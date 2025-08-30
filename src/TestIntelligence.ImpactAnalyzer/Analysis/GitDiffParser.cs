@@ -28,9 +28,9 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         private static readonly Regex AddedLinePattern = new Regex(@"^\+(.*)$", RegexOptions.Multiline);
         private static readonly Regex RemovedLinePattern = new Regex(@"^-(.*)$", RegexOptions.Multiline);
         
-        // C# method detection patterns
+        // C# method detection patterns - match the last word before parentheses
         private static readonly Regex MethodSignaturePattern = new Regex(
-            @"(?:public|private|protected|internal).*?\s+(\w+)\s*\([^)]*\)\s*[\{;]",
+            @"(?:public|private|protected|internal).*?\s+(\w+)\s*\([^)]*\)",
             RegexOptions.Multiline | RegexOptions.IgnoreCase);
 
         public GitDiffParser(ILogger<GitDiffParser> logger, IRoslynAnalyzer roslynAnalyzer)
@@ -71,8 +71,21 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                     }
 
                     currentFile = fileMatch.Groups[2].Value;
-                    currentChangeType = DetermineChangeType(line);
+                    currentChangeType = CodeChangeType.Modified; // Default to modified
                     changedLines.Clear();
+                    continue;
+                }
+
+                // Check for special file mode changes
+                if (line.StartsWith("deleted file mode"))
+                {
+                    currentChangeType = CodeChangeType.Deleted;
+                    continue;
+                }
+                
+                if (line.StartsWith("new file mode"))
+                {
+                    currentChangeType = CodeChangeType.Added;
                     continue;
                 }
 
@@ -84,7 +97,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                     if (filePath.StartsWith("b/"))
                         filePath = filePath.Substring(2);
                     if (filePath == "/dev/null")
-                        currentChangeType = line.StartsWith("+++") ? CodeChangeType.Added : CodeChangeType.Deleted;
+                        currentChangeType = line.StartsWith("---") ? CodeChangeType.Deleted : CodeChangeType.Added;
                     continue;
                 }
 
@@ -192,7 +205,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         private static CodeChangeType DetermineChangeType(string diffLine)
         {
             if (diffLine.Contains("/dev/null"))
-                return diffLine.StartsWith("+++") ? CodeChangeType.Added : CodeChangeType.Deleted;
+                return diffLine.StartsWith("---") ? CodeChangeType.Deleted : CodeChangeType.Added;
             
             return CodeChangeType.Modified;
         }
