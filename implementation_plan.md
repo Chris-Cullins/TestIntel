@@ -102,6 +102,10 @@ TestIntelligence/
 - Create comprehensive examples and documentation
 - Performance optimization and caching strategies
 
+### Bonus Features:
+- Ingest a git diff or svn patch file, or something like that, and then give back test impact from those changes.
+
+
 **Deliverables:**
 - Production-ready selection engine
 - AI agent integration library

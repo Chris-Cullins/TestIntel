@@ -5,6 +5,10 @@ using Microsoft.Extensions.Logging;
 using TestIntelligence.CLI.Services;
 using TestIntelligence.SelectionEngine.Engine;
 using TestIntelligence.SelectionEngine.Interfaces;
+using TestIntelligence.ImpactAnalyzer.Analysis;
+using TestIntelligence.ImpactAnalyzer.Services;
+using TestIntelligence.Core.Services;
+using TestIntelligence.Core.Interfaces;
 
 namespace TestIntelligence.CLI;
 
@@ -19,6 +23,7 @@ public class Program
             CreateAnalyzeCommand(host),
             CreateCategorizeCommand(host),
             CreateSelectCommand(host),
+            CreateDiffCommand(host),
             CreateVersionCommand()
         };
 
@@ -35,7 +40,13 @@ public class Program
                 services.AddTransient<IAnalysisService, AnalysisService>();
                 services.AddTransient<ICategorizationService, CategorizationService>();
                 services.AddTransient<ISelectionService, SelectionService>();
+                services.AddTransient<IDiffAnalysisService, DiffAnalysisService>();
                 services.AddTransient<IOutputFormatter, JsonOutputFormatter>();
+                
+                // Impact Analyzer services
+                services.AddTransient<IRoslynAnalyzer, RoslynAnalyzer>();
+                services.AddTransient<IGitDiffParser, GitDiffParser>();
+                services.AddTransient<ISimplifiedDiffImpactAnalyzer, SimplifiedDiffImpactAnalyzer>();
             });
     }
 
@@ -174,6 +185,73 @@ public class Program
         }, pathOption, changesOption, confidenceOption, outputOption, maxTestsOption, maxTimeOption);
 
         return selectCommand;
+    }
+
+    private static Command CreateDiffCommand(IHost host)
+    {
+        var solutionOption = new Option<string>(
+            name: "--solution",
+            description: "Path to solution file")
+        {
+            IsRequired = true
+        };
+        solutionOption.AddAlias("-s");
+
+        var diffContentOption = new Option<string>(
+            name: "--diff-content",
+            description: "Git diff content as string");
+        diffContentOption.AddAlias("-d");
+
+        var diffFileOption = new Option<string>(
+            name: "--diff-file",
+            description: "Path to git diff file");
+        diffFileOption.AddAlias("-f");
+
+        var gitCommandOption = new Option<string>(
+            name: "--git-command",
+            description: "Git command to generate diff (e.g., 'diff HEAD~1')")
+        {
+            ArgumentHelpName = "COMMAND"
+        };
+        gitCommandOption.AddAlias("-g");
+
+        var outputOption = new Option<string>(
+            name: "--output",
+            description: "Output file path (default: console)")
+        {
+            IsRequired = false
+        };
+        outputOption.AddAlias("-o");
+
+        var formatOption = new Option<string>(
+            name: "--format",
+            description: "Output format: json, text",
+            getDefaultValue: () => "text");
+        formatOption.AddAlias("--fmt");
+
+        var verboseOption = new Option<bool>(
+            name: "--verbose",
+            description: "Enable verbose output");
+        verboseOption.AddAlias("-v");
+
+        var diffCommand = new Command("diff", "Analyze test impact from git diff or patch files")
+        {
+            solutionOption,
+            diffContentOption,
+            diffFileOption,
+            gitCommandOption,
+            outputOption,
+            formatOption,
+            verboseOption
+        };
+
+        diffCommand.SetHandler(async (string solution, string? diffContent, string? diffFile, string? gitCommand, string? output, string format, bool verbose) =>
+        {
+            var diffAnalysisService = host.Services.GetRequiredService<IDiffAnalysisService>();
+            await diffAnalysisService.AnalyzeDiffAsync(solution, diffContent, diffFile, gitCommand, output, format, verbose);
+        }, solutionOption, diffContentOption, diffFileOption, gitCommandOption, outputOption, formatOption, verboseOption);
+
+        return diffCommand;
     }
 
     private static Command CreateVersionCommand()
