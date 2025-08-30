@@ -1,0 +1,315 @@
+using Microsoft.Extensions.Logging;
+using System.IO;
+using TestIntelligence.CLI.Models;
+using TestIntelligence.Core.Assembly;
+using TestIntelligence.Core.Discovery;
+using TestIntelligence.SelectionEngine.Models;
+
+namespace TestIntelligence.CLI.Services;
+
+/// <summary>
+/// Implementation of analysis service for CLI operations.
+/// </summary>
+public class AnalysisService : IAnalysisService
+{
+    private readonly ILogger<AnalysisService> _logger;
+    private readonly IOutputFormatter _outputFormatter;
+
+    public AnalysisService(ILogger<AnalysisService> logger, IOutputFormatter outputFormatter)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _outputFormatter = outputFormatter ?? throw new ArgumentNullException(nameof(outputFormatter));
+    }
+
+    public async Task AnalyzeAsync(string path, string? outputPath, string format, bool verbose)
+    {
+        try
+        {
+            _logger.LogInformation("Starting analysis of: {Path}", path);
+
+            if (verbose)
+            {
+                _logger.LogInformation("Verbose mode enabled");
+            }
+
+            // Validate input path
+            if (!File.Exists(path) && !Directory.Exists(path))
+            {
+                throw new FileNotFoundException($"Path not found: {path}");
+            }
+
+            var analysisResult = await PerformAnalysisAsync(path, verbose);
+
+            await _outputFormatter.WriteOutputAsync(analysisResult, format, outputPath);
+
+            _logger.LogInformation("Analysis completed successfully");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during analysis");
+            throw;
+        }
+    }
+
+    private async Task<AnalysisResult> PerformAnalysisAsync(string path, bool verbose)
+    {
+        var result = new AnalysisResult
+        {
+            AnalyzedPath = path,
+            Timestamp = DateTimeOffset.UtcNow,
+            Assemblies = new List<AssemblyAnalysis>()
+        };
+
+        // Discover assemblies to analyze
+        var assemblyPaths = await DiscoverAssembliesAsync(path);
+        
+        _logger.LogInformation("Found {Count} assemblies to analyze", assemblyPaths.Count);
+
+        foreach (var assemblyPath in assemblyPaths)
+        {
+            try
+            {
+                var assemblyAnalysis = await AnalyzeAssemblyAsync(assemblyPath, verbose);
+                result.Assemblies.Add(assemblyAnalysis);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to analyze assembly: {Assembly}", assemblyPath);
+                
+                result.Assemblies.Add(new AssemblyAnalysis
+                {
+                    AssemblyPath = assemblyPath,
+                    Error = ex.Message,
+                    TestMethods = new List<TestMethodAnalysis>()
+                });
+            }
+        }
+
+        // Calculate summary statistics
+        result.Summary = new AnalysisSummary
+        {
+            TotalAssemblies = result.Assemblies.Count,
+            TotalTestMethods = result.Assemblies.Sum(a => a.TestMethods.Count),
+            SuccessfullyAnalyzed = result.Assemblies.Count(a => string.IsNullOrEmpty(a.Error)),
+            FailedAnalyses = result.Assemblies.Count(a => !string.IsNullOrEmpty(a.Error)),
+            CategoryBreakdown = CalculateCategoryBreakdown(result.Assemblies)
+        };
+
+        return result;
+    }
+
+    private async Task<List<string>> DiscoverAssembliesAsync(string path)
+    {
+        var assemblies = new List<string>();
+
+        if (File.Exists(path))
+        {
+            if (path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+            {
+                assemblies.Add(path);
+            }
+            else if (path.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
+            {
+                // Parse solution file to find test projects
+                var solutionDir = Path.GetDirectoryName(path)!;
+                var testProjectPaths = await FindTestProjectsInSolutionAsync(path);
+                
+                foreach (var projectPath in testProjectPaths)
+                {
+                    var assemblyPath = GetAssemblyPathFromProject(projectPath);
+                    if (File.Exists(assemblyPath))
+                    {
+                        assemblies.Add(assemblyPath);
+                    }
+                }
+            }
+        }
+        else if (Directory.Exists(path))
+        {
+            // Find all test assemblies in directory
+            var dllFiles = Directory.GetFiles(path, "*.dll", SearchOption.AllDirectories)
+                .Where(f => f.Contains("test", StringComparison.OrdinalIgnoreCase) ||
+                           f.Contains("spec", StringComparison.OrdinalIgnoreCase))
+                .Where(f => !f.Contains("obj", StringComparison.OrdinalIgnoreCase));
+            
+            assemblies.AddRange(dllFiles);
+        }
+
+        return assemblies.Distinct().ToList();
+    }
+
+    private async Task<AssemblyAnalysis> AnalyzeAssemblyAsync(string assemblyPath, bool verbose)
+    {
+        _logger.LogDebug("Analyzing assembly: {Assembly}", assemblyPath);
+
+        var analysis = new AssemblyAnalysis
+        {
+            AssemblyPath = assemblyPath,
+            TestMethods = new List<TestMethodAnalysis>()
+        };
+
+        try
+        {
+            // Load assembly and discover tests
+            var loader = new CrossFrameworkAssemblyLoader();
+            var loadResult = await loader.LoadAssemblyAsync(assemblyPath);
+            
+            if (!loadResult.IsSuccess || loadResult.Assembly == null)
+            {
+                throw new InvalidOperationException($"Failed to load assembly: {string.Join(", ", loadResult.Errors)}");
+            }
+            
+            var discovery = TestDiscoveryFactory.CreateNUnitTestDiscovery();
+            var discoveryResult = await discovery.DiscoverTestsAsync(loadResult.Assembly);
+            var testMethods = discoveryResult.GetAllTestMethods();
+
+            foreach (var testMethod in testMethods)
+            {
+                var methodAnalysis = new TestMethodAnalysis
+                {
+                    MethodName = testMethod.GetDisplayName(),
+                    Category = await CategorizeTestMethodAsync(testMethod),
+                    EstimatedDuration = TimeSpan.FromMilliseconds(100), // Default estimate
+                    Tags = ExtractTags(testMethod),
+                    Dependencies = new List<string>()
+                };
+
+                if (verbose)
+                {
+                    methodAnalysis.Dependencies = await ExtractDependenciesAsync(testMethod);
+                }
+
+                analysis.TestMethods.Add(methodAnalysis);
+            }
+
+            analysis.Framework = loadResult.Assembly.FrameworkVersion.ToString();
+        }
+        catch (Exception ex)
+        {
+            analysis.Error = ex.Message;
+        }
+
+        return analysis;
+    }
+
+    private Task<TestCategory> CategorizeTestMethodAsync(Core.Models.TestMethod testMethod)
+    {
+        // Simplified categorization logic for CLI
+        var methodName = testMethod.MethodInfo.Name.ToLower();
+        
+        if (methodName.Contains("database") || methodName.Contains("db"))
+            return Task.FromResult(TestCategory.Database);
+        
+        if (methodName.Contains("api") || methodName.Contains("http"))
+            return Task.FromResult(TestCategory.API);
+        
+        if (methodName.Contains("integration"))
+            return Task.FromResult(TestCategory.Integration);
+        
+        if (methodName.Contains("ui") || methodName.Contains("selenium"))
+            return Task.FromResult(TestCategory.UI);
+        
+        return Task.FromResult(TestCategory.Unit);
+    }
+
+    private List<string> ExtractTags(Core.Models.TestMethod testMethod)
+    {
+        var tags = new List<string>();
+        
+        // Extract tags from attributes
+        foreach (var attribute in testMethod.MethodInfo.GetCustomAttributes(true))
+        {
+            var attributeName = attribute.GetType().Name.ToLower();
+            
+            if (attributeName.Contains("category"))
+                tags.Add("category");
+            if (attributeName.Contains("slow"))
+                tags.Add("slow");
+            if (attributeName.Contains("integration"))
+                tags.Add("integration");
+        }
+
+        return tags;
+    }
+
+    private Task<List<string>> ExtractDependenciesAsync(Core.Models.TestMethod testMethod)
+    {
+        // Simplified dependency extraction - would use Roslyn in production
+        var dependencies = new List<string>();
+        
+        // Add the class name as a basic dependency
+        dependencies.Add(testMethod.MethodInfo.DeclaringType?.FullName ?? "Unknown");
+        
+        return Task.FromResult(dependencies);
+    }
+
+    private async Task<List<string>> FindTestProjectsInSolutionAsync(string solutionPath)
+    {
+        var projects = new List<string>();
+        
+        if (!File.Exists(solutionPath))
+            return projects;
+
+        var solutionContent = await File.ReadAllTextAsync(solutionPath);
+        var lines = solutionContent.Split('\n');
+        
+        foreach (var line in lines)
+        {
+            if (line.StartsWith("Project(") && line.Contains(".csproj"))
+            {
+                var parts = line.Split(',');
+                if (parts.Length >= 2)
+                {
+                    var projectPath = parts[1].Trim().Trim('"');
+                    if (projectPath.Contains("test", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var fullPath = Path.Combine(Path.GetDirectoryName(solutionPath)!, projectPath);
+                        projects.Add(fullPath);
+                    }
+                }
+            }
+        }
+
+        return projects;
+    }
+
+    private string GetAssemblyPathFromProject(string projectPath)
+    {
+        // Simplified - assumes Debug build in standard location
+        var projectDir = Path.GetDirectoryName(projectPath)!;
+        var projectName = Path.GetFileNameWithoutExtension(projectPath);
+        
+        // Try common output paths
+        var possiblePaths = new[]
+        {
+            Path.Combine(projectDir, "bin", "Debug", "net8.0", $"{projectName}.dll"),
+            Path.Combine(projectDir, "bin", "Debug", "netstandard2.0", $"{projectName}.dll"),
+            Path.Combine(projectDir, "bin", "Release", "net8.0", $"{projectName}.dll"),
+            Path.Combine(projectDir, "bin", "Release", "netstandard2.0", $"{projectName}.dll")
+        };
+
+        return possiblePaths.FirstOrDefault(File.Exists) ?? possiblePaths[0];
+    }
+
+    private Dictionary<TestCategory, int> CalculateCategoryBreakdown(List<AssemblyAnalysis> assemblies)
+    {
+        var breakdown = new Dictionary<TestCategory, int>();
+
+        foreach (var assembly in assemblies)
+        {
+            foreach (var testMethod in assembly.TestMethods)
+            {
+                if (breakdown.ContainsKey(testMethod.Category))
+                {
+                    breakdown[testMethod.Category]++;
+                }
+                else
+                {
+                    breakdown[testMethod.Category] = 1;
+                }
+            }
+        }
+
+        return breakdown;
+    }
+}

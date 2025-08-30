@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net48</TargetFrameworks>
+    <AssemblyName>TestIntelligence.Framework48Adapter</AssemblyName>
+    <RootNamespace>TestIntelligence.Framework48Adapter</RootNamespace>
+    <Description>Adapter for .NET Framework 4.8 assembly loading and test discovery</Description>
+    <PackageTags>testing;dotnet-framework;adapter</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TestIntelligence.Core\TestIntelligence.Core.csproj" />
+  </ItemGroup>
+
+</Project>

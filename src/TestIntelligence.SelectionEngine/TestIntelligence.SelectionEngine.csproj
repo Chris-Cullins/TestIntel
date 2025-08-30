@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <PackageId>TestIntelligence.SelectionEngine</PackageId>
+    <PackageDescription>Test selection engine for TestIntelligence library providing intelligent test prioritization and selection algorithms.</PackageDescription>
+    <Authors>TestIntelligence Contributors</Authors>
+    <Company>TestIntelligence</Company>
+    <Product>TestIntelligence</Product>
+    <Copyright>Copyright © TestIntelligence Contributors</Copyright>
+    <PackageProjectUrl>https://github.com/testintelligence/testintelligence</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/testintelligence/testintelligence</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>testing;test-selection;test-prioritization;intelligent-selection</PackageTags>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="6.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TestIntelligence.Core\TestIntelligence.Core.csproj" />
+    <ProjectReference Include="..\TestIntelligence.Categorizer\TestIntelligence.Categorizer.csproj" />
+    <ProjectReference Include="..\TestIntelligence.DataTracker\TestIntelligence.DataTracker.csproj" />
+    <ProjectReference Include="..\TestIntelligence.ImpactAnalyzer\TestIntelligence.ImpactAnalyzer.csproj" />
+  </ItemGroup>
+
+</Project>

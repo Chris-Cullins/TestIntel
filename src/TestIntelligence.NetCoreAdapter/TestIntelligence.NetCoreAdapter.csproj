@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>TestIntelligence.NetCoreAdapter</AssemblyName>
+    <RootNamespace>TestIntelligence.NetCoreAdapter</RootNamespace>
+    <Description>Adapter for .NET Core/.NET 5+ assembly loading and test discovery</Description>
+    <PackageTags>testing;dotnet-core;adapter</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TestIntelligence.Core\TestIntelligence.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Runtime.Loader" Version="4.3.0" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <PackageId>TestIntelligence.Core</PackageId>
+    <PackageDescription>Core components for TestIntelligence library providing fundamental interfaces and models for intelligent test selection and categorization.</PackageDescription>
+    <Authors>TestIntelligence Contributors</Authors>
+    <Company>TestIntelligence</Company>
+    <Product>TestIntelligence</Product>
+    <Copyright>Copyright © TestIntelligence Contributors</Copyright>
+    <PackageProjectUrl>https://github.com/testintelligence/testintelligence</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/testintelligence/testintelligence</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>testing;test-selection;test-categorization;ci-cd</PackageTags>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Microsoft.CodeAnalysis.CSharp, Newtonsoft.Json, System.Memory, and System.Collections.Immutable are provided by Directory.Build.props -->
+    <PackageReference Include="System.Reflection.Metadata" Version="7.0.0" />
+    <PackageReference Include="System.Runtime.Loader" Version="4.3.0" />
+  </ItemGroup>
+
+</Project>
