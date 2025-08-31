@@ -1,0 +1,100 @@
+Summary
+  Generated on: 8/30/2025 - 8:43:37 PM
+  Coverage date: 8/30/2025 - 8:31:35 PM - 8/30/2025 - 8:43:19 PM
+  Parser: MultiReport (5x Cobertura)
+  Assemblies: 5
+  Classes: 70
+  Files: 44
+  Line coverage: 30.1%
+  Covered lines: 1318
+  Uncovered lines: 3050
+  Coverable lines: 4368
+  Total lines: 9019
+  Branch coverage: 23.8% (397 of 1667)
+  Covered branches: 397
+  Total branches: 1667
+  Method coverage: 40.1% (235 of 585)
+  Full method coverage: 31.7% (186 of 585)
+  Covered methods: 235
+  Fully covered methods: 186
+  Total methods: 585
+
+TestIntelligence.API                                                          71.9%
+  TestIntelligence.API.Controllers.TestDiscoveryController                    92.1%
+  TestIntelligence.API.Controllers.TestSelectionController                    78.8%
+  TestIntelligence.API.Models.DiffAnalysisRequest                              100%
+  TestIntelligence.API.Models.DiffAnalysisResult                               100%
+  TestIntelligence.API.Models.TestDiscoveryRequest                             100%
+  TestIntelligence.API.Models.TestDiscoveryResponse                            100%
+  TestIntelligence.API.Models.TestDiscoverySummary                             100%
+  TestIntelligence.API.Models.TestPlanRequest                                  100%
+  TestIntelligence.API.Program                                                   0%
+  TestIntelligence.API.Startup                                                   0%
+
+TestIntelligence.Core                                                         29.9%
+  TestIntelligence.Core.Assembly.AssemblyLoadedEventArgs                         0%
+  TestIntelligence.Core.Assembly.AssemblyLoaderFactory                           0%
+  TestIntelligence.Core.Assembly.AssemblyLoadException                           0%
+  TestIntelligence.Core.Assembly.AssemblyLoadFailedEventArgs                     0%
+  TestIntelligence.Core.Assembly.AssemblyLoadResult                           36.3%
+  TestIntelligence.Core.Assembly.ConsoleAssemblyLoadLogger                       0%
+  TestIntelligence.Core.Assembly.CrossFrameworkAssemblyLoader                    0%
+  TestIntelligence.Core.Assembly.FrameworkDetector                               0%
+  TestIntelligence.Core.Assembly.FrameworkVersionExtensions                      0%
+  TestIntelligence.Core.Assembly.Loaders.BaseAssemblyLoader                      0%
+  TestIntelligence.Core.Assembly.Loaders.Framework48LoaderCompatible             0%
+  TestIntelligence.Core.Assembly.Loaders.Net5PlusLoaderCompatible                0%
+  TestIntelligence.Core.Assembly.Loaders.NetCoreLoaderCompatible                 0%
+  TestIntelligence.Core.Assembly.Loaders.StandardLoader                          0%
+  TestIntelligence.Core.Assembly.NullAssemblyLoadLogger                          0%
+  TestIntelligence.Core.Assembly.TestAssemblyWrapper                             0%
+  TestIntelligence.Core.Caching.AssemblyMetadataCache                         75.1%
+  TestIntelligence.Core.Caching.CacheStatistics                                100%
+  TestIntelligence.Core.Caching.MemoryCacheProvider                           74.8%
+  TestIntelligence.Core.Discovery.NUnitTestDiscovery                          69.5%
+  TestIntelligence.Core.Discovery.TestDiscoveryCompletedEventArgs                0%
+  TestIntelligence.Core.Discovery.TestDiscoveryErrorEventArgs                    0%
+  TestIntelligence.Core.Discovery.TestDiscoveryFactory                           0%
+  TestIntelligence.Core.Discovery.TestDiscoveryResult                         69.5%
+  TestIntelligence.Core.Discovery.TestDiscoveryStartedEventArgs                  0%
+  TestIntelligence.Core.Models.TestFixture                                    75.8%
+  TestIntelligence.Core.Models.TestMethod                                     55.2%
+
+TestIntelligence.DataTracker                                                  50.2%
+  TestIntelligence.DataTracker.Analysis.DataSeedingOperation                   100%
+  TestIntelligence.DataTracker.Analysis.EF6ContextUsage                        100%
+  TestIntelligence.DataTracker.Analysis.EF6PatternDetector                    41.9%
+  TestIntelligence.DataTracker.Analysis.EFCoreContextUsage                     100%
+  TestIntelligence.DataTracker.Analysis.EFCorePatternDetector                 38.6%
+  TestIntelligence.DataTracker.Analysis.InMemoryDatabaseUsage                  100%
+  TestIntelligence.DataTracker.Models.DataConflict                            97.4%
+  TestIntelligence.DataTracker.Models.DataConflictReport                       100%
+  TestIntelligence.DataTracker.Models.DataDependency                           100%
+  TestIntelligence.DataTracker.ParallelExecutionRecommendations                100%
+  TestIntelligence.DataTracker.TestDataDependencyTracker                      49.3%
+
+TestIntelligence.ImpactAnalyzer                                                4.5%
+  TestIntelligence.ImpactAnalyzer.Analysis.GitDiffParser                         0%
+  TestIntelligence.ImpactAnalyzer.Analysis.MethodCallGraph                       0%
+  TestIntelligence.ImpactAnalyzer.Analysis.MethodInfo                            0%
+  TestIntelligence.ImpactAnalyzer.Analysis.RoslynAnalyzer                        0%
+  TestIntelligence.ImpactAnalyzer.Analysis.TypeUsageInfo                         0%
+  TestIntelligence.ImpactAnalyzer.Models.CodeChange                           54.5%
+  TestIntelligence.ImpactAnalyzer.Models.CodeChangeSet                        28.5%
+  TestIntelligence.ImpactAnalyzer.Services.SimplifiedDiffImpactAnalyzer          0%
+  TestIntelligence.ImpactAnalyzer.Services.SimplifiedTestImpactResult         42.8%
+  TestIntelligence.ImpactAnalyzer.Services.SimplifiedTestReference               0%
+
+TestIntelligence.SelectionEngine                                              10.1%
+  TestIntelligence.SelectionEngine.Algorithms.ExecutionTimeScoringAlgorithm      0%
+  TestIntelligence.SelectionEngine.Algorithms.HistoricalScoringAlgorithm         0%
+  TestIntelligence.SelectionEngine.Algorithms.ImpactBasedScoringAlgorithm        0%
+  TestIntelligence.SelectionEngine.Engine.NullLogger<T>                          0%
+  TestIntelligence.SelectionEngine.Engine.TestSelectionEngine                    0%
+  TestIntelligence.SelectionEngine.Models.ConfidenceLevelExtensions           23.3%
+  TestIntelligence.SelectionEngine.Models.TestExecutionBatch                     0%
+  TestIntelligence.SelectionEngine.Models.TestExecutionPlan                     25%
+  TestIntelligence.SelectionEngine.Models.TestExecutionResult                 57.8%
+  TestIntelligence.SelectionEngine.Models.TestInfo                              35%
+  TestScoringContext                                                             0%
+  TestSelectionOptions                                                          70%
