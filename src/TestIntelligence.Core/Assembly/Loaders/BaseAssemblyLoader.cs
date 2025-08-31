@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,6 +12,7 @@ namespace TestIntelligence.Core.Assembly.Loaders
     public abstract class BaseAssemblyLoader : IAssemblyLoader
     {
         private bool _disposed = false;
+        private static readonly ThreadLocal<HashSet<string>> _resolutionStack = new ThreadLocal<HashSet<string>>(() => new HashSet<string>());
 
         /// <summary>
         /// Initializes a new instance of the BaseAssemblyLoader.
@@ -83,6 +85,7 @@ namespace TestIntelligence.Core.Assembly.Loaders
 
         /// <summary>
         /// Default assembly resolver that attempts to resolve dependencies from the assembly directory.
+        /// Includes circular dependency detection to prevent stack overflow.
         /// </summary>
         /// <param name="sender">The sender of the resolve request.</param>
         /// <param name="args">The resolve event arguments.</param>
@@ -91,50 +94,66 @@ namespace TestIntelligence.Core.Assembly.Loaders
         {
             try
             {
-                // Extract the simple name from the full assembly name
-                var assemblyName = new System.Reflection.AssemblyName(args.Name);
-                var simpleName = assemblyName.Name;
-
-                if (string.IsNullOrEmpty(simpleName))
-                    return null;
-
-                // Try to find the assembly in the requesting assembly's directory
-                if (args.RequestingAssembly != null && !string.IsNullOrEmpty(args.RequestingAssembly.Location))
+                // Check for circular dependency to prevent stack overflow
+                var resolutionStack = _resolutionStack.Value!;
+                if (resolutionStack.Contains(args.Name))
                 {
-                    var requestingDir = Path.GetDirectoryName(args.RequestingAssembly.Location);
-                    if (!string.IsNullOrEmpty(requestingDir))
-                    {
-                        var candidatePaths = new[]
-                        {
-                            Path.Combine(requestingDir, $"{simpleName}.dll"),
-                            Path.Combine(requestingDir, $"{simpleName}.exe")
-                        };
+                    // Circular dependency detected, return null to break the cycle
+                    return null;
+                }
 
-                        foreach (var candidatePath in candidatePaths)
+                resolutionStack.Add(args.Name);
+                try
+                {
+                    // Extract the simple name from the full assembly name
+                    var assemblyName = new System.Reflection.AssemblyName(args.Name);
+                    var simpleName = assemblyName.Name;
+
+                    if (string.IsNullOrEmpty(simpleName))
+                        return null;
+
+                    // Try to find the assembly in the requesting assembly's directory
+                    if (args.RequestingAssembly != null && !string.IsNullOrEmpty(args.RequestingAssembly.Location))
+                    {
+                        var requestingDir = Path.GetDirectoryName(args.RequestingAssembly.Location);
+                        if (!string.IsNullOrEmpty(requestingDir))
                         {
-                            if (File.Exists(candidatePath))
+                            var candidatePaths = new[]
                             {
-                                try
+                                Path.Combine(requestingDir, $"{simpleName}.dll"),
+                                Path.Combine(requestingDir, $"{simpleName}.exe")
+                            };
+
+                            foreach (var candidatePath in candidatePaths)
+                            {
+                                if (File.Exists(candidatePath))
                                 {
-                                    return System.Reflection.Assembly.LoadFrom(candidatePath);
-                                }
-                                catch
-                                {
-                                    // Continue to next candidate
+                                    try
+                                    {
+                                        return System.Reflection.Assembly.LoadFrom(candidatePath);
+                                    }
+                                    catch
+                                    {
+                                        // Continue to next candidate
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                // Try loading from GAC or already loaded assemblies
-                try
-                {
-                    return System.Reflection.Assembly.Load(args.Name);
+                    // Try loading from GAC or already loaded assemblies
+                    try
+                    {
+                        return System.Reflection.Assembly.Load(args.Name);
+                    }
+                    catch
+                    {
+                        return null;
+                    }
                 }
-                catch
+                finally
                 {
-                    return null;
+                    resolutionStack.Remove(args.Name);
                 }
             }
             catch
@@ -176,7 +195,11 @@ namespace TestIntelligence.Core.Assembly.Loaders
         /// </summary>
         protected virtual void DisposeCore()
         {
-            // Base implementation does nothing
+            // Clean up thread-local resolution stack
+            if (_resolutionStack.IsValueCreated)
+            {
+                _resolutionStack.Value?.Clear();
+            }
         }
 
         /// <summary>

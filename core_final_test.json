@@ -1,0 +1,579 @@
+{
+  "AnalyzedPath": "tests/TestIntelligence.Core.Tests/bin/Debug/net8.0/TestIntelligence.Core.Tests.dll",
+  "Timestamp": "2025-08-31T01:24:59.567189+00:00",
+  "Assemblies": [
+    {
+      "AssemblyPath": "tests/TestIntelligence.Core.Tests/bin/Debug/net8.0/TestIntelligence.Core.Tests.dll",
+      "Framework": "Net5Plus",
+      "TestMethods": [
+        {
+          "MethodName": "TestFixtureTests.Constructor_WithValidParameters_SetsProperties",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.Constructor_WithNullType_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.Constructor_WithNullAssemblyPath_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.GetUniqueId_ReturnsFullClassName",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.TestMethods_IsInitialized",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.FixtureAttributes_IsInitialized",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.HasSetUpMethods_WithNoSetupMethods_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.HasTearDownMethods_WithNoTearDownMethods_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.HasTests_WithNoTestMethods_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.GetExecutableTests_ReturnsExpectedCollection",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.GetSetUpMethods_ReturnsExpectedCollection",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.GetTearDownMethods_ReturnsExpectedCollection",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.GetCategories_ReturnsExpectedCollection",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.ToString_ReturnsExpectedFormat",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.Constructor_WithValidParameters_SetsProperties",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.Constructor_WithNullMethodInfo_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.Constructor_WithNullDeclaringType_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.Constructor_WithNullAssemblyPath_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.GetUniqueId_ReturnsExpectedFormat",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.GetDisplayName_ReturnsExpectedFormat",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.IsExecutableTest_WithRegularMethod_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.TestAttributes_IsInitialized",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.ToString_ReturnsDisplayName",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.GetTestCaseParameters_WithRegularMethod_ReturnsEmpty",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "NUnitTestDiscoveryTests.IsTestFixture_WithNullType_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "NUnitTestDiscoveryTests.IsTestFixture_WithNonTestClass_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "NUnitTestDiscoveryTests.IsTestMethod_WithNullMethod_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "NUnitTestDiscoveryTests.IsTestMethod_WithRegularMethod_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "NUnitTestDiscoveryTests.DiscoverTestsAsync_WithNullAssembly_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "NUnitTestDiscoveryTests.DiscoverTestsAsync_WithValidAssembly_ReturnsResult",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "NUnitTestDiscoveryTests.DiscoverTestsAsync_MultipleAssemblies_WithNullInput_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "NUnitTestDiscoveryTests.DiscoverTestsAsync_MultipleAssemblies_ReturnsResults",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.GetOrCacheTestDiscoveryAsync_WithNullAssemblyPath_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.GetOrCacheTestDiscoveryAsync_WithNullFactory_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.GetOrCacheTestDiscoveryAsync_WithValidInput_CallsFactory",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.GetOrCacheAssemblyLoadAsync_WithNullAssemblyPath_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.GetOrCacheAssemblyLoadAsync_WithNullFactory_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.GetOrCacheAssemblyLoadAsync_WithValidInput_CallsFactory",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.CacheFrameworkVersionAsync_WithNullAssemblyPath_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.CacheFrameworkVersionAsync_WithValidInput_DoesNotThrow",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.GetCachedFrameworkVersionAsync_WithNullAssemblyPath_ReturnsNull",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.GetCachedFrameworkVersionAsync_WithNonCachedAssembly_ReturnsNull",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.InvalidateAssemblyAsync_WithValidPath_DoesNotThrow",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.ClearAllAsync_DoesNotThrow",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.GetModifiedAssembliesAsync_WithNullInput_ReturnsEmptyList",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.Dispose_CanBeCalledMultipleTimes",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.GetAsync_WithNonExistentKey_ReturnsNull",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.GetAsync_WithNullKey_ReturnsNull",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.SetAsync_WithValidKeyAndValue_StoresValue",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.SetAsync_WithNullKey_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.SetAsync_WithNullValue_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.RemoveAsync_WithExistingKey_RemovesValue_ReturnsTrue",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.RemoveAsync_WithNonExistentKey_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.ExistsAsync_WithExistingKey_ReturnsTrue",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.ExistsAsync_WithNonExistentKey_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.ClearAsync_RemovesAllEntries",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.GetOrSetAsync_WithNonExistentKey_CallsFactory",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.GetOrSetAsync_WithExistingKey_DoesNotCallFactory",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.GetOrSetAsync_WithNullKey_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.GetOrSetAsync_WithNullFactory_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.GetStatistics_ReturnsValidStatistics",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.Dispose_CanBeCalledMultipleTimes",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        }
+      ]
+    }
+  ],
+  "Summary": {
+    "TotalAssemblies": 1,
+    "TotalTestMethods": 62,
+    "SuccessfullyAnalyzed": 1,
+    "FailedAnalyses": 0,
+    "CategoryBreakdown": {
+      "Unit": 62
+    }
+  }
+}

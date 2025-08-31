@@ -234,11 +234,38 @@ public class AnalysisService : IAnalysisService
 
     private Task<List<string>> ExtractDependenciesAsync(Core.Models.TestMethod testMethod)
     {
-        // Simplified dependency extraction - would use Roslyn in production
         var dependencies = new List<string>();
         
-        // Add the class name as a basic dependency
-        dependencies.Add(testMethod.MethodInfo.DeclaringType?.FullName ?? "Unknown");
+        try
+        {
+            // Extract external dependencies, not test infrastructure
+            var assembly = testMethod.MethodInfo.DeclaringType?.Assembly;
+            if (assembly != null)
+            {
+                // Get referenced assemblies that aren't test frameworks or system assemblies
+                var referencedAssemblies = assembly.GetReferencedAssemblies()
+                    .Where(an => !IsTestFrameworkAssembly(an.Name) && !IsSystemAssembly(an.Name))
+                    .Select(an => an.Name)
+                    .Where(name => !string.IsNullOrEmpty(name))
+                    .Cast<string>()
+                    .Distinct()
+                    .OrderBy(name => name)
+                    .ToList();
+                
+                dependencies.AddRange(referencedAssemblies);
+            }
+            
+            // If no external dependencies found, this is likely a pure unit test
+            if (!dependencies.Any())
+            {
+                // Return empty list for isolated unit tests
+                return Task.FromResult(new List<string>());
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to extract dependencies for test method: {Method}", testMethod.GetDisplayName());
+        }
         
         return Task.FromResult(dependencies);
     }
@@ -250,45 +277,82 @@ public class AnalysisService : IAnalysisService
         if (!File.Exists(solutionPath))
             return projects;
 
+        _logger.LogDebug("Parsing solution file: {SolutionPath}", solutionPath);
         var solutionContent = await File.ReadAllTextAsync(solutionPath);
-        var lines = solutionContent.Split('\n');
+        var lines = solutionContent.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var solutionDir = Path.GetDirectoryName(solutionPath)!;
         
         foreach (var line in lines)
         {
-            if (line.StartsWith("Project(") && line.Contains(".csproj"))
+            var trimmedLine = line.Trim();
+            if (trimmedLine.StartsWith("Project(") && trimmedLine.Contains(".csproj"))
             {
-                var parts = line.Split(',');
+                // Parse: Project("{GUID}") = "ProjectName", "relative\path\Project.csproj", "{GUID}"
+                var parts = trimmedLine.Split(',');
                 if (parts.Length >= 2)
                 {
-                    var projectPath = parts[1].Trim().Trim('"');
-                    if (projectPath.Contains("test", StringComparison.OrdinalIgnoreCase))
+                    var projectRelativePath = parts[1].Trim().Trim('"');
+                    var fullProjectPath = Path.Combine(solutionDir, projectRelativePath.Replace('\\', Path.DirectorySeparatorChar));
+                    
+                    if (File.Exists(fullProjectPath) && await IsTestProjectAsync(fullProjectPath))
                     {
-                        var fullPath = Path.Combine(Path.GetDirectoryName(solutionPath)!, projectPath);
-                        projects.Add(fullPath);
+                        _logger.LogDebug("Found test project: {ProjectPath}", fullProjectPath);
+                        projects.Add(fullProjectPath);
                     }
                 }
             }
         }
 
+        _logger.LogInformation("Found {Count} test projects in solution", projects.Count);
         return projects;
     }
 
     private string GetAssemblyPathFromProject(string projectPath)
     {
-        // Simplified - assumes Debug build in standard location
         var projectDir = Path.GetDirectoryName(projectPath)!;
         var projectName = Path.GetFileNameWithoutExtension(projectPath);
         
-        // Try common output paths
-        var possiblePaths = new[]
+        // Try to detect target framework from project file
+        var targetFrameworks = GetTargetFrameworksFromProject(projectPath);
+        
+        var possiblePaths = new List<string>();
+        
+        // Try different configurations and frameworks
+        var configurations = new[] { "Debug", "Release" };
+        
+        foreach (var config in configurations)
         {
-            Path.Combine(projectDir, "bin", "Debug", "net8.0", $"{projectName}.dll"),
-            Path.Combine(projectDir, "bin", "Debug", "netstandard2.0", $"{projectName}.dll"),
-            Path.Combine(projectDir, "bin", "Release", "net8.0", $"{projectName}.dll"),
-            Path.Combine(projectDir, "bin", "Release", "netstandard2.0", $"{projectName}.dll")
-        };
+            foreach (var framework in targetFrameworks)
+            {
+                possiblePaths.Add(Path.Combine(projectDir, "bin", config, framework, $"{projectName}.dll"));
+            }
+        }
+        
+        // Fallback to common frameworks if none detected
+        if (!targetFrameworks.Any())
+        {
+            foreach (var config in configurations)
+            {
+                possiblePaths.AddRange(new[]
+                {
+                    Path.Combine(projectDir, "bin", config, "net8.0", $"{projectName}.dll"),
+                    Path.Combine(projectDir, "bin", config, "net6.0", $"{projectName}.dll"),
+                    Path.Combine(projectDir, "bin", config, "net5.0", $"{projectName}.dll"),
+                    Path.Combine(projectDir, "bin", config, "netcoreapp3.1", $"{projectName}.dll"),
+                    Path.Combine(projectDir, "bin", config, "netstandard2.0", $"{projectName}.dll")
+                });
+            }
+        }
 
-        return possiblePaths.FirstOrDefault(File.Exists) ?? possiblePaths[0];
+        var existingPath = possiblePaths.FirstOrDefault(File.Exists);
+        if (existingPath != null)
+        {
+            _logger.LogDebug("Found assembly at: {AssemblyPath}", existingPath);
+            return existingPath;
+        }
+        
+        _logger.LogWarning("Assembly not found for project {ProjectPath}, using default path", projectPath);
+        return possiblePaths.First();
     }
 
     private Dictionary<TestCategory, int> CalculateCategoryBreakdown(List<AssemblyAnalysis> assemblies)
@@ -311,5 +375,144 @@ public class AnalysisService : IAnalysisService
         }
 
         return breakdown;
+    }
+
+    /// <summary>
+    /// Determines if a project file represents a test project by examining its content and references.
+    /// </summary>
+    private async Task<bool> IsTestProjectAsync(string projectPath)
+    {
+        try
+        {
+            var projectContent = await File.ReadAllTextAsync(projectPath);
+            
+            // Check for test indicators in project name/path
+            var projectName = Path.GetFileNameWithoutExtension(projectPath).ToLowerInvariant();
+            if (projectName.Contains("test") || projectName.Contains("spec"))
+            {
+                return true;
+            }
+            
+            // Check for common test framework package references
+            var testIndicators = new[]
+            {
+                "Microsoft.NET.Test.Sdk",
+                "xunit", "nunit", "mstest",
+                "FluentAssertions", "Shouldly",
+                "Moq", "NSubstitute", "FakeItEasy"
+            };
+            
+            return testIndicators.Any(indicator => 
+                projectContent.Contains(indicator, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to analyze project file: {ProjectPath}", projectPath);
+            return false;
+        }
+    }
+    
+    /// <summary>
+    /// Extracts target framework versions from a project file.
+    /// </summary>
+    private List<string> GetTargetFrameworksFromProject(string projectPath)
+    {
+        var frameworks = new List<string>();
+        
+        try
+        {
+            var projectContent = File.ReadAllText(projectPath);
+            
+            // Look for TargetFramework (single) or TargetFrameworks (multiple)
+            var lines = projectContent.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            
+            foreach (var line in lines)
+            {
+                var trimmed = line.Trim();
+                
+                if (trimmed.StartsWith("<TargetFramework>", StringComparison.OrdinalIgnoreCase))
+                {
+                    var framework = ExtractXmlElementContent(trimmed, "TargetFramework");
+                    if (!string.IsNullOrEmpty(framework))
+                    {
+                        frameworks.Add(framework);
+                    }
+                }
+                else if (trimmed.StartsWith("<TargetFrameworks>", StringComparison.OrdinalIgnoreCase))
+                {
+                    var frameworksString = ExtractXmlElementContent(trimmed, "TargetFrameworks");
+                    if (!string.IsNullOrEmpty(frameworksString))
+                    {
+                        frameworks.AddRange(frameworksString.Split(';', StringSplitOptions.RemoveEmptyEntries)
+                            .Select(f => f.Trim()));
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse target frameworks from: {ProjectPath}", projectPath);
+        }
+        
+        return frameworks;
+    }
+    
+    /// <summary>
+    /// Extracts content from an XML element in a simple way.
+    /// </summary>
+    private string? ExtractXmlElementContent(string line, string elementName)
+    {
+        var startTag = $"<{elementName}>";
+        var endTag = $"</{elementName}>";
+        
+        var startIndex = line.IndexOf(startTag, StringComparison.OrdinalIgnoreCase);
+        var endIndex = line.IndexOf(endTag, StringComparison.OrdinalIgnoreCase);
+        
+        if (startIndex >= 0 && endIndex > startIndex)
+        {
+            var contentStart = startIndex + startTag.Length;
+            var contentLength = endIndex - contentStart;
+            return line.Substring(contentStart, contentLength).Trim();
+        }
+        
+        return null;
+    }
+    
+    /// <summary>
+    /// Determines if an assembly name represents a test framework.
+    /// </summary>
+    private bool IsTestFrameworkAssembly(string? assemblyName)
+    {
+        if (string.IsNullOrEmpty(assemblyName))
+            return false;
+            
+        var testFrameworkNames = new[]
+        {
+            "xunit", "nunit", "mstest", "Microsoft.VisualStudio.TestPlatform",
+            "FluentAssertions", "Shouldly", "Moq", "NSubstitute", "FakeItEasy",
+            "Microsoft.NET.Test", "TestAdapter", "TestFramework"
+        };
+        
+        return testFrameworkNames.Any(framework => 
+            assemblyName.Contains(framework, StringComparison.OrdinalIgnoreCase));
+    }
+    
+    /// <summary>
+    /// Determines if an assembly name represents a system/runtime assembly.
+    /// </summary>
+    private bool IsSystemAssembly(string? assemblyName)
+    {
+        if (string.IsNullOrEmpty(assemblyName))
+            return false;
+            
+        var systemPrefixes = new[]
+        {
+            "System", "Microsoft.Extensions", "Microsoft.AspNetCore", 
+            "Microsoft.EntityFrameworkCore", "Newtonsoft", "mscorlib",
+            "netstandard", "Microsoft.CSharp", "Microsoft.Win32"
+        };
+        
+        return systemPrefixes.Any(prefix => 
+            assemblyName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
     }
 }

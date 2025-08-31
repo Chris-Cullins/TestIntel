@@ -1,0 +1,1806 @@
+{
+  "AnalyzedPath": "TestIntelligence.sln",
+  "Timestamp": "2025-08-31T01:24:24.202578+00:00",
+  "Assemblies": [
+    {
+      "AssemblyPath": "src/TestIntelligence.Core/bin/Debug/netstandard2.0/TestIntelligence.Core.dll",
+      "Framework": "NetStandard",
+      "TestMethods": []
+    },
+    {
+      "AssemblyPath": "src/TestIntelligence.Categorizer/bin/Debug/netstandard2.0/TestIntelligence.Categorizer.dll",
+      "Framework": "NetStandard",
+      "TestMethods": []
+    },
+    {
+      "AssemblyPath": "src/TestIntelligence.DataTracker/bin/Debug/netstandard2.0/TestIntelligence.DataTracker.dll",
+      "Framework": "NetStandard",
+      "TestMethods": []
+    },
+    {
+      "AssemblyPath": "src/TestIntelligence.ImpactAnalyzer/bin/Debug/netstandard2.0/TestIntelligence.ImpactAnalyzer.dll",
+      "Framework": "NetStandard",
+      "TestMethods": []
+    },
+    {
+      "AssemblyPath": "src/TestIntelligence.SelectionEngine/bin/Debug/netstandard2.0/TestIntelligence.SelectionEngine.dll",
+      "Framework": "NetStandard",
+      "TestMethods": []
+    },
+    {
+      "AssemblyPath": "tests/TestIntelligence.Core.Tests/bin/Debug/net8.0/TestIntelligence.Core.Tests.dll",
+      "Framework": "Net5Plus",
+      "TestMethods": [
+        {
+          "MethodName": "TestFixtureTests.Constructor_WithValidParameters_SetsProperties",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.Constructor_WithNullType_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.Constructor_WithNullAssemblyPath_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.GetUniqueId_ReturnsFullClassName",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.TestMethods_IsInitialized",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.FixtureAttributes_IsInitialized",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.HasSetUpMethods_WithNoSetupMethods_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.HasTearDownMethods_WithNoTearDownMethods_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.HasTests_WithNoTestMethods_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.GetExecutableTests_ReturnsExpectedCollection",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.GetSetUpMethods_ReturnsExpectedCollection",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.GetTearDownMethods_ReturnsExpectedCollection",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.GetCategories_ReturnsExpectedCollection",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestFixtureTests.ToString_ReturnsExpectedFormat",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.Constructor_WithValidParameters_SetsProperties",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.Constructor_WithNullMethodInfo_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.Constructor_WithNullDeclaringType_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.Constructor_WithNullAssemblyPath_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.GetUniqueId_ReturnsExpectedFormat",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.GetDisplayName_ReturnsExpectedFormat",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.IsExecutableTest_WithRegularMethod_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.TestAttributes_IsInitialized",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.ToString_ReturnsDisplayName",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "TestMethodTests.GetTestCaseParameters_WithRegularMethod_ReturnsEmpty",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "NUnitTestDiscoveryTests.IsTestFixture_WithNullType_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "NUnitTestDiscoveryTests.IsTestFixture_WithNonTestClass_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "NUnitTestDiscoveryTests.IsTestMethod_WithNullMethod_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "NUnitTestDiscoveryTests.IsTestMethod_WithRegularMethod_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "NUnitTestDiscoveryTests.DiscoverTestsAsync_WithNullAssembly_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "NUnitTestDiscoveryTests.DiscoverTestsAsync_WithValidAssembly_ReturnsResult",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "NUnitTestDiscoveryTests.DiscoverTestsAsync_MultipleAssemblies_WithNullInput_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "NUnitTestDiscoveryTests.DiscoverTestsAsync_MultipleAssemblies_ReturnsResults",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.GetOrCacheTestDiscoveryAsync_WithNullAssemblyPath_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.GetOrCacheTestDiscoveryAsync_WithNullFactory_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.GetOrCacheTestDiscoveryAsync_WithValidInput_CallsFactory",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.GetOrCacheAssemblyLoadAsync_WithNullAssemblyPath_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.GetOrCacheAssemblyLoadAsync_WithNullFactory_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.GetOrCacheAssemblyLoadAsync_WithValidInput_CallsFactory",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.CacheFrameworkVersionAsync_WithNullAssemblyPath_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.CacheFrameworkVersionAsync_WithValidInput_DoesNotThrow",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.GetCachedFrameworkVersionAsync_WithNullAssemblyPath_ReturnsNull",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.GetCachedFrameworkVersionAsync_WithNonCachedAssembly_ReturnsNull",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.InvalidateAssemblyAsync_WithValidPath_DoesNotThrow",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.ClearAllAsync_DoesNotThrow",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.GetModifiedAssembliesAsync_WithNullInput_ReturnsEmptyList",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "AssemblyMetadataCacheTests.Dispose_CanBeCalledMultipleTimes",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.GetAsync_WithNonExistentKey_ReturnsNull",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.GetAsync_WithNullKey_ReturnsNull",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.SetAsync_WithValidKeyAndValue_StoresValue",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.SetAsync_WithNullKey_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.SetAsync_WithNullValue_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.RemoveAsync_WithExistingKey_RemovesValue_ReturnsTrue",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.RemoveAsync_WithNonExistentKey_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.ExistsAsync_WithExistingKey_ReturnsTrue",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.ExistsAsync_WithNonExistentKey_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.ClearAsync_RemovesAllEntries",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.GetOrSetAsync_WithNonExistentKey_CallsFactory",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.GetOrSetAsync_WithExistingKey_DoesNotCallFactory",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.GetOrSetAsync_WithNullKey_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.GetOrSetAsync_WithNullFactory_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.GetStatistics_ReturnsValidStatistics",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        },
+        {
+          "MethodName": "MemoryCacheProviderTests.Dispose_CanBeCalledMultipleTimes",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core"
+          ]
+        }
+      ]
+    },
+    {
+      "AssemblyPath": "tests/TestIntelligence.DataTracker.Tests/bin/Debug/net8.0/TestIntelligence.DataTracker.Tests.dll",
+      "Framework": "Net5Plus",
+      "TestMethods": [
+        {
+          "MethodName": "TestDataDependencyTrackerTests.Constructor_WithoutLogger_UsesNullLogger",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.Constructor_WithLogger_UsesProvidedLogger",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.FindDataConflictsAsync_WithNullTestAssembly_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.FindDataConflictsAsync_WithValidAssembly_ReturnsReport",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.FindDataConflictsAsync_WithCancellationToken_RespectsToken",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.CanRunInParallelAsync_WithNullTestA_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.CanRunInParallelAsync_WithNullTestB_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.CanRunInParallelAsync_WithValidTestMethods_ReturnsBoolean",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.CanRunInParallelAsync_WithTestsWithoutConflicts_ReturnsTrue",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.GetParallelExecutionRecommendationsAsync_WithNullTestMethods_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.GetParallelExecutionRecommendationsAsync_WithValidTestMethods_ReturnsRecommendations",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.GetParallelExecutionRecommendationsAsync_WithEmptyTestMethods_ReturnsEmptyRecommendations",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.GetParallelExecutionRecommendationsAsync_WithSingleTestMethod_ReturnsEmptyRecommendations",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.GetParallelExecutionRecommendationsAsync_WithCancellationToken_RespectsToken",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.ParallelExecutionRecommendations_Constructor_WithNullCanRunInParallel_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.ParallelExecutionRecommendations_Constructor_WithNullMustRunSequentially_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.ParallelExecutionRecommendations_Properties_SetCorrectly",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.ParallelExecutionRecommendations_ParallelExecutionRatio_CalculatesCorrectly",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.ParallelExecutionRecommendations_WithZeroTotalPairs_ReturnsZeroRatio",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.FindDataConflictsAsync_LogsInformation",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "TestDataDependencyTrackerTests.CanRunInParallelAsync_WithException_ReturnsFalse",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictReportTests.Constructor_WithValidParameters_SetsPropertiesCorrectly",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictReportTests.Constructor_WithNullAssemblyPath_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictReportTests.Constructor_WithNullConflicts_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictReportTests.Constructor_WithNullDependencies_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictReportTests.HighSeverityConflictCount_ReturnsCorrectCount",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictReportTests.ParallelBlockingConflictCount_ReturnsCorrectCount",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictReportTests.GetConflictsBySeverity_ReturnsCorrectConflicts",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictReportTests.GetTestMethodsWithDependencies_ReturnsUniqueTestMethods",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictReportTests.GetTestMethodsWithDependencies_WithNoDependencies_ReturnsEmptyCollection",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictReportTests.ToString_ReturnsExpectedFormat",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictReportTests.Properties_AreImmutable",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictReportTests.Collections_AreReadOnly",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictReportTests.GeneratedAt_IsSetToCurrentTime",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictReportTests.Constructor_WithEmptyCollections_AllowsEmptyCollections",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictReportTests.GetConflictsBySeverity_WithNoMatchingConflicts_ReturnsEmptyCollection",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictTests.Constructor_WithValidParameters_SetsPropertiesCorrectly",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictTests.Constructor_WithNullTestMethodA_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictTests.Constructor_WithNullTestMethodB_ThrowsArgumentNullException",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictTests.Constructor_WithNullConflictReason_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictTests.Constructor_WithNullConflictingDependencies_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictTests.Severity_Property_ReturnsCorrectSeverityForConflictType",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictTests.PreventsParallelExecution_Property_ReturnsCorrectValueForConflictType",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictTests.ToString_ReturnsExpectedFormat",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictTests.Properties_AreImmutable",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictTests.ConflictingDependencies_PropertyIsReadOnly",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataConflictTests.DetectedAt_IsSetToCurrentTime",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataDependencyTests.Constructor_WithValidParameters_SetsPropertiesCorrectly",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataDependencyTests.Constructor_WithNullTestMethodId_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataDependencyTests.Constructor_WithNullResourceIdentifier_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataDependencyTests.Constructor_WithNullEntityTypes_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataDependencyTests.DependencyType_Property_AcceptsAllValidValues",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataDependencyTests.AccessType_Property_AcceptsAllValidValues",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataDependencyTests.ToString_ReturnsExpectedFormat",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataDependencyTests.EntityTypes_PropertyIsReadOnly",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataDependencyTests.DetectedAt_IsSetToCurrentTime",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataDependencyTests.Constructor_WithEmptyEntityTypes_AllowsEmptyList",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DataDependencyTests.Properties_AreImmutable",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DatabaseFrameworkTests.DatabaseFramework_EnumValues_AreCorrect",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DatabaseFrameworkTests.DatabaseFramework_ToString_ReturnsCorrectName",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "DatabaseFrameworkTests.DatabaseFramework_AllValuesAreDefined",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.SupportedFrameworks_ContainsEntityFramework6",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.DetectDatabaseOperationsAsync_WithNullTestMethod_ThrowsArgumentNullException",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.DetectDatabaseOperationsAsync_WithValidTestMethod_ReturnsEmptyList",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.DetectDatabaseOperationsAsync_WithCancellationToken_RespectsToken",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.DetectDatabaseOperationsAsync_WithSetupMethods_HandlesNullEnumerable",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.DetectDatabaseOperationsAsync_WithSetupMethods_ReturnsEmptyListForEmptyEnumerable",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.DetectDatabaseOperationsAsync_WithSetupMethods_ProcessesMultipleMethods",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.RequiresExclusiveDbAccess_WithMethodNameIndicatingExclusiveAccess_ReturnsTrue",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.RequiresExclusiveDbAccess_WithNormalTestMethod_ReturnsFalse",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.RequiresExclusiveDbAccess_WithNullTestMethod_ThrowsArgumentNullException",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.SharesDatabaseDependency_WithNullParameters_ThrowsArgumentNullException",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.SharesDatabaseDependency_WithNoDatabaseDependencies_ReturnsFalse",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.SharesDatabaseDependency_WithSameResourceIdentifier_ReturnsTrue",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.SharesDatabaseDependency_WithSharedEntityTypes_ReturnsTrue",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.SharesDatabaseDependency_WithNoSharedDependencies_ReturnsFalse",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.DetectDbContextUsageAsync_WithNullMethod_ThrowsArgumentNullException",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.DetectDbContextUsageAsync_WithValidMethod_ReturnsResult",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.DetectDataSeedingAsync_WithNullMethod_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.DetectDataSeedingAsync_WithValidMethod_ReturnsResult",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EF6PatternDetectorTests.RequiresExclusiveDbAccess_WithExceptionThrown_ReturnsTrue",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.SupportedFrameworks_ContainsEntityFrameworkCore",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.DetectDatabaseOperationsAsync_WithNullTestMethod_ThrowsArgumentNullException",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.DetectDatabaseOperationsAsync_WithValidTestMethod_ReturnsEmptyList",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.DetectDatabaseOperationsAsync_WithCancellationToken_RespectsToken",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.DetectDatabaseOperationsAsync_WithSetupMethods_HandlesNullEnumerable",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.DetectDatabaseOperationsAsync_WithSetupMethods_ReturnsEmptyListForEmptyEnumerable",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.DetectDatabaseOperationsAsync_WithSetupMethods_ProcessesMultipleMethods",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.RequiresExclusiveDbAccess_WithInMemoryDatabase_ReturnsFalse",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.RequiresExclusiveDbAccess_WithNullTestMethod_ThrowsArgumentNullException",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.SharesDatabaseDependency_WithNullParameters_ThrowsArgumentNullException",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.SharesDatabaseDependency_WithNoDatabaseDependencies_ReturnsFalse",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.SharesDatabaseDependency_WithSameInMemoryDatabase_ReturnsTrue",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.SharesDatabaseDependency_WithDifferentInMemoryDatabases_ReturnsFalse",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.SharesDatabaseDependency_WithSameResourceIdentifier_ReturnsTrue",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.SharesDatabaseDependency_WithSharedEntityTypes_ReturnsTrue",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.SharesDatabaseDependency_WithNoSharedDependencies_ReturnsFalse",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.DetectDbContextUsageAsync_WithNullMethod_ThrowsArgumentNullException",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.DetectDbContextUsageAsync_WithValidMethod_ReturnsResult",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.DetectInMemoryDatabaseUsageAsync_WithNullMethod_ThrowsArgumentNullException",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.DetectInMemoryDatabaseUsageAsync_WithValidMethod_ReturnsResult",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.RequiresExclusiveDbAccess_WithExceptionThrown_ReturnsFalse",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "EFCorePatternDetectorTests.DetermineAccessType_BasedOnMethodName_ReturnsCorrectAccessType",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "HelperClassTests.EF6ContextUsage_Constructor_WithValidParameters_SetsProperties",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "HelperClassTests.EF6ContextUsage_Constructor_WithNullContextType_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "HelperClassTests.EF6ContextUsage_Constructor_WithNullEntitySets_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "HelperClassTests.EFCoreContextUsage_Constructor_WithValidParameters_SetsProperties",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "HelperClassTests.EFCoreContextUsage_Constructor_WithNullContextType_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "HelperClassTests.EFCoreContextUsage_Constructor_WithNullEntitySets_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "HelperClassTests.InMemoryDatabaseUsage_Constructor_WithValidParameters_SetsProperties",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "HelperClassTests.InMemoryDatabaseUsage_Constructor_WithNullDatabaseName_ThrowsArgumentNullException",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "HelperClassTests.InMemoryDatabaseUsage_Constructor_WithNullContextType_ThrowsArgumentNullException",
+          "Category": "Database",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "HelperClassTests.DataSeedingOperation_Constructor_WithValidParameters_SetsProperties",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "HelperClassTests.DataSeedingOperation_Constructor_WithNullEntityType_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "HelperClassTests.DataSeedingOperation_Constructor_WithNullOperationType_ThrowsArgumentNullException",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "HelperClassTests.DataSeedingOperation_Constructor_WithZeroRecordCount_AllowsZero",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        },
+        {
+          "MethodName": "HelperClassTests.DataSeedingOperation_Constructor_WithNegativeRecordCount_AllowsNegative",
+          "Category": "Unit",
+          "EstimatedDuration": "00:00:00.1000000",
+          "Tags": [],
+          "Dependencies": [
+            "TestIntelligence.Core",
+            "TestIntelligence.DataTracker"
+          ]
+        }
+      ]
+    },
+    {
+      "AssemblyPath": "tests/TestIntelligence.ImpactAnalyzer.Tests/bin/Debug/net8.0/TestIntelligence.ImpactAnalyzer.Tests.dll",
+      "Framework": "Net5Plus",
+      "TestMethods": []
+    },
+    {
+      "AssemblyPath": "src/TestIntelligence.Framework48Adapter/bin/Debug/netstandard2.0/TestIntelligence.Framework48Adapter.dll",
+      "Framework": "NetStandard",
+      "TestMethods": []
+    },
+    {
+      "AssemblyPath": "src/TestIntelligence.NetCoreAdapter/bin/Debug/netstandard2.0/TestIntelligence.NetCoreAdapter.dll",
+      "Framework": "NetStandard",
+      "TestMethods": []
+    },
+    {
+      "AssemblyPath": "src/TestIntelligence.API/bin/Debug/net8.0/TestIntelligence.API.dll",
+      "Framework": "Net5Plus",
+      "TestMethods": []
+    },
+    {
+      "AssemblyPath": "tests/TestIntelligence.API.Tests/bin/Debug/net8.0/TestIntelligence.API.Tests.dll",
+      "Framework": "Net5Plus",
+      "TestMethods": []
+    }
+  ],
+  "Summary": {
+    "TotalAssemblies": 12,
+    "TotalTestMethods": 179,
+    "SuccessfullyAnalyzed": 12,
+    "FailedAnalyses": 0,
+    "CategoryBreakdown": {
+      "Unit": 135,
+      "Database": 44
+    }
+  }
+}
