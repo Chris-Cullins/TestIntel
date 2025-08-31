@@ -25,7 +25,7 @@
     <PackageReference Include="Microsoft.Build.Locator" Version="1.6.10" />
     <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.8.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.8.0" />
-    <!-- Other dependencies provided by Directory.Build.props: Microsoft.CodeAnalysis.CSharp, Newtonsoft.Json, System.Collections.Immutable -->
+    <!-- Other dependencies provided by Directory.Build.props: Microsoft.CodeAnalysis.CSharp, Newtonsoft.Json, System.Collections.Immutable, System.CodeDom -->
     <PackageReference Include="System.Reflection.Metadata" Version="8.0.0" />
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>

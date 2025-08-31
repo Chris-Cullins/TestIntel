@@ -56,6 +56,8 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="System.Memory" Version="4.5.5" />
     <PackageReference Include="System.Collections.Immutable" Version="8.0.0" />
+    <!-- Fix for System.CodeDom version conflicts in MSBuild -->
+    <PackageReference Include="System.CodeDom" Version="8.0.0" />
   </ItemGroup>
 
   <!-- Global suppression of warnings that don't add value -->

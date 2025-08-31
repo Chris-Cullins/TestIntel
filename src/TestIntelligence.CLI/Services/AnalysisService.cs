@@ -65,11 +65,17 @@ public class AnalysisService : IAnalysisService
         
         _logger.LogInformation("Found {Count} assemblies to analyze", assemblyPaths.Count);
 
+        // Use a single shared loader for the entire analysis to avoid assembly resolution conflicts
+        using var sharedLoader = new CrossFrameworkAssemblyLoader();
+
         foreach (var assemblyPath in assemblyPaths)
         {
             try
             {
-                var assemblyAnalysis = await AnalyzeAssemblyAsync(assemblyPath, verbose);
+                _logger.LogDebug("Starting analysis of assembly: {AssemblyPath}", assemblyPath);
+                var assemblyAnalysis = await AnalyzeAssemblyAsync(assemblyPath, verbose, sharedLoader);
+                _logger.LogDebug("Assembly {AssemblyName} analysis completed: {TestCount} tests found", 
+                    Path.GetFileName(assemblyPath), assemblyAnalysis.TestMethods.Count);
                 result.Assemblies.Add(assemblyAnalysis);
             }
             catch (Exception ex)
@@ -119,7 +125,12 @@ public class AnalysisService : IAnalysisService
                     var assemblyPath = GetAssemblyPathFromProject(projectPath);
                     if (File.Exists(assemblyPath))
                     {
+                        _logger.LogDebug("Found assembly: {AssemblyPath}", assemblyPath);
                         assemblies.Add(assemblyPath);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Assembly not found for project {ProjectPath}, expected at {AssemblyPath}", projectPath, assemblyPath);
                     }
                 }
             }
@@ -138,7 +149,7 @@ public class AnalysisService : IAnalysisService
         return assemblies.Distinct().ToList();
     }
 
-    private async Task<AssemblyAnalysis> AnalyzeAssemblyAsync(string assemblyPath, bool verbose)
+    private async Task<AssemblyAnalysis> AnalyzeAssemblyAsync(string assemblyPath, bool verbose, CrossFrameworkAssemblyLoader? sharedLoader = null)
     {
         _logger.LogDebug("Analyzing assembly: {Assembly}", assemblyPath);
 
@@ -151,7 +162,8 @@ public class AnalysisService : IAnalysisService
         try
         {
             // Load assembly and discover tests
-            var loader = new CrossFrameworkAssemblyLoader();
+            var loader = sharedLoader ?? new CrossFrameworkAssemblyLoader();
+            var shouldDisposeLoader = sharedLoader == null;
             var loadResult = await loader.LoadAssemblyAsync(assemblyPath);
             
             if (!loadResult.IsSuccess || loadResult.Assembly == null)
@@ -161,6 +173,26 @@ public class AnalysisService : IAnalysisService
             
             var discovery = TestDiscoveryFactory.CreateNUnitTestDiscovery();
             var discoveryResult = await discovery.DiscoverTestsAsync(loadResult.Assembly);
+            
+            if (discoveryResult.Errors.Any())
+            {
+                // Check if this looks like a dependency resolution issue
+                var hasDependencyIssues = discoveryResult.Errors.Any(e => 
+                    e.Contains("Could not load file or assembly") || 
+                    e.Contains("Could not resolve type"));
+                
+                if (hasDependencyIssues)
+                {
+                    _logger.LogWarning("Assembly {AssemblyName} has dependency resolution issues: {ErrorCount} errors", 
+                        Path.GetFileName(assemblyPath), discoveryResult.Errors.Count);
+                }
+                else
+                {
+                    _logger.LogWarning("Assembly {AssemblyName} discovery errors: {Errors}", 
+                        Path.GetFileName(assemblyPath), string.Join(", ", discoveryResult.Errors.Take(3)));
+                }
+            }
+            
             var testMethods = discoveryResult.GetAllTestMethods();
 
             foreach (var testMethod in testMethods)

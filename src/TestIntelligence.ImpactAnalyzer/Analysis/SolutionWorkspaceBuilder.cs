@@ -63,6 +63,9 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                 // { "MSBuildSDKsPath", null }, // Let MSBuild find the SDK automatically
                 { "DesignTimeBuild", "true" }, // Optimize for analysis scenarios
                 { "BuildingProject", "false" }, // We're not building, just analyzing
+                { "SkipCompilerExecution", "true" }, // Skip actual compilation, just get metadata
+                { "ProvideCommandLineArgs", "true" }, // Provide command-line args for analysis
+                { "NonExistentFile", Path.Combine("__NonExistentSubDir__", "__NonExistentFile__") } // Dummy file to prevent actual builds
             };
             
             var workspace = MSBuildWorkspace.Create(properties);
@@ -87,6 +90,12 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                 _logger.LogInformation("Specific loading errors: {LoaderExceptions}", string.Join("; ", ex.LoaderExceptions?.Select(le => le.Message) ?? Array.Empty<string>()));
                 workspace.Dispose();
                 throw new InvalidOperationException($"MSBuild workspace creation failed due to assembly loading issues. Try using individual file analysis instead.", ex);
+            }
+            catch (System.IO.FileLoadException ex) when (ex.Message.Contains("System.CodeDom"))
+            {
+                _logger.LogWarning(ex, "System.CodeDom version conflict detected. MSBuild failed to load proper version.");
+                workspace.Dispose();
+                throw new InvalidOperationException($"MSBuild workspace creation failed due to System.CodeDom version conflicts. This is a known issue with MSBuild and Roslyn integration.", ex);
             }
             catch (Exception ex)
             {

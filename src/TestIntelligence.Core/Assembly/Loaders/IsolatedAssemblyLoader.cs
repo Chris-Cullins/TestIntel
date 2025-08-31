@@ -6,20 +6,24 @@ using System.Reflection;
 namespace TestIntelligence.Core.Assembly.Loaders
 {
     /// <summary>
-    /// Standard assembly loader for .NET Standard and compatible assemblies.
-    /// This loader uses the default AppDomain and provides basic assembly loading functionality.
+    /// Enhanced assembly loader that provides better dependency resolution for complex assemblies like ASP.NET Core tests.
+    /// Uses enhanced dependency resolution strategies to handle missing runtime dependencies.
     /// </summary>
-    public class StandardLoader : BaseAssemblyLoader
+    public class IsolatedAssemblyLoader : BaseAssemblyLoader
     {
         private readonly ConcurrentDictionary<string, WeakReference<ITestAssembly>> _loadedAssemblies;
         private readonly object _lockObject = new object();
+        private readonly string[] _aspNetCoreSharedPaths;
 
         /// <summary>
-        /// Initializes a new instance of the StandardLoader.
+        /// Initializes a new instance of the IsolatedAssemblyLoader.
         /// </summary>
-        public StandardLoader() : base(FrameworkVersion.NetStandard)
+        public IsolatedAssemblyLoader() : base(FrameworkVersion.NetCore)
         {
             _loadedAssemblies = new ConcurrentDictionary<string, WeakReference<ITestAssembly>>(StringComparer.OrdinalIgnoreCase);
+            
+            // Initialize ASP.NET Core shared framework paths
+            _aspNetCoreSharedPaths = GetAspNetCoreSharedPaths();
             
             // Subscribe to assembly resolution events
             AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
@@ -48,11 +52,10 @@ namespace TestIntelligence.Core.Assembly.Loaders
         /// <inheritdoc />
         protected override bool CanLoadFramework(FrameworkVersion frameworkVersion)
         {
-            // StandardLoader can handle most framework versions as fallback
-            return frameworkVersion == FrameworkVersion.NetStandard ||
-                   frameworkVersion == FrameworkVersion.NetCore ||
+            // IsolatedAssemblyLoader handles .NET Core and newer frameworks
+            return frameworkVersion == FrameworkVersion.NetCore ||
                    frameworkVersion == FrameworkVersion.Net5Plus ||
-                   frameworkVersion == FrameworkVersion.Unknown;
+                   frameworkVersion == FrameworkVersion.NetStandard;
         }
 
         /// <inheritdoc />
@@ -81,8 +84,8 @@ namespace TestIntelligence.Core.Assembly.Loaders
 
                 try
                 {
-                    // Load the assembly
-                    var assembly = LoadAssemblyCore(normalizedPath);
+                    // Load the assembly with enhanced dependency resolution
+                    var assembly = LoadAssemblyWithEnhancedResolution(normalizedPath);
                     
                     // Detect the actual framework version
                     var frameworkVersion = FrameworkDetector.DetectFrameworkVersion(normalizedPath);
@@ -106,15 +109,13 @@ namespace TestIntelligence.Core.Assembly.Loaders
         }
 
         /// <summary>
-        /// Core assembly loading logic that can be overridden by derived classes.
+        /// Loads assembly with enhanced dependency resolution for ASP.NET Core dependencies.
         /// </summary>
-        /// <param name="assemblyPath">The path to the assembly to load.</param>
-        /// <returns>The loaded assembly.</returns>
-        protected virtual System.Reflection.Assembly LoadAssemblyCore(string assemblyPath)
+        protected virtual System.Reflection.Assembly LoadAssemblyWithEnhancedResolution(string assemblyPath)
         {
             try
             {
-                // First try LoadFrom
+                // First try LoadFrom with our enhanced resolver
                 return System.Reflection.Assembly.LoadFrom(assemblyPath);
             }
             catch (Exception ex) when (ex.Message.Contains("Could not load file or assembly"))
@@ -147,9 +148,6 @@ namespace TestIntelligence.Core.Assembly.Loaders
             {
                 if (_loadedAssemblies.TryRemove(pathToRemove, out _))
                 {
-                    // Standard loader cannot truly unload assemblies in .NET Framework/.NET Standard
-                    // The assembly will remain loaded until the AppDomain is unloaded
-                    // But we can remove it from our tracking
                     try
                     {
                         testAssembly.Dispose();
@@ -181,7 +179,7 @@ namespace TestIntelligence.Core.Assembly.Loaders
         }
 
         /// <summary>
-        /// Handles assembly resolution events.
+        /// Enhanced assembly resolution that searches for ASP.NET Core shared framework dependencies.
         /// </summary>
         private System.Reflection.Assembly? OnAssemblyResolve(object? sender, ResolveEventArgs args)
         {
@@ -207,6 +205,16 @@ namespace TestIntelligence.Core.Assembly.Loaders
                         {
                             return System.Reflection.Assembly.LoadFrom(localPath);
                         }
+                    }
+                }
+
+                // For ASP.NET Core assemblies, try shared framework locations
+                if (assemblyName.Name?.StartsWith("Microsoft.AspNetCore") == true)
+                {
+                    var sharedFrameworkPath = FindSharedFrameworkAssembly(assemblyName.Name);
+                    if (sharedFrameworkPath != null)
+                    {
+                        return System.Reflection.Assembly.LoadFrom(sharedFrameworkPath);
                     }
                 }
 
@@ -237,6 +245,58 @@ namespace TestIntelligence.Core.Assembly.Loaders
             {
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Gets potential ASP.NET Core shared framework paths for this platform.
+        /// </summary>
+        private static string[] GetAspNetCoreSharedPaths()
+        {
+            var paths = new[]
+            {
+                "/usr/local/share/dotnet/shared/Microsoft.AspNetCore.App",
+                "/usr/share/dotnet/shared/Microsoft.AspNetCore.App",
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "dotnet", "shared", "Microsoft.AspNetCore.App"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "dotnet", "shared", "Microsoft.AspNetCore.App")
+            };
+
+            return paths;
+        }
+
+        /// <summary>
+        /// Attempts to find an assembly in the ASP.NET Core shared framework.
+        /// </summary>
+        private string? FindSharedFrameworkAssembly(string assemblyName)
+        {
+            var fileName = assemblyName + ".dll";
+            
+            foreach (var basePath in _aspNetCoreSharedPaths)
+            {
+                if (!Directory.Exists(basePath))
+                    continue;
+
+                try
+                {
+                    // Look for the latest version directory
+                    var versionDirs = Directory.GetDirectories(basePath);
+                    Array.Sort(versionDirs, StringComparer.OrdinalIgnoreCase);
+                    
+                    for (int i = versionDirs.Length - 1; i >= 0; i--)
+                    {
+                        var assemblyPath = Path.Combine(versionDirs[i], fileName);
+                        if (File.Exists(assemblyPath))
+                        {
+                            return assemblyPath;
+                        }
+                    }
+                }
+                catch
+                {
+                    // Continue to next path
+                }
+            }
+
+            return null;
         }
 
         /// <inheritdoc />

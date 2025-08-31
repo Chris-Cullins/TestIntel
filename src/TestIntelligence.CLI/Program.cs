@@ -67,7 +67,11 @@ public class Program
         return Host.CreateDefaultBuilder(args)
             .ConfigureServices((context, services) =>
             {
-                services.AddLogging(builder => builder.AddConsole());
+                services.AddLogging(builder => 
+                {
+                    builder.AddConsole();
+                    builder.SetMinimumLevel(LogLevel.Debug);
+                });
                 services.AddTransient<ITestSelectionEngine, TestSelectionEngine>();
                 services.AddTransient<IAnalysisService, AnalysisService>();
                 services.AddTransient<ICategorizationService, CategorizationService>();

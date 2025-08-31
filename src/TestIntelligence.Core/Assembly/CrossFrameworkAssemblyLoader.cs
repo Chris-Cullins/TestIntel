@@ -52,22 +52,40 @@ namespace TestIntelligence.Core.Assembly
 
             try
             {
-                _loaders[FrameworkVersion.NetCore] = new NetCoreLoaderCompatible();
-                _logger.LogDebug("NetCoreLoaderCompatible initialized successfully");
+                _loaders[FrameworkVersion.NetCore] = new IsolatedAssemblyLoader();
+                _logger.LogDebug("IsolatedAssemblyLoader initialized successfully");
             }
             catch (Exception ex)
             {
-                _logger.LogWarning("Failed to initialize NetCoreLoaderCompatible: {0}", ex.Message);
+                _logger.LogWarning("Failed to initialize IsolatedAssemblyLoader, falling back to NetCoreLoaderCompatible: {0}", ex.Message);
+                try
+                {
+                    _loaders[FrameworkVersion.NetCore] = new NetCoreLoaderCompatible();
+                    _logger.LogDebug("NetCoreLoaderCompatible fallback initialized successfully");
+                }
+                catch (Exception fallbackEx)
+                {
+                    _logger.LogWarning("Failed to initialize NetCoreLoaderCompatible fallback: {0}", fallbackEx.Message);
+                }
             }
 
             try
             {
-                _loaders[FrameworkVersion.Net5Plus] = new Net5PlusLoaderCompatible();
-                _logger.LogDebug("Net5PlusLoaderCompatible initialized successfully");
+                _loaders[FrameworkVersion.Net5Plus] = new IsolatedAssemblyLoader();
+                _logger.LogDebug("IsolatedAssemblyLoader for Net5Plus initialized successfully");
             }
             catch (Exception ex)
             {
-                _logger.LogWarning("Failed to initialize Net5PlusLoaderCompatible: {0}", ex.Message);
+                _logger.LogWarning("Failed to initialize IsolatedAssemblyLoader for Net5Plus, falling back to Net5PlusLoaderCompatible: {0}", ex.Message);
+                try
+                {
+                    _loaders[FrameworkVersion.Net5Plus] = new Net5PlusLoaderCompatible();
+                    _logger.LogDebug("Net5PlusLoaderCompatible fallback initialized successfully");
+                }
+                catch (Exception fallbackEx)
+                {
+                    _logger.LogWarning("Failed to initialize Net5PlusLoaderCompatible fallback: {0}", fallbackEx.Message);
+                }
             }
 
             // Standard loader should always be available as fallback

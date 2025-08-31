@@ -56,9 +56,31 @@ namespace TestIntelligence.ImpactAnalyzer.Services
 
             _logger.LogInformation("Building test coverage map for solution: {SolutionPath}", solutionPath);
 
-            // Build the complete call graph using the solution path
-            // The Roslyn analyzer will handle finding source files and prefer MSBuild workspace if .sln is provided
-            var callGraph = await _roslynAnalyzer.BuildCallGraphAsync(new[] { solutionPath }, cancellationToken);
+            // Try to build call graph with MSBuild workspace first, fallback to assembly analysis
+            MethodCallGraph callGraph;
+            try 
+            {
+                // Build the complete call graph using the solution path
+                // The Roslyn analyzer will handle finding source files and prefer MSBuild workspace if .sln is provided
+                callGraph = await _roslynAnalyzer.BuildCallGraphAsync(new[] { solutionPath }, cancellationToken);
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("System.CodeDom") || ex.Message.Contains("MSBuild workspace"))
+            {
+                _logger.LogWarning(ex, "MSBuild workspace failed, falling back to assembly-based analysis");
+                
+                // Fallback: Try to analyze compiled assemblies instead
+                var assemblyPaths = FindTestAssembliesInSolution(solutionPath);
+                if (assemblyPaths.Any())
+                {
+                    _logger.LogInformation("Found {AssemblyCount} test assemblies for fallback analysis", assemblyPaths.Count);
+                    callGraph = await _roslynAnalyzer.BuildCallGraphAsync(assemblyPaths.ToArray(), cancellationToken);
+                }
+                else
+                {
+                    _logger.LogWarning("No assemblies found for fallback analysis");
+                    return new TestCoverageMap(new Dictionary<string, List<TestCoverageInfo>>(), DateTime.UtcNow, solutionPath);
+                }
+            }
             
             // Identify test methods and production methods
             var allMethods = callGraph.GetAllMethods()
@@ -282,6 +304,53 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             confidence *= (0.5 + 0.5 * testConfidence); // Scale between 0.5 and 1.0
 
             return Math.Max(0.0, Math.Min(1.0, confidence));
+        }
+
+        private IReadOnlyList<string> FindTestAssembliesInSolution(string solutionPath)
+        {
+            var assemblies = new List<string>();
+            var solutionDir = Path.GetDirectoryName(solutionPath);
+            
+            if (string.IsNullOrEmpty(solutionDir))
+                return assemblies;
+
+            try
+            {
+                // Look for test assemblies in bin/Debug and bin/Release folders
+                var searchPatterns = new[] { "*Test*.dll", "*.Tests.dll" };
+                var searchDirs = new[] { "bin/Debug", "bin/Release" };
+
+                foreach (var searchPattern in searchPatterns)
+                {
+                    foreach (var searchDir in searchDirs)
+                    {
+                        var pattern = Path.Combine(solutionDir, "**", searchDir, "**", searchPattern);
+                        var files = Directory.GetFiles(solutionDir, searchPattern, SearchOption.AllDirectories)
+                            .Where(f => f.Contains("bin") && 
+                                       (f.Contains("Debug") || f.Contains("Release")) &&
+                                       f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                            .ToList();
+                        
+                        assemblies.AddRange(files);
+                    }
+                }
+
+                // Remove duplicates and prefer Debug over Release
+                var uniqueAssemblies = assemblies
+                    .GroupBy(f => Path.GetFileName(f))
+                    .Select(g => g.OrderBy(f => f.Contains("Release") ? 1 : 0).First())
+                    .ToList();
+
+                _logger.LogDebug("Found {AssemblyCount} test assemblies: {Assemblies}", 
+                    uniqueAssemblies.Count, string.Join(", ", uniqueAssemblies.Select(Path.GetFileName)));
+
+                return uniqueAssemblies;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error searching for test assemblies in solution directory: {SolutionDir}", solutionDir);
+                return assemblies;
+            }
         }
 
     }
