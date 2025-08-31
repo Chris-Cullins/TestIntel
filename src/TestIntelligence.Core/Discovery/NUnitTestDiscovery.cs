@@ -18,15 +18,21 @@ namespace TestIntelligence.Core.Discovery
         private static readonly HashSet<string> TestFixtureAttributeNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "TestFixtureAttribute",
-            "NUnit.Framework.TestFixtureAttribute"
+            "NUnit.Framework.TestFixtureAttribute",
+            "TestClassAttribute",
+            "Microsoft.VisualStudio.TestTools.UnitTesting.TestClassAttribute"
         };
 
         private static readonly HashSet<string> TestMethodAttributeNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "TestAttribute",
-            "TestCaseAttribute",
+            "TestCaseAttribute", 
             "NUnit.Framework.TestAttribute",
-            "NUnit.Framework.TestCaseAttribute"
+            "NUnit.Framework.TestCaseAttribute",
+            "FactAttribute",
+            "TheoryAttribute",
+            "Xunit.FactAttribute",
+            "Xunit.TheoryAttribute"
         };
 
         private static readonly HashSet<string> SetupAttributeNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

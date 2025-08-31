@@ -7,8 +7,7 @@ using TestIntelligence.SelectionEngine.Engine;
 using TestIntelligence.SelectionEngine.Interfaces;
 using TestIntelligence.ImpactAnalyzer.Analysis;
 using TestIntelligence.ImpactAnalyzer.Services;
-using TestIntelligence.Core.Services;
-using TestIntelligence.Core.Interfaces;
+using TestIntelligence.Core.Discovery;
 
 namespace TestIntelligence.CLI;
 
@@ -47,6 +46,7 @@ public class Program
                 services.AddTransient<IRoslynAnalyzer, RoslynAnalyzer>();
                 services.AddTransient<IGitDiffParser, GitDiffParser>();
                 services.AddTransient<ISimplifiedDiffImpactAnalyzer, SimplifiedDiffImpactAnalyzer>();
+                services.AddTransient<ITestDiscovery, NUnitTestDiscovery>();
             });
     }
 
