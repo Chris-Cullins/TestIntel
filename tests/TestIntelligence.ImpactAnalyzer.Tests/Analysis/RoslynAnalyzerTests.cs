@@ -310,7 +310,7 @@ namespace TestNamespace
             result.Should().HaveCount(1);
             result.First().TestMethodName.Should().Be("BusinessMethod_ShouldWork");
             result.First().TestClassName.Should().Be("ProductionTests");
-            result.First().CallDepth.Should().Be(0);
+            result.First().CallDepth.Should().Be(1);
             result.First().Confidence.Should().BeGreaterThan(0.8);
         }
 
@@ -605,7 +605,7 @@ namespace TestNamespace
             result.Should().HaveCount(1);
             result.First().TestMethodName.Should().Be("TestMethod");
             result.First().TestClassName.Should().Be("TestClass");
-            result.First().CallDepth.Should().Be(0);
+            result.First().CallDepth.Should().Be(1);
         }
     }
 

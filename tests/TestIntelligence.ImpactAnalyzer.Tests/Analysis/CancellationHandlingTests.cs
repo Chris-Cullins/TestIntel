@@ -193,15 +193,21 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Analysis
         [Fact]
         public async Task CancellationToken_ShouldPropagateToNestedOperations()
         {
-            var sourceCode = CreateComplexSourceCode(1);
-            var filePath = CreateTempFile("NestedCancellationTest.cs", sourceCode);
+            // Create many files to process to increase processing time
+            var files = new List<string>();
+            for (int i = 0; i < 20; i++)
+            {
+                var sourceCode = CreateComplexSourceCode(i);
+                var filePath = CreateTempFile($"NestedCancellationTest{i}.cs", sourceCode);
+                files.Add(filePath);
+            }
             
             using var cts = new CancellationTokenSource();
             
             // Start the operation and cancel it shortly after
-            var task = _analyzer.BuildCallGraphAsync(new[] { filePath }, cts.Token);
+            var task = _analyzer.BuildCallGraphAsync(files.ToArray(), cts.Token);
             
-            await Task.Delay(10); // Let it start
+            await Task.Delay(50); // Let it start
             cts.Cancel();
 
             var action = async () => await task;

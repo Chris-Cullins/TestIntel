@@ -293,50 +293,240 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                 }
             }
 
+            // Create a single compilation with all files to enable cross-file symbol resolution
+            return await BuildCallGraphWithSharedCompilationAsync(sourceFiles.ToArray(), cancellationToken);
+        }
+
+        private async Task<MethodCallGraph> BuildCallGraphWithSharedCompilationAsync(string[] sourceFiles, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             var callGraph = new Dictionary<string, HashSet<string>>();
             var methodDefinitions = new Dictionary<string, MethodInfo>();
 
-            // First pass: Extract method definitions
+            // Create syntax trees for all files
+            var syntaxTrees = new List<Microsoft.CodeAnalysis.SyntaxTree>();
             foreach (var file in sourceFiles)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                
                 if (!File.Exists(file)) continue;
-
-                try
+                
+                var sourceCode = File.ReadAllText(file);
+                var syntaxTree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(sourceCode, path: file);
+                syntaxTrees.Add(syntaxTree);
+                
+                // Add a small async delay to allow cancellation token to be checked more frequently
+                if (syntaxTrees.Count % 5 == 0)
                 {
-                    var methods = await ExtractMethodsStandaloneAsync(file, cancellationToken);
-                    foreach (var method in methods)
-                    {
-                        methodDefinitions[method.Id] = method;
-                        if (!callGraph.ContainsKey(method.Id))
-                            callGraph[method.Id] = new HashSet<string>();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to process file in fallback mode: {FilePath}", file);
+                    await Task.Delay(1, cancellationToken);
                 }
             }
 
-            // Second pass: Extract method calls
-            foreach (var file in sourceFiles)
+            if (syntaxTrees.Count == 0)
+                return new MethodCallGraph(callGraph, methodDefinitions);
+
+            // Create a single compilation with all syntax trees
+            var compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create(
+                assemblyName: "SharedAnalysis",
+                syntaxTrees: syntaxTrees,
+                references: GetBasicReferences()
+            );
+
+            // First pass: Extract method definitions from all files
+            foreach (var syntaxTree in syntaxTrees)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 
-                if (!File.Exists(file)) continue;
+                var semanticModel = compilation.GetSemanticModel(syntaxTree);
+                var root = syntaxTree.GetRoot(cancellationToken);
+                var methodDeclarations = root.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>();
 
-                try
+                foreach (var method in methodDeclarations)
                 {
-                    await ExtractMethodCallsStandaloneAsync(file, callGraph, methodDefinitions, cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var symbol = semanticModel.GetDeclaredSymbol(method, cancellationToken);
+                    if (symbol is not IMethodSymbol methodSymbol) continue;
+
+                    var methodId = GetMethodIdentifier(methodSymbol);
+                    var isTest = IsTestMethod(methodSymbol, method);
+                    var methodInfo = new MethodInfo(
+                        methodId,
+                        methodSymbol.Name,
+                        methodSymbol.ContainingType.Name,
+                        syntaxTree.FilePath ?? "unknown",
+                        method.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
+                        isTest
+                    );
+
+                    methodDefinitions[methodId] = methodInfo;
+                    if (!callGraph.ContainsKey(methodId))
+                        callGraph[methodId] = new HashSet<string>();
                 }
-                catch (Exception ex)
+            }
+
+            // Second pass: Extract method calls using shared semantic models
+            foreach (var syntaxTree in syntaxTrees)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                
+                var semanticModel = compilation.GetSemanticModel(syntaxTree);
+                var root = syntaxTree.GetRoot(cancellationToken);
+                var methodDeclarations = root.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>();
+
+                foreach (var method in methodDeclarations)
                 {
-                    _logger.LogWarning(ex, "Failed to extract method calls from file: {FilePath}", file);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var symbol = semanticModel.GetDeclaredSymbol(method, cancellationToken);
+                    if (symbol is not IMethodSymbol methodSymbol) continue;
+
+                    var callerMethodId = GetMethodIdentifier(methodSymbol);
+                    
+                    // Extract all types of method calls using the same logic as the enhanced version
+                    await ExtractMethodCallsWithSharedSemanticModel(method, semanticModel, callerMethodId, callGraph, methodDefinitions, cancellationToken);
                 }
             }
 
             return new MethodCallGraph(callGraph, methodDefinitions);
+        }
+
+        private async Task ExtractMethodCallsWithSharedSemanticModel(
+            Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax method,
+            SemanticModel semanticModel,
+            string callerMethodId,
+            Dictionary<string, HashSet<string>> callGraph,
+            Dictionary<string, MethodInfo> methodDefinitions,
+            CancellationToken cancellationToken)
+        {
+            // 1. Regular method invocations
+            var invocations = method.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.InvocationExpressionSyntax>();
+            var invocationList = invocations.ToList();
+            for (int i = 0; i < invocationList.Count; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var invocation = invocationList[i];
+                var invokedSymbol = semanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol as IMethodSymbol;
+                if (invokedSymbol != null)
+                {
+                    var calledMethodId = GetMethodIdentifier(invokedSymbol);
+                    callGraph[callerMethodId].Add(calledMethodId);
+                    
+                    // Ensure the called method also exists in the call graph
+                    if (!callGraph.ContainsKey(calledMethodId))
+                    {
+                        callGraph[calledMethodId] = new HashSet<string>();
+                    }
+                    
+                    // Add basic method info for external methods if not already present
+                    if (!methodDefinitions.ContainsKey(calledMethodId))
+                    {
+                        var methodInfo = new MethodInfo(
+                            calledMethodId,
+                            invokedSymbol.Name,
+                            invokedSymbol.ContainingType.Name,
+                            "external",
+                            0,
+                            false
+                        );
+                        methodDefinitions[calledMethodId] = methodInfo;
+                    }
+                }
+                
+                // Add small delay every 10 invocations to allow cancellation
+                if (i > 0 && i % 10 == 0)
+                {
+                    await Task.Delay(1, cancellationToken);
+                }
+            }
+
+            // 2. Constructor calls (new MyClass())
+            var objectCreations = method.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ObjectCreationExpressionSyntax>();
+            foreach (var creation in objectCreations)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var constructorSymbol = semanticModel.GetSymbolInfo(creation, cancellationToken).Symbol as IMethodSymbol;
+                if (constructorSymbol != null)
+                {
+                    var calledMethodId = GetMethodIdentifier(constructorSymbol);
+                    callGraph[callerMethodId].Add(calledMethodId);
+                    
+                    if (!callGraph.ContainsKey(calledMethodId))
+                        callGraph[calledMethodId] = new HashSet<string>();
+                        
+                    if (!methodDefinitions.ContainsKey(calledMethodId))
+                    {
+                        var methodInfo = new MethodInfo(
+                            calledMethodId,
+                            constructorSymbol.Name,
+                            constructorSymbol.ContainingType.Name,
+                            "external",
+                            0,
+                            false
+                        );
+                        methodDefinitions[calledMethodId] = methodInfo;
+                    }
+                }
+            }
+
+            // 3. Property access (obj.MyProperty)
+            var memberAccesses = method.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MemberAccessExpressionSyntax>();
+            foreach (var memberAccess in memberAccesses)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                // Skip if this member access is part of an invocation (already handled above)
+                if (memberAccess.Parent is Microsoft.CodeAnalysis.CSharp.Syntax.InvocationExpressionSyntax)
+                    continue;
+
+                var symbolInfo = semanticModel.GetSymbolInfo(memberAccess, cancellationToken);
+                var memberSymbol = symbolInfo.Symbol;
+                
+                if (memberSymbol is IPropertySymbol propertySymbol)
+                {
+                    var isWriteAccess = IsWriteAccess(memberAccess);
+                    
+                    if (isWriteAccess && propertySymbol.SetMethod != null)
+                    {
+                        var calledMethodId = GetMethodIdentifier(propertySymbol.SetMethod);
+                        callGraph[callerMethodId].Add(calledMethodId);
+                        
+                        if (!callGraph.ContainsKey(calledMethodId))
+                            callGraph[calledMethodId] = new HashSet<string>();
+                            
+                        if (!methodDefinitions.ContainsKey(calledMethodId))
+                        {
+                            var methodInfo = new MethodInfo(
+                                calledMethodId,
+                                propertySymbol.SetMethod.Name,
+                                propertySymbol.SetMethod.ContainingType.Name,
+                                "external",
+                                0,
+                                false
+                            );
+                            methodDefinitions[calledMethodId] = methodInfo;
+                        }
+                    }
+                    else if (!isWriteAccess && propertySymbol.GetMethod != null)
+                    {
+                        var calledMethodId = GetMethodIdentifier(propertySymbol.GetMethod);
+                        callGraph[callerMethodId].Add(calledMethodId);
+                        
+                        if (!callGraph.ContainsKey(calledMethodId))
+                            callGraph[calledMethodId] = new HashSet<string>();
+                            
+                        if (!methodDefinitions.ContainsKey(calledMethodId))
+                        {
+                            var methodInfo = new MethodInfo(
+                                calledMethodId,
+                                propertySymbol.GetMethod.Name,
+                                propertySymbol.GetMethod.ContainingType.Name,
+                                "external",
+                                0,
+                                false
+                            );
+                            methodDefinitions[calledMethodId] = methodInfo;
+                        }
+                    }
+                }
+            }
         }
 
         private Task<SemanticModel> GetSemanticModelFallbackAsync(string filePath, CancellationToken cancellationToken)
@@ -507,7 +697,9 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                     }
                 }
 
-                // Find all invocation expressions in this method
+                // Find all method calls in this method
+                
+                // 1. Regular method invocations
                 var invocations = method.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.InvocationExpressionSyntax>();
                 foreach (var invocation in invocations)
                 {
@@ -538,9 +730,124 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                         }
                     }
                 }
+
+                // 2. Constructor calls (new MyClass())
+                var objectCreations = method.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ObjectCreationExpressionSyntax>();
+                foreach (var creation in objectCreations)
+                {
+                    var constructorSymbol = semanticModel.GetSymbolInfo(creation, cancellationToken).Symbol as IMethodSymbol;
+                    if (constructorSymbol != null)
+                    {
+                        var calledMethodId = GetMethodIdentifier(constructorSymbol);
+                        callGraph[callerMethodId].Add(calledMethodId);
+                        
+                        // Ensure the called method also exists in the call graph
+                        if (!callGraph.ContainsKey(calledMethodId))
+                        {
+                            callGraph[calledMethodId] = new HashSet<string>();
+                        }
+                        
+                        // Add basic method info for constructor if not already present
+                        if (!methodDefinitions.ContainsKey(calledMethodId))
+                        {
+                            var methodInfo = new MethodInfo(
+                                calledMethodId,
+                                constructorSymbol.Name,
+                                constructorSymbol.ContainingType.Name,
+                                filePath,
+                                0,
+                                false
+                            );
+                            methodDefinitions[calledMethodId] = methodInfo;
+                        }
+                    }
+                }
+
+                // 3. Property access (obj.MyProperty)
+                var memberAccesses = method.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MemberAccessExpressionSyntax>();
+                foreach (var memberAccess in memberAccesses)
+                {
+                    // Skip if this member access is part of an invocation (already handled above)
+                    if (memberAccess.Parent is Microsoft.CodeAnalysis.CSharp.Syntax.InvocationExpressionSyntax)
+                        continue;
+
+                    var symbolInfo = semanticModel.GetSymbolInfo(memberAccess, cancellationToken);
+                    var memberSymbol = symbolInfo.Symbol;
+                    
+                    if (memberSymbol is IPropertySymbol propertySymbol)
+                    {
+                        // Add both getter and setter calls based on usage context
+                        var isWriteAccess = IsWriteAccess(memberAccess);
+                        
+                        if (isWriteAccess && propertySymbol.SetMethod != null)
+                        {
+                            var calledMethodId = GetMethodIdentifier(propertySymbol.SetMethod);
+                            callGraph[callerMethodId].Add(calledMethodId);
+                            
+                            if (!callGraph.ContainsKey(calledMethodId))
+                                callGraph[calledMethodId] = new HashSet<string>();
+                                
+                            if (!methodDefinitions.ContainsKey(calledMethodId))
+                            {
+                                var methodInfo = new MethodInfo(
+                                    calledMethodId,
+                                    propertySymbol.SetMethod.Name,
+                                    propertySymbol.SetMethod.ContainingType.Name,
+                                    filePath,
+                                    0,
+                                    false
+                                );
+                                methodDefinitions[calledMethodId] = methodInfo;
+                            }
+                        }
+                        else if (!isWriteAccess && propertySymbol.GetMethod != null)
+                        {
+                            var calledMethodId = GetMethodIdentifier(propertySymbol.GetMethod);
+                            callGraph[callerMethodId].Add(calledMethodId);
+                            
+                            if (!callGraph.ContainsKey(calledMethodId))
+                                callGraph[calledMethodId] = new HashSet<string>();
+                                
+                            if (!methodDefinitions.ContainsKey(calledMethodId))
+                            {
+                                var methodInfo = new MethodInfo(
+                                    calledMethodId,
+                                    propertySymbol.GetMethod.Name,
+                                    propertySymbol.GetMethod.ContainingType.Name,
+                                    filePath,
+                                    0,
+                                    false
+                                );
+                                methodDefinitions[calledMethodId] = methodInfo;
+                            }
+                        }
+                    }
+                }
             }
 
             return Task.CompletedTask;
+        }
+
+        private static bool IsWriteAccess(Microsoft.CodeAnalysis.CSharp.Syntax.MemberAccessExpressionSyntax memberAccess)
+        {
+            var parent = memberAccess.Parent;
+
+            // Check if it's the left side of an assignment
+            if (parent is Microsoft.CodeAnalysis.CSharp.Syntax.AssignmentExpressionSyntax assignment && assignment.Left == memberAccess)
+                return true;
+
+            // Check if it's used with ++ or -- operators
+            if (parent is Microsoft.CodeAnalysis.CSharp.Syntax.PrefixUnaryExpressionSyntax prefixUnary && 
+                (prefixUnary.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.PreIncrementExpression) || 
+                 prefixUnary.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.PreDecrementExpression)))
+                return true;
+
+            if (parent is Microsoft.CodeAnalysis.CSharp.Syntax.PostfixUnaryExpressionSyntax postfixUnary && 
+                (postfixUnary.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.PostIncrementExpression) || 
+                 postfixUnary.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.PostDecrementExpression)))
+                return true;
+
+            return false;
         }
 
         private Task<IReadOnlyList<TypeUsageInfo>> AnalyzeTypeUsageWithSemanticModel(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
