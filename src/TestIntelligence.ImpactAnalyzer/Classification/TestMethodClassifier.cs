@@ -50,7 +50,7 @@ namespace TestIntelligence.ImpactAnalyzer.Classification
         };
 
         private static readonly Regex TestMethodNamePattern = new Regex(
-            @"(test|spec|should|when|given|scenario|example|verify|check|ensure).*|(.*)(test|tests|spec|specs)$",
+            @"(test|spec|should|when|given|scenario|example|verify|check|ensure|benchmark|calculate).*|(.*)(test|tests|spec|specs)$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         /// <summary>
@@ -71,13 +71,8 @@ namespace TestIntelligence.ImpactAnalyzer.Classification
             // Only apply to methods in explicitly identified test projects
             if (IsInTestProject(methodInfo.FilePath))
             {
-                var methodName = methodInfo.Name.ToLowerInvariant();
-                
-                // Very restrictive naming patterns - must start with clear test indicators
-                return methodName.StartsWith("test") || 
-                       methodName.StartsWith("should") || 
-                       methodName.StartsWith("when") || 
-                       methodName.StartsWith("given");
+                // Use comprehensive regex pattern for test method naming conventions
+                return TestMethodNamePattern.IsMatch(methodInfo.Name);
             }
 
             // No fallback for production code - if it doesn't have attributes, it's not a test
