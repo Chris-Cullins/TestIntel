@@ -23,7 +23,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Performance
         public CompilationCacheIntegrationTests(ITestOutputHelper output)
         {
             _output = output;
-            _analyzerLogger = new TestLogger<OptimizedRoslynAnalyzer>(output);
+            _analyzerLogger = new TestLogger<RoslynAnalyzerV2>(output);
             _cacheLogger = new TestLogger<EnhancedCompilationCache>(output);
             _fsLogger = new TestLogger<FileSystemCache>(output);
             _memoryCache = new MemoryCache(new MemoryCacheOptions());
@@ -40,7 +40,8 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Performance
             try
             {
                 // Test original analyzer
-                var originalAnalyzer = new RoslynAnalyzer(new TestLogger<RoslynAnalyzer>(_output));
+                var loggerFactory = new Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory();
+                var originalAnalyzer = new RoslynAnalyzerV2(new TestLogger<RoslynAnalyzerV2>(_output), loggerFactory);
                 var originalStats = await MeasureAnalyzerPerformance(originalAnalyzer, testFiles, "Original");
 
                 // Test optimized analyzer
@@ -55,7 +56,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Performance
                         FileSystemCacheExpiration = TimeSpan.FromHours(1)
                     });
 
-                var optimizedAnalyzer = new OptimizedRoslynAnalyzer(_analyzerLogger, compilationCache, maxParallelism: 2);
+                var optimizedAnalyzer = new RoslynAnalyzerV2(_analyzerLogger, loggerFactory);
                 var optimizedStats = await MeasureAnalyzerPerformance(optimizedAnalyzer, testFiles, "Optimized");
 
                 // Validate performance improvement

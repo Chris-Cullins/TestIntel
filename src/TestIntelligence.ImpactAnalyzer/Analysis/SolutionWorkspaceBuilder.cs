@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+// using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.Extensions.Logging;
@@ -37,6 +38,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
     public class SolutionWorkspaceBuilder
     {
         private readonly ILogger<SolutionWorkspaceBuilder> _logger;
+        // private static bool _msbuildRegistered = false;
+        // private static readonly object _lockObject = new object();
 
         public SolutionWorkspaceBuilder(ILogger<SolutionWorkspaceBuilder> logger)
         {
@@ -50,7 +53,19 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
             _logger.LogInformation("Creating workspace for solution: {SolutionPath}", solutionPath);
 
-            var workspace = MSBuildWorkspace.Create();
+            // Ensure MSBuild is registered (only once per process)
+            // EnsureMSBuildRegistered();
+
+            // Configure MSBuild properties to use the local .NET SDK
+            var properties = new Dictionary<string, string>
+            {
+                // Use the current .NET SDK
+                // { "MSBuildSDKsPath", null }, // Let MSBuild find the SDK automatically
+                { "DesignTimeBuild", "true" }, // Optimize for analysis scenarios
+                { "BuildingProject", "false" }, // We're not building, just analyzing
+            };
+            
+            var workspace = MSBuildWorkspace.Create(properties);
             
             try
             {
@@ -274,5 +289,48 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
             return references.ToImmutableArray();
         }
+
+        // private void EnsureMSBuildRegistered()
+        // {
+        //     lock (_lockObject)
+        //     {
+        //         if (!_msbuildRegistered)
+        //         {
+        //             try
+        //             {
+        //                 _logger.LogInformation("Registering MSBuild with MSBuildLocator");
+        //                 
+        //                 // Find the default MSBuild instance
+        //                 var msbuildInstances = MSBuildLocator.QueryVisualStudioInstances().ToList();
+        //                 
+        //                 if (msbuildInstances.Any())
+        //                 {
+        //                     var latestInstance = msbuildInstances
+        //                         .OrderByDescending(i => i.Version)
+        //                         .First();
+        //                     
+        //                     _logger.LogInformation("Found MSBuild instance: {Name} {Version} at {Path}", 
+        //                         latestInstance.Name, latestInstance.Version, latestInstance.MSBuildPath);
+        //                         
+        //                     MSBuildLocator.RegisterInstance(latestInstance);
+        //                 }
+        //                 else
+        //                 {
+        //                     _logger.LogInformation("No Visual Studio instances found, registering default MSBuild");
+        //                     MSBuildLocator.RegisterDefaults();
+        //                 }
+        //                 
+        //                 _msbuildRegistered = true;
+        //                 _logger.LogInformation("MSBuild registration completed successfully");
+        //             }
+        //             catch (Exception ex)
+        //             {
+        //                 _logger.LogWarning(ex, "Failed to register MSBuild with MSBuildLocator, using defaults");
+        //                 // Don't throw - let MSBuildWorkspace.Create try with system defaults
+        //                 _msbuildRegistered = true; // Prevent retries
+        //             }
+        //         }
+        //     }
+        // }
     }
 }

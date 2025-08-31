@@ -56,11 +56,9 @@ namespace TestIntelligence.ImpactAnalyzer.Services
 
             _logger.LogInformation("Building test coverage map for solution: {SolutionPath}", solutionPath);
 
-            // Get all source files in the solution
-            var sourceFiles = await GetSourceFilesAsync(solutionPath, cancellationToken);
-            
-            // Build the complete call graph
-            var callGraph = await _roslynAnalyzer.BuildCallGraphAsync(sourceFiles, cancellationToken);
+            // Build the complete call graph using the solution path
+            // The Roslyn analyzer will handle finding source files and prefer MSBuild workspace if .sln is provided
+            var callGraph = await _roslynAnalyzer.BuildCallGraphAsync(new[] { solutionPath }, cancellationToken);
             
             // Identify test methods and production methods
             var allMethods = callGraph.GetAllMethods()
@@ -142,9 +140,8 @@ namespace TestIntelligence.ImpactAnalyzer.Services
 
             var coverageMap = await BuildTestCoverageMapAsync(solutionPath, cancellationToken);
             
-            // Get all source files and build call graph to count total methods
-            var sourceFiles = await GetSourceFilesAsync(solutionPath, cancellationToken);
-            var callGraph = await _roslynAnalyzer.BuildCallGraphAsync(sourceFiles, cancellationToken);
+            // Get call graph to count total methods (already built in BuildTestCoverageMapAsync)
+            var callGraph = await _roslynAnalyzer.BuildCallGraphAsync(new[] { solutionPath }, cancellationToken);
             
             var allMethods = callGraph.GetAllMethods()
                 .Select(methodId => callGraph.GetMethodInfo(methodId))
@@ -287,24 +284,5 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             return Math.Max(0.0, Math.Min(1.0, confidence));
         }
 
-        private Task<string[]> GetSourceFilesAsync(string solutionPath, CancellationToken cancellationToken)
-        {
-            // For now, we'll get all .cs files in the solution directory and subdirectories
-            // In a more sophisticated implementation, we'd parse the solution file
-            var solutionDir = Path.GetDirectoryName(solutionPath) ?? solutionPath;
-            
-            if (Directory.Exists(solutionDir))
-            {
-                var files = Directory.GetFiles(solutionDir, "*.cs", SearchOption.AllDirectories)
-                    .Where(f => !f.Contains("bin") && !f.Contains("obj")) // Skip build artifacts
-                    .ToArray();
-                
-                _logger.LogInformation("Found {FileCount} source files in solution", files.Length);
-                return Task.FromResult(files);
-            }
-
-            _logger.LogWarning("Solution directory not found: {SolutionDir}", solutionDir);
-            return Task.FromResult(Array.Empty<string>());
-        }
     }
 }

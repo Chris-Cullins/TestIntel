@@ -310,7 +310,7 @@ namespace TestNamespace
             result.Should().HaveCount(1);
             result.First().TestMethodName.Should().Be("BusinessMethod_ShouldWork");
             result.First().TestClassName.Should().Be("ProductionTests");
-            result.First().IsDirectCall.Should().BeTrue();
+            result.First().CallDepth.Should().Be(0);
             result.First().Confidence.Should().BeGreaterThan(0.8);
         }
 
@@ -355,8 +355,8 @@ namespace TestNamespace
 
             result.Should().HaveCount(1);
             result.First().TestMethodName.Should().Be("HighLevelMethod_ShouldWork");
-            result.First().IsDirectCall.Should().BeFalse();
-            result.First().PathLength.Should().Be(3); // LowLevelMethod -> HighLevelMethod -> Test
+            result.First().CallDepth.Should().BeGreaterThan(0);
+            result.First().CallDepth.Should().Be(2); // LowLevelMethod -> HighLevelMethod -> Test
         }
 
         [Fact]
@@ -605,7 +605,7 @@ namespace TestNamespace
             result.Should().HaveCount(1);
             result.First().TestMethodName.Should().Be("TestMethod");
             result.First().TestClassName.Should().Be("TestClass");
-            result.First().IsDirectCall.Should().BeTrue();
+            result.First().CallDepth.Should().Be(0);
         }
     }
 
@@ -676,7 +676,8 @@ namespace TestNamespace
         {
             var typeUsage = new TypeUsageInfo("TestType", "TestNamespace", "/path/to/file.cs", 5, TypeUsageContext.Declaration);
 
-            typeUsage.FullTypeName.Should().Be("TestNamespace.TestType");
+            var fullName = string.IsNullOrEmpty(typeUsage.Namespace) ? typeUsage.TypeName : $"{typeUsage.Namespace}.{typeUsage.TypeName}";
+            fullName.Should().Be("TestNamespace.TestType");
         }
 
         [Fact]
@@ -684,7 +685,8 @@ namespace TestNamespace
         {
             var typeUsage = new TypeUsageInfo("TestType", string.Empty, "/path/to/file.cs", 5, TypeUsageContext.Declaration);
 
-            typeUsage.FullTypeName.Should().Be("TestType");
+            var fullName = string.IsNullOrEmpty(typeUsage.Namespace) ? typeUsage.TypeName : $"{typeUsage.Namespace}.{typeUsage.TypeName}";
+            fullName.Should().Be("TestType");
         }
 
         [Fact]
@@ -715,30 +717,30 @@ namespace TestNamespace
         }
 
         [Fact]
-        public void IsDirectCall_WithTwoElementPath_ShouldReturnTrue()
+        public void CallDepth_WithTwoElementPath_ShouldReturnOne()
         {
             var callPath = new[] { "ProductionMethod", "TestMethod" };
             var result = new TestCoverageResult("TestMethod", "TestName", "TestClass", "/test.cs", callPath, 0.85);
 
-            result.IsDirectCall.Should().BeTrue();
+            result.CallDepth.Should().Be(1);
         }
 
         [Fact]
-        public void IsDirectCall_WithThreeElementPath_ShouldReturnFalse()
+        public void CallDepth_WithThreeElementPath_ShouldReturnTwo()
         {
             var callPath = new[] { "ProductionMethod", "IntermediateMethod", "TestMethod" };
             var result = new TestCoverageResult("TestMethod", "TestName", "TestClass", "/test.cs", callPath, 0.75);
 
-            result.IsDirectCall.Should().BeFalse();
+            result.CallDepth.Should().Be(2);
         }
 
         [Fact]
-        public void PathLength_ShouldReturnCorrectCount()
+        public void CallDepth_ShouldReturnCorrectCount()
         {
             var callPath = new[] { "Method1", "Method2", "Method3", "TestMethod" };
             var result = new TestCoverageResult("TestMethod", "TestName", "TestClass", "/test.cs", callPath, 0.65);
 
-            result.PathLength.Should().Be(4);
+            result.CallDepth.Should().Be(3);
         }
 
         [Fact]

@@ -23,7 +23,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Analysis
         public EnhancedRoslynAnalyzerTests()
         {
             _loggerFactory = Substitute.For<ILoggerFactory>();
-            _loggerFactory.CreateLogger<RoslynAnalyzer>().Returns(Substitute.For<ILogger<RoslynAnalyzer>>());
+            _loggerFactory.CreateLogger<RoslynAnalyzerV2>().Returns(Substitute.For<ILogger<RoslynAnalyzerV2>>());
             _loggerFactory.CreateLogger<RoslynAnalyzerV2>().Returns(Substitute.For<ILogger<RoslynAnalyzerV2>>());
             
             _legacyAnalyzer = RoslynAnalyzerFactory.Create(_loggerFactory, RoslynAnalyzerConfig.Default);
@@ -184,7 +184,7 @@ namespace Tests
             
             // Assert
             analyzer.Should().NotBeNull();
-            analyzer.Should().BeOfType<RoslynAnalyzer>("Default config should create legacy analyzer");
+            analyzer.Should().BeOfType<RoslynAnalyzerV2>("Default config should create RoslynAnalyzerV2");
         }
 
         private string CreateTestProjectCode()
