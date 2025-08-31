@@ -18,7 +18,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Analysis
     public class SymbolResolutionEngineTests : IDisposable
     {
         private readonly ILogger<SymbolResolutionEngine> _logger;
-        private readonly CompilationManager _compilationManager;
+        private readonly ICompilationManager _compilationManager;
         private readonly SymbolResolutionEngine _engine;
         private readonly string _tempDirectory;
 
@@ -28,8 +28,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Analysis
             _tempDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
             Directory.CreateDirectory(_tempDirectory);
             
-            var workspace = CreateMockWorkspace();
-            _compilationManager = Substitute.For<CompilationManager>(Substitute.For<ILogger<CompilationManager>>(), workspace);
+            _compilationManager = Substitute.For<ICompilationManager>();
             _engine = new SymbolResolutionEngine(_compilationManager, _logger);
         }
 
@@ -114,7 +113,7 @@ namespace TestNamespace
 
             var result = _engine.GetFullyQualifiedMethodName(methodSymbol!);
 
-            result.Should().Be("TestNamespace.TestClass.TestMethod(string)");
+            result.Should().Be("global::TestNamespace.TestClass.TestMethod(string)");
         }
 
         [Fact]
@@ -294,20 +293,6 @@ namespace TestNamespace
             return filePath;
         }
 
-        private SolutionWorkspace CreateMockWorkspace()
-        {
-            var workspace = Substitute.For<MSBuildWorkspace>();
-            var solution = Substitute.For<Solution>();
-            var projects = new List<Project>();
-            solution.Projects.Returns(projects);
-
-            return new SolutionWorkspace(
-                workspace,
-                solution,
-                new Dictionary<string, ProjectId>(),
-                new Dictionary<ProjectId, Compilation>()
-            );
-        }
 
     }
 }

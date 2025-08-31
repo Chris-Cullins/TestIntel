@@ -10,10 +10,10 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 {
     public class SymbolResolutionEngine
     {
-        private readonly CompilationManager _compilationManager;
+        private readonly ICompilationManager _compilationManager;
         private readonly ILogger<SymbolResolutionEngine> _logger;
 
-        public SymbolResolutionEngine(CompilationManager compilationManager, ILogger<SymbolResolutionEngine> logger)
+        public SymbolResolutionEngine(ICompilationManager compilationManager, ILogger<SymbolResolutionEngine> logger)
         {
             _compilationManager = compilationManager ?? throw new ArgumentNullException(nameof(compilationManager));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));

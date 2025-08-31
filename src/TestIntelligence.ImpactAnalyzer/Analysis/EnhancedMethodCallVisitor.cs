@@ -47,13 +47,13 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
     public class EnhancedMethodCallVisitor : CSharpSyntaxWalker
     {
         private readonly SemanticModel _semanticModel;
-        private readonly CompilationManager _compilationManager;
+        private readonly ICompilationManager _compilationManager;
         private readonly SymbolResolutionEngine _symbolResolver;
         private readonly ILogger<EnhancedMethodCallVisitor> _logger;
         private readonly List<MethodCallInfo> _methodCalls;
         private readonly string _filePath;
 
-        public EnhancedMethodCallVisitor(SemanticModel semanticModel, CompilationManager compilationManager, 
+        public EnhancedMethodCallVisitor(SemanticModel semanticModel, ICompilationManager compilationManager, 
             SymbolResolutionEngine symbolResolver, ILogger<EnhancedMethodCallVisitor> logger, string filePath)
         {
             _semanticModel = semanticModel ?? throw new ArgumentNullException(nameof(semanticModel));

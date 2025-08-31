@@ -15,12 +15,12 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 {
     public class CallGraphBuilderV2
     {
-        private readonly CompilationManager _compilationManager;
+        private readonly ICompilationManager _compilationManager;
         private readonly SymbolResolutionEngine _symbolResolver;
         private readonly ILogger<CallGraphBuilderV2> _logger;
         private readonly ILoggerFactory _loggerFactory;
 
-        public CallGraphBuilderV2(CompilationManager compilationManager, SymbolResolutionEngine symbolResolver, ILogger<CallGraphBuilderV2> logger, ILoggerFactory loggerFactory)
+        public CallGraphBuilderV2(ICompilationManager compilationManager, SymbolResolutionEngine symbolResolver, ILogger<CallGraphBuilderV2> logger, ILoggerFactory loggerFactory)
         {
             _compilationManager = compilationManager ?? throw new ArgumentNullException(nameof(compilationManager));
             _symbolResolver = symbolResolver ?? throw new ArgumentNullException(nameof(symbolResolver));

@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace TestIntelligence.ImpactAnalyzer.Analysis
 {
-    public class CompilationManager
+    public class CompilationManager : ICompilationManager
     {
         private readonly ILogger<CompilationManager> _logger;
         private readonly SolutionWorkspace _solutionWorkspace;

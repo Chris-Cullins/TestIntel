@@ -22,7 +22,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         private readonly ILoggerFactory _loggerFactory;
 
         private SolutionWorkspace? _currentWorkspace;
-        private CompilationManager? _compilationManager;
+        private ICompilationManager? _compilationManager;
         private SymbolResolutionEngine? _symbolResolver;
         private CallGraphBuilderV2? _callGraphBuilder;
 
