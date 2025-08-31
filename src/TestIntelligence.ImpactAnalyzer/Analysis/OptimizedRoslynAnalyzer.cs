@@ -150,18 +150,32 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                 var methodSymbol = semanticModel.GetDeclaredSymbol(method, cancellationToken);
                 if (methodSymbol == null) continue;
 
+                var isTest = IsTestMethod(methodSymbol, method);
                 var methodInfo = new MethodInfo(
                     GetMethodIdentifier(methodSymbol),
                     methodSymbol.Name,
                     methodSymbol.ContainingType.Name,
                     filePath,
-                    method.GetLocation().GetLineSpan().StartLinePosition.Line + 1
+                    method.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
+                    isTest
                 );
 
                 methods.Add(methodInfo);
             }
 
             return methods;
+        }
+
+        public async Task<IReadOnlyList<TestCoverageResult>> FindTestsExercisingMethodAsync(string methodId, string[] solutionFiles, CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation("Finding tests exercising method: {MethodId}", methodId);
+            
+            var callGraph = await BuildCallGraphAsync(solutionFiles, cancellationToken);
+            var results = callGraph.GetTestCoverageForMethod(methodId);
+            
+            _logger.LogInformation("Found {TestCount} tests exercising method {MethodId}", results.Count, methodId);
+            
+            return results.ToList();
         }
 
         private async Task ProcessFileForCallGraphAsync(
@@ -188,12 +202,14 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                         if (methodSymbol == null) continue;
 
                         var methodId = GetMethodIdentifier(methodSymbol);
+                        var isTest = IsTestMethod(methodSymbol, method);
                         var methodInfo = new MethodInfo(
                             methodId,
                             methodSymbol.Name,
                             methodSymbol.ContainingType.Name,
                             syntaxTree.FilePath,
-                            method.GetLocation().GetLineSpan().StartLinePosition.Line + 1
+                            method.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
+                            isTest
                         );
 
                         methodDefinitions[methodId] = methodInfo;
@@ -300,6 +316,37 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         {
             return _syntaxTreeCache.GetOrAdd(filePath, _ => Task.FromResult(
                 CSharpSyntaxTree.ParseText(File.ReadAllText(filePath), path: filePath)));
+        }
+
+        private static bool IsTestMethod(IMethodSymbol methodSymbol, MethodDeclarationSyntax methodSyntax)
+        {
+            // Check for test attributes
+            var testAttributes = new[] { "Test", "TestMethod", "Fact", "Theory" };
+            
+            foreach (var attributeList in methodSyntax.AttributeLists)
+            {
+                foreach (var attribute in attributeList.Attributes)
+                {
+                    var attributeName = attribute.Name.ToString();
+                    if (testAttributes.Any(ta => attributeName.EndsWith(ta, StringComparison.OrdinalIgnoreCase)))
+                        return true;
+                }
+            }
+
+            // Check method name patterns
+            var methodName = methodSymbol.Name;
+            if (methodName.EndsWith("Test", StringComparison.OrdinalIgnoreCase) ||
+                methodName.EndsWith("Tests", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // Check if containing type is in a test assembly/project
+            var containingType = methodSymbol.ContainingType;
+            var typeName = containingType.Name;
+            if (typeName.EndsWith("Test", StringComparison.OrdinalIgnoreCase) ||
+                typeName.EndsWith("Tests", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            return false;
         }
 
         private static string GetMethodIdentifier(IMethodSymbol methodSymbol)

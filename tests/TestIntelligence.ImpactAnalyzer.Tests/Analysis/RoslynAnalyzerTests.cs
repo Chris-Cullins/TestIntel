@@ -271,6 +271,174 @@ namespace TestNamespace
                 usage.Context == TypeUsageContext.Declaration);
         }
 
+        [Fact]
+        public async Task FindTestsExercisingMethodAsync_WithDirectTestCall_ShouldReturnTest()
+        {
+            var sourceCode = @"
+using System;
+using Xunit;
+
+namespace TestNamespace
+{
+    public class ProductionClass
+    {
+        public void BusinessMethod()
+        {
+            Console.WriteLine(""Business logic"");
+        }
+    }
+
+    public class ProductionTests
+    {
+        [Fact]
+        public void BusinessMethod_ShouldWork()
+        {
+            var instance = new ProductionClass();
+            instance.BusinessMethod();
+        }
+    }
+}";
+
+            var filePath = CreateTempFile("TestCase.cs", sourceCode);
+            var result = await _analyzer.FindTestsExercisingMethodAsync(
+                "TestNamespace.ProductionClass.BusinessMethod()", 
+                new[] { filePath }
+            );
+
+            result.Should().HaveCount(1);
+            result.First().TestMethodName.Should().Be("BusinessMethod_ShouldWork");
+            result.First().TestClassName.Should().Be("ProductionTests");
+            result.First().IsDirectCall.Should().BeTrue();
+            result.First().Confidence.Should().BeGreaterThan(0.8);
+        }
+
+        [Fact]
+        public async Task FindTestsExercisingMethodAsync_WithIndirectTestCall_ShouldReturnTest()
+        {
+            var sourceCode = @"
+using System;
+using Xunit;
+
+namespace TestNamespace
+{
+    public class ProductionClass
+    {
+        public void LowLevelMethod()
+        {
+            Console.WriteLine(""Low level logic"");
+        }
+
+        public void HighLevelMethod()
+        {
+            LowLevelMethod();
+        }
+    }
+
+    public class ProductionTests
+    {
+        [Fact]
+        public void HighLevelMethod_ShouldWork()
+        {
+            var instance = new ProductionClass();
+            instance.HighLevelMethod();
+        }
+    }
+}";
+
+            var filePath = CreateTempFile("IndirectTestCase.cs", sourceCode);
+            var result = await _analyzer.FindTestsExercisingMethodAsync(
+                "TestNamespace.ProductionClass.LowLevelMethod()", 
+                new[] { filePath }
+            );
+
+            result.Should().HaveCount(1);
+            result.First().TestMethodName.Should().Be("HighLevelMethod_ShouldWork");
+            result.First().IsDirectCall.Should().BeFalse();
+            result.First().PathLength.Should().Be(3); // LowLevelMethod -> HighLevelMethod -> Test
+        }
+
+        [Fact]
+        public async Task FindTestsExercisingMethodAsync_WithNoTestCoverage_ShouldReturnEmpty()
+        {
+            var sourceCode = @"
+using System;
+using Xunit;
+
+namespace TestNamespace
+{
+    public class ProductionClass
+    {
+        public void UntestedMethod()
+        {
+            Console.WriteLine(""No test coverage"");
+        }
+    }
+
+    public class ProductionTests
+    {
+        [Fact]
+        public void SomeOtherTest()
+        {
+            Console.WriteLine(""Testing something else"");
+        }
+    }
+}";
+
+            var filePath = CreateTempFile("NoTestCase.cs", sourceCode);
+            var result = await _analyzer.FindTestsExercisingMethodAsync(
+                "TestNamespace.ProductionClass.UntestedMethod()", 
+                new[] { filePath }
+            );
+
+            result.Should().BeEmpty();
+        }
+
+        [Fact]
+        public async Task FindTestsExercisingMethodAsync_WithMultipleTests_ShouldReturnAll()
+        {
+            var sourceCode = @"
+using System;
+using Xunit;
+
+namespace TestNamespace
+{
+    public class ProductionClass
+    {
+        public void SharedMethod()
+        {
+            Console.WriteLine(""Shared logic"");
+        }
+    }
+
+    public class ProductionTests
+    {
+        [Fact]
+        public void Test1()
+        {
+            var instance = new ProductionClass();
+            instance.SharedMethod();
+        }
+
+        [Fact]
+        public void Test2()
+        {
+            var instance = new ProductionClass();
+            instance.SharedMethod();
+        }
+    }
+}";
+
+            var filePath = CreateTempFile("MultipleTestCase.cs", sourceCode);
+            var result = await _analyzer.FindTestsExercisingMethodAsync(
+                "TestNamespace.ProductionClass.SharedMethod()", 
+                new[] { filePath }
+            );
+
+            result.Should().HaveCount(2);
+            result.Should().Contain(r => r.TestMethodName == "Test1");
+            result.Should().Contain(r => r.TestMethodName == "Test2");
+        }
+
         private string CreateTempFile(string fileName, string content)
         {
             var filePath = Path.Combine(_tempDirectory, fileName);
@@ -395,6 +563,48 @@ namespace TestNamespace
 
             result.Should().BeNull();
         }
+
+        [Fact]
+        public void GetTestMethodsExercisingMethod_WithDirectTestCall_ShouldReturnTestMethod()
+        {
+            var callGraph = new Dictionary<string, HashSet<string>>
+            {
+                ["TestMethod"] = new HashSet<string> { "ProductionMethod" }
+            };
+            var methodDefinitions = new Dictionary<string, MethodInfo>
+            {
+                ["TestMethod"] = new MethodInfo("TestMethod", "TestMethod", "TestClass", "/test.cs", 10, true),
+                ["ProductionMethod"] = new MethodInfo("ProductionMethod", "ProductionMethod", "ProductionClass", "/prod.cs", 20, false)
+            };
+            var graph = new MethodCallGraph(callGraph, methodDefinitions);
+
+            var result = graph.GetTestMethodsExercisingMethod("ProductionMethod");
+
+            result.Should().Contain("TestMethod");
+            result.Should().HaveCount(1);
+        }
+
+        [Fact]
+        public void GetTestCoverageForMethod_WithDirectTestCall_ShouldReturnCoverageResult()
+        {
+            var callGraph = new Dictionary<string, HashSet<string>>
+            {
+                ["TestMethod"] = new HashSet<string> { "ProductionMethod" }
+            };
+            var methodDefinitions = new Dictionary<string, MethodInfo>
+            {
+                ["TestMethod"] = new MethodInfo("TestMethod", "TestMethod", "TestClass", "/test.cs", 10, true),
+                ["ProductionMethod"] = new MethodInfo("ProductionMethod", "ProductionMethod", "ProductionClass", "/prod.cs", 20, false)
+            };
+            var graph = new MethodCallGraph(callGraph, methodDefinitions);
+
+            var result = graph.GetTestCoverageForMethod("ProductionMethod");
+
+            result.Should().HaveCount(1);
+            result.First().TestMethodName.Should().Be("TestMethod");
+            result.First().TestClassName.Should().Be("TestClass");
+            result.First().IsDirectCall.Should().BeTrue();
+        }
     }
 
     public class MethodInfoTests
@@ -483,6 +693,85 @@ namespace TestNamespace
             var result = typeUsage.ToString();
 
             result.Should().Be("Declaration: TestNamespace.TestType at file.cs:5");
+        }
+    }
+
+    public class TestCoverageResultTests
+    {
+        [Fact]
+        public void Constructor_WithValidParameters_ShouldCreateInstance()
+        {
+            var callPath = new[] { "ProductionMethod", "TestMethod" };
+            var result = new TestCoverageResult("TestMethod", "TestName", "TestClass", "/test.cs", callPath, 0.85);
+
+            result.TestMethodId.Should().Be("TestMethod");
+            result.TestMethodName.Should().Be("TestName");
+            result.TestClassName.Should().Be("TestClass");
+            result.TestFilePath.Should().Be("/test.cs");
+            result.CallPath.Should().Equal(callPath);
+            result.Confidence.Should().Be(0.85);
+        }
+
+        [Fact]
+        public void IsDirectCall_WithTwoElementPath_ShouldReturnTrue()
+        {
+            var callPath = new[] { "ProductionMethod", "TestMethod" };
+            var result = new TestCoverageResult("TestMethod", "TestName", "TestClass", "/test.cs", callPath, 0.85);
+
+            result.IsDirectCall.Should().BeTrue();
+        }
+
+        [Fact]
+        public void IsDirectCall_WithThreeElementPath_ShouldReturnFalse()
+        {
+            var callPath = new[] { "ProductionMethod", "IntermediateMethod", "TestMethod" };
+            var result = new TestCoverageResult("TestMethod", "TestName", "TestClass", "/test.cs", callPath, 0.75);
+
+            result.IsDirectCall.Should().BeFalse();
+        }
+
+        [Fact]
+        public void PathLength_ShouldReturnCorrectCount()
+        {
+            var callPath = new[] { "Method1", "Method2", "Method3", "TestMethod" };
+            var result = new TestCoverageResult("TestMethod", "TestName", "TestClass", "/test.cs", callPath, 0.65);
+
+            result.PathLength.Should().Be(4);
+        }
+
+        [Fact]
+        public void ToString_ShouldReturnFormattedString()
+        {
+            var callPath = new[] { "ProductionClass.ProductionMethod", "TestClass.TestMethod" };
+            var result = new TestCoverageResult("TestMethod", "TestName", "TestClass", "/test.cs", callPath, 0.85);
+
+            var output = result.ToString();
+
+            output.Should().Contain("[0.85]");
+            output.Should().Contain("TestClass.TestName");
+            output.Should().Contain("ProductionMethod");
+            output.Should().Contain("TestMethod");
+        }
+
+        [Theory]
+        [InlineData(null, "TestName", "TestClass", "/test.cs")]
+        [InlineData("TestMethod", null, "TestClass", "/test.cs")]
+        [InlineData("TestMethod", "TestName", null, "/test.cs")]
+        [InlineData("TestMethod", "TestName", "TestClass", null)]
+        public void Constructor_WithNullParameter_ShouldThrowArgumentNullException(string? testMethodId, string? testMethodName, string? testClassName, string? testFilePath)
+        {
+            var callPath = new[] { "ProductionMethod", "TestMethod" };
+            var action = () => new TestCoverageResult(testMethodId!, testMethodName!, testClassName!, testFilePath!, callPath, 0.85);
+
+            action.Should().Throw<ArgumentNullException>();
+        }
+
+        [Fact]
+        public void Constructor_WithNullCallPath_ShouldThrowArgumentNullException()
+        {
+            var action = () => new TestCoverageResult("TestMethod", "TestName", "TestClass", "/test.cs", null!, 0.85);
+
+            action.Should().Throw<ArgumentNullException>();
         }
     }
 }

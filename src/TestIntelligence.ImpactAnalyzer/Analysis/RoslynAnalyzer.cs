@@ -21,6 +21,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         Task<SemanticModel> GetSemanticModelAsync(string filePath, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<TypeUsageInfo>> AnalyzeTypeUsageAsync(string[] sourceFiles, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<MethodInfo>> ExtractMethodsFromFileAsync(string filePath, CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<TestCoverageResult>> FindTestsExercisingMethodAsync(string methodId, string[] solutionFiles, CancellationToken cancellationToken = default);
     }
 
     public class RoslynAnalyzer : IRoslynAnalyzer
@@ -61,12 +62,14 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                         if (methodSymbol == null) continue;
 
                         var methodId = GetMethodIdentifier(methodSymbol);
+                        var isTest = IsTestMethod(methodSymbol, method);
                         var methodInfo = new MethodInfo(
                             methodId,
                             methodSymbol.Name,
                             methodSymbol.ContainingType.Name,
                             syntaxTree.FilePath,
-                            method.GetLocation().GetLineSpan().StartLinePosition.Line + 1
+                            method.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
+                            isTest
                         );
 
                         methodDefinitions[methodId] = methodInfo;
@@ -222,18 +225,32 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                 var methodSymbol = semanticModel.GetDeclaredSymbol(method, cancellationToken);
                 if (methodSymbol == null) continue;
 
+                var isTest = IsTestMethod(methodSymbol, method);
                 var methodInfo = new MethodInfo(
                     GetMethodIdentifier(methodSymbol),
                     methodSymbol.Name,
                     methodSymbol.ContainingType.Name,
                     filePath,
-                    method.GetLocation().GetLineSpan().StartLinePosition.Line + 1
+                    method.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
+                    isTest
                 );
 
                 methods.Add(methodInfo);
             }
 
             return Task.FromResult<IReadOnlyList<MethodInfo>>(methods);
+        }
+
+        public async Task<IReadOnlyList<TestCoverageResult>> FindTestsExercisingMethodAsync(string methodId, string[] solutionFiles, CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation("Finding tests exercising method: {MethodId}", methodId);
+            
+            var callGraph = await BuildCallGraphAsync(solutionFiles, cancellationToken);
+            var results = callGraph.GetTestCoverageForMethod(methodId);
+            
+            _logger.LogInformation("Found {TestCount} tests exercising method {MethodId}", results.Count, methodId);
+            
+            return results.ToList();
         }
 
         private Task<Compilation?> GetOrCreateCompilationAsync(string filePath, CancellationToken cancellationToken)
@@ -281,6 +298,37 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                 default:
                     return TypeUsageContext.Reference;
             }
+        }
+
+        private static bool IsTestMethod(IMethodSymbol methodSymbol, MethodDeclarationSyntax methodSyntax)
+        {
+            // Check for test attributes
+            var testAttributes = new[] { "Test", "TestMethod", "Fact", "Theory" };
+            
+            foreach (var attributeList in methodSyntax.AttributeLists)
+            {
+                foreach (var attribute in attributeList.Attributes)
+                {
+                    var attributeName = attribute.Name.ToString();
+                    if (testAttributes.Any(ta => attributeName.EndsWith(ta, StringComparison.OrdinalIgnoreCase)))
+                        return true;
+                }
+            }
+
+            // Check method name patterns
+            var methodName = methodSymbol.Name;
+            if (methodName.EndsWith("Test", StringComparison.OrdinalIgnoreCase) ||
+                methodName.EndsWith("Tests", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // Check if containing type is in a test assembly/project
+            var containingType = methodSymbol.ContainingType;
+            var typeName = containingType.Name;
+            if (typeName.EndsWith("Test", StringComparison.OrdinalIgnoreCase) ||
+                typeName.EndsWith("Tests", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            return false;
         }
 
         private static ImmutableArray<MetadataReference> GetBasicReferences()
@@ -356,6 +404,95 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             return _methodDefinitions.Keys;
         }
 
+        public IReadOnlyCollection<string> GetTestMethodsExercisingMethod(string methodId)
+        {
+            var testMethods = new HashSet<string>();
+            var visited = new HashSet<string>();
+            var queue = new Queue<string>();
+
+            // Start from the target method and traverse dependents
+            queue.Enqueue(methodId);
+            visited.Add(methodId);
+
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                
+                // Check direct dependents
+                foreach (var dependent in GetMethodDependents(current))
+                {
+                    if (visited.Add(dependent))
+                    {
+                        var methodInfo = GetMethodInfo(dependent);
+                        if (methodInfo?.IsTestMethod == true)
+                        {
+                            testMethods.Add(dependent);
+                        }
+                        else
+                        {
+                            // Continue traversing non-test methods
+                            queue.Enqueue(dependent);
+                        }
+                    }
+                }
+            }
+
+            return testMethods;
+        }
+
+        public IReadOnlyCollection<TestCoverageResult> GetTestCoverageForMethod(string methodId)
+        {
+            var results = new List<TestCoverageResult>();
+            var visited = new HashSet<string>();
+            var paths = new Dictionary<string, List<string>>();
+
+            // BFS to find all test methods that can reach the target method
+            var queue = new Queue<(string methodId, List<string> path)>();
+            queue.Enqueue((methodId, new List<string> { methodId }));
+            visited.Add(methodId);
+
+            while (queue.Count > 0)
+            {
+                var (current, currentPath) = queue.Dequeue();
+                
+                foreach (var dependent in GetMethodDependents(current))
+                {
+                    var newPath = new List<string>(currentPath) { dependent };
+                    
+                    var methodInfo = GetMethodInfo(dependent);
+                    if (methodInfo?.IsTestMethod == true)
+                    {
+                        // Found a test method - create result
+                        var confidence = CalculateConfidence(newPath);
+                        results.Add(new TestCoverageResult(
+                            dependent,
+                            methodInfo.Name,
+                            methodInfo.ContainingType,
+                            methodInfo.FilePath,
+                            newPath.ToArray(),
+                            confidence
+                        ));
+                    }
+                    else if (!visited.Contains(dependent))
+                    {
+                        // Continue traversing non-test methods
+                        visited.Add(dependent);
+                        queue.Enqueue((dependent, newPath));
+                    }
+                }
+            }
+
+            return results;
+        }
+
+        private static double CalculateConfidence(List<string> callPath)
+        {
+            // Simple confidence calculation based on path length
+            // Direct call = 1.0, each hop reduces confidence
+            var hops = callPath.Count - 1;
+            return Math.Max(0.1, 1.0 - (hops * 0.15));
+        }
+
         private Dictionary<string, HashSet<string>> BuildReverseGraph()
         {
             var reverse = new Dictionary<string, HashSet<string>>();
@@ -377,13 +514,14 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
     public class MethodInfo
     {
-        public MethodInfo(string id, string name, string containingType, string filePath, int lineNumber)
+        public MethodInfo(string id, string name, string containingType, string filePath, int lineNumber, bool isTestMethod = false)
         {
             Id = id ?? throw new ArgumentNullException(nameof(id));
             Name = name ?? throw new ArgumentNullException(nameof(name));
             ContainingType = containingType ?? throw new ArgumentNullException(nameof(containingType));
             FilePath = filePath ?? throw new ArgumentNullException(nameof(filePath));
             LineNumber = lineNumber;
+            IsTestMethod = isTestMethod;
         }
 
         public string Id { get; }
@@ -391,10 +529,12 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         public string ContainingType { get; }
         public string FilePath { get; }
         public int LineNumber { get; }
+        public bool IsTestMethod { get; }
 
         public override string ToString()
         {
-            return $"{ContainingType}.{Name} at {Path.GetFileName(FilePath)}:{LineNumber}";
+            var prefix = IsTestMethod ? "[Test] " : "";
+            return $"{prefix}{ContainingType}.{Name} at {Path.GetFileName(FilePath)}:{LineNumber}";
         }
     }
 
@@ -429,5 +569,34 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         Reference,
         Inheritance,
         Implementation
+    }
+
+    public class TestCoverageResult
+    {
+        public TestCoverageResult(string testMethodId, string testMethodName, string testClassName, string testFilePath, string[] callPath, double confidence)
+        {
+            TestMethodId = testMethodId ?? throw new ArgumentNullException(nameof(testMethodId));
+            TestMethodName = testMethodName ?? throw new ArgumentNullException(nameof(testMethodName));
+            TestClassName = testClassName ?? throw new ArgumentNullException(nameof(testClassName));
+            TestFilePath = testFilePath ?? throw new ArgumentNullException(nameof(testFilePath));
+            CallPath = callPath ?? throw new ArgumentNullException(nameof(callPath));
+            Confidence = confidence;
+        }
+
+        public string TestMethodId { get; }
+        public string TestMethodName { get; }
+        public string TestClassName { get; }
+        public string TestFilePath { get; }
+        public string[] CallPath { get; }
+        public double Confidence { get; }
+
+        public int PathLength => CallPath.Length;
+        public bool IsDirectCall => PathLength == 2; // Target method -> Test method
+
+        public override string ToString()
+        {
+            var pathStr = string.Join(" -> ", CallPath.Select(p => p.Split('.').Last()));
+            return $"[{Confidence:F2}] {TestClassName}.{TestMethodName} via {pathStr}";
+        }
     }
 }
