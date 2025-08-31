@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <PackageId>TestIntelligence.API</PackageId>
+    <PackageDescription>RESTful API for AI agent integration with TestIntelligence library providing intelligent test selection and analysis endpoints.</PackageDescription>
+    <Authors>TestIntelligence Contributors</Authors>
+    <Company>TestIntelligence</Company>
+    <Product>TestIntelligence</Product>
+    <Copyright>Copyright © TestIntelligence Contributors</Copyright>
+    <PackageProjectUrl>https://github.com/testintelligence/testintelligence</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/testintelligence/testintelligence</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>testing;api;agent-integration;rest-api;test-selection</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../TestIntelligence.Core/TestIntelligence.Core.csproj" />
+    <ProjectReference Include="../TestIntelligence.SelectionEngine/TestIntelligence.SelectionEngine.csproj" />
+    <ProjectReference Include="../TestIntelligence.ImpactAnalyzer/TestIntelligence.ImpactAnalyzer.csproj" />
+    <ProjectReference Include="../TestIntelligence.DataTracker/TestIntelligence.DataTracker.csproj" />
+  </ItemGroup>
+
+</Project>

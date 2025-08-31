@@ -296,7 +296,155 @@ Total Tests: 156
 TestIntelligence can now analyze git diffs, patch files, or SVN patches to determine which tests are likely impacted by your changes. This is perfect for:
 
 - **Pull Request Analysis**: Automatically determine which tests to run based on PR changes
-- **Pre-commit Hooks**: Run only tests affected by your local changes  
+- **Pre-commit Hooks**: Run only tests affected by your local changes
+
+## 🌐 RESTful API for AI Agent Integration (NEW!)
+
+TestIntelligence now includes a production-ready RESTful API designed for AI agent integration, providing programmatic access to all intelligent test selection capabilities.
+
+### API Features
+
+- **Multi-factor scoring algorithms** with configurable weights
+- **Confidence-based test selection** (Fast/Medium/High/Full strategies)
+- **Real-time test impact analysis** from git diffs
+- **Machine learning from execution history** to improve recommendations
+- **Batch optimization** for parallel test execution
+- **OpenAPI/Swagger documentation** with interactive testing
+- **CORS enabled** for web-based AI agents
+
+### Starting the API Server
+
+```bash
+# Start the API server (default ports 5000/5001)
+dotnet run --project src/TestIntelligence.API/
+
+# API will be available at:
+# - HTTP: http://localhost:5000
+# - HTTPS: https://localhost:5001  
+# - Swagger UI: https://localhost:5001/swagger
+```
+
+### API Endpoints
+
+#### Test Selection API
+
+```bash
+# Get optimal test plan based on code changes
+POST /api/testselection/plan
+Content-Type: application/json
+{
+  "codeChanges": {
+    "changes": [
+      {
+        "filePath": "src/UserService.cs",
+        "changeType": "Modified", 
+        "changedMethods": ["CreateUser", "UpdateUser"],
+        "changedTypes": ["UserService"]
+      }
+    ]
+  },
+  "confidenceLevel": "Medium",
+  "maxTests": 100,
+  "maxExecutionTime": "00:05:00"
+}
+
+# Analyze git diff and get test recommendations  
+POST /api/testselection/analyze-diff
+Content-Type: application/json
+{
+  "solutionPath": "/path/to/solution.sln",
+  "diffContent": "diff --git a/src/UserService.cs b/src/UserService.cs\n+added line",
+  "confidenceLevel": "High"
+}
+
+# Update test execution history for ML learning
+POST /api/testselection/execution-results
+Content-Type: application/json
+[
+  {
+    "testName": "UserTests.CreateUser_ShouldSucceed",
+    "duration": "00:00:01.500", 
+    "passed": true,
+    "executedAt": "2024-01-15T10:30:00Z",
+    "errorMessage": null
+  }
+]
+
+# Get test execution history and statistics
+GET /api/testselection/history?filter=UserTests
+```
+
+#### Test Discovery API
+
+```bash
+# Discover tests in assemblies or solutions
+POST /api/testdiscovery/discover
+Content-Type: application/json
+{
+  "path": "/path/to/tests.dll",
+  "includeDetailedAnalysis": true,
+  "categoryFilter": ["Unit", "Integration"]
+}
+
+# Get available test categories and descriptions  
+GET /api/testdiscovery/categories
+
+# API health check and feature list
+GET /api/testdiscovery/health
+```
+
+### AI Agent Integration Example
+
+```bash
+# Example: Get test recommendations for a PR
+curl -X POST https://localhost:5001/api/testselection/analyze-diff \
+  -H "Content-Type: application/json" \
+  -d '{
+    "solutionPath": "/workspace/MyApp.sln",
+    "diffContent": "'"$(git diff origin/main)"'",
+    "confidenceLevel": "Medium"
+  }' | jq '.recommendedTests.tests[].testName'
+```
+
+### Response Examples
+
+**Test Selection Response:**
+```json
+{
+  "tests": [
+    {
+      "testName": "UserServiceTests.CreateUser_ValidInput_ShouldSucceed",
+      "category": "Unit",
+      "selectionScore": 0.95,
+      "averageExecutionTime": "00:00:00.125",
+      "assemblyName": "MyApp.Tests"
+    }
+  ],
+  "confidenceLevel": "Medium", 
+  "estimatedDuration": "00:02:15.500",
+  "description": "Selected 23 tests based on Medium confidence level"
+}
+```
+
+**Diff Analysis Response:**
+```json
+{
+  "changeSet": {
+    "changes": [
+      {
+        "filePath": "src/UserService.cs",
+        "changeType": "Modified",
+        "changedMethods": ["CreateUser"],
+        "changedTypes": ["UserService"]
+      }
+    ]
+  },
+  "recommendedTests": { /* TestExecutionPlan */ },
+  "totalChanges": 1,
+  "impactScore": 0.72,
+  "analysisTimestamp": "2024-01-15T14:30:00Z"
+}
+```  
 - **CI/CD Optimization**: Intelligent test selection based on git history
 - **Code Review**: Understand test impact before merging changes
 
