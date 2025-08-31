@@ -1,0 +1,15 @@
+=== Test Selection Report ===
+Path: tests/TestIntelligence.Core.Tests/bin/Debug/net8.0/TestIntelligence.Core.Tests.dll
+Timestamp: 2025-08-31 00:04:03
+Confidence Level: High
+Changed Files: NUnitTestDiscovery.cs
+
+=== Selection Summary ===
+Selected Tests: 0
+Estimated Duration: 0s
+Average Score: 0.000
+Optimal Parallelism: 0
+
+=== Category Breakdown ===
+
+=== Selected Tests ===

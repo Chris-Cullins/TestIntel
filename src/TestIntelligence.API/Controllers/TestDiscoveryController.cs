@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using TestIntelligence.Core.Discovery;
+using TestIntelligence.Core.Models;
+using TestIntelligence.Core.Assembly;
 using TestIntelligence.API.Models;
 using TestIntelligence.SelectionEngine.Models;
 
@@ -166,15 +168,13 @@ public class TestDiscoveryController : ControllerBase
                 _ => TimeSpan.FromMilliseconds(1000)
             };
 
-            var testInfo = new TestInfo(
-                testNames[i],
-                $"TestAssembly.{testNames[i].Split('.')[0]}",
-                testNames[i],
-                category)
+            // Create a mock TestMethod for API demonstration
+            var mockMethodInfo = typeof(object).GetMethod("ToString")!;
+            var mockType = typeof(object);
+            var testMethod = new TestMethod(mockMethodInfo, mockType, "MockAssembly.dll", FrameworkVersion.NetCore);
+            var testInfo = new TestInfo(testMethod, category, executionTime, random.NextDouble())
             {
-                AverageExecutionTime = executionTime,
-                LastExecuted = DateTimeOffset.UtcNow.AddDays(-random.Next(1, 30)),
-                SelectionScore = random.NextDouble()
+                LastExecuted = DateTimeOffset.UtcNow.AddDays(-random.Next(1, 30))
             };
 
             testInfo.Tags.Add($"{category}Test");
@@ -193,7 +193,7 @@ public class TestDiscoveryController : ControllerBase
             TotalTests = tests.Count,
             EstimatedTotalDuration = TimeSpan.FromMilliseconds(
                 tests.Sum(t => t.AverageExecutionTime.TotalMilliseconds)),
-            AssembliesAnalyzed = tests.Select(t => t.AssemblyName).Distinct().Count()
+            AssembliesAnalyzed = tests.Select(t => t.TestMethod.ClassName).Distinct().Count()
         };
 
         foreach (var category in Enum.GetValues<TestCategory>())

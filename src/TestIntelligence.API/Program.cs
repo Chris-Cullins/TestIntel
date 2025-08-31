@@ -1,54 +1,20 @@
-using Microsoft.Extensions.Logging;
-using TestIntelligence.Core.Discovery;
-using TestIntelligence.SelectionEngine.Engine;
-using TestIntelligence.SelectionEngine.Interfaces;
-using TestIntelligence.ImpactAnalyzer.Analysis;
-using TestIntelligence.ImpactAnalyzer.Services;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Hosting;
 
-var builder = WebApplication.CreateBuilder(args);
-
-// Add services to the container
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
+namespace TestIntelligence.API
 {
-    c.SwaggerDoc("v1", new() { 
-        Title = "TestIntelligence API", 
-        Version = "v1",
-        Description = "RESTful API for AI agent integration with intelligent test selection and analysis"
-    });
-});
-
-// Register TestIntelligence services
-builder.Services.AddScoped<ITestSelectionEngine, TestSelectionEngine>();
-builder.Services.AddScoped<ITestDiscovery, NUnitTestDiscovery>();
-builder.Services.AddScoped<IRoslynAnalyzer, RoslynAnalyzer>();
-builder.Services.AddScoped<IGitDiffParser, GitDiffParser>();
-builder.Services.AddScoped<ISimplifiedDiffImpactAnalyzer, SimplifiedDiffImpactAnalyzer>();
-
-// Add CORS for AI agent integration
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AIAgentPolicy", policy =>
+    public class Program
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
-    });
-});
+        public static void Main(string[] args)
+        {
+            CreateHostBuilder(args).Build().Run();
+        }
 
-var app = builder.Build();
-
-// Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
+        public static IHostBuilder CreateHostBuilder(string[] args) =>
+            Host.CreateDefaultBuilder(args)
+                .ConfigureWebHostDefaults(webBuilder =>
+                {
+                    webBuilder.UseStartup<Startup>();
+                });
+    }
 }
-
-app.UseHttpsRedirection();
-app.UseCors("AIAgentPolicy");
-app.UseAuthorization();
-app.MapControllers();
-
-app.Run();

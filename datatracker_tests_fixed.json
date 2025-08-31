@@ -1,0 +1,31 @@
+=== Test Categorization Report ===
+Path: tests/TestIntelligence.DataTracker.Tests/bin/Debug/net8.0/TestIntelligence.DataTracker.Tests.dll
+Timestamp: 2025-08-31 00:03:59
+Total Tests: 117
+
+=== Unit Tests (73) ===
+  • DataConflictReportTests.Collections_AreReadOnly
+  • DataConflictReportTests.Constructor_WithEmptyCollections_AllowsEmptyCollections
+  • DataConflictReportTests.Constructor_WithNullAssemblyPath_ThrowsArgumentNullException
+  • DataConflictReportTests.Constructor_WithNullConflicts_ThrowsArgumentNullException
+  • DataConflictReportTests.Constructor_WithNullDependencies_ThrowsArgumentNullException
+  • DataConflictReportTests.Constructor_WithValidParameters_SetsPropertiesCorrectly
+  • DataConflictReportTests.GeneratedAt_IsSetToCurrentTime
+  • DataConflictReportTests.GetConflictsBySeverity_ReturnsCorrectConflicts
+  • DataConflictReportTests.GetConflictsBySeverity_WithNoMatchingConflicts_ReturnsEmptyCollection
+  • DataConflictReportTests.GetTestMethodsWithDependencies_ReturnsUniqueTestMethods
+  ... and 63 more
+
+=== Database Tests (44) ===
+  • DatabaseFrameworkTests.DatabaseFramework_AllValuesAreDefined
+  • DatabaseFrameworkTests.DatabaseFramework_EnumValues_AreCorrect
+  • DatabaseFrameworkTests.DatabaseFramework_ToString_ReturnsCorrectName
+  • DataConflictTests.Constructor_WithNullTestMethodB_ThrowsArgumentNullException
+  • EF6PatternDetectorTests.DetectDatabaseOperationsAsync_WithCancellationToken_RespectsToken
+  • EF6PatternDetectorTests.DetectDatabaseOperationsAsync_WithNullTestMethod_ThrowsArgumentNullException
+  • EF6PatternDetectorTests.DetectDatabaseOperationsAsync_WithSetupMethods_HandlesNullEnumerable
+  • EF6PatternDetectorTests.DetectDatabaseOperationsAsync_WithSetupMethods_ProcessesMultipleMethods
+  • EF6PatternDetectorTests.DetectDatabaseOperationsAsync_WithSetupMethods_ReturnsEmptyListForEmptyEnumerable
+  • EF6PatternDetectorTests.DetectDatabaseOperationsAsync_WithValidTestMethod_ReturnsEmptyList
+  ... and 34 more
+
