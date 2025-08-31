@@ -10,9 +10,11 @@ TestIntelligence is a comprehensive solution that analyzes your test suites to p
 - **Intelligent Test Selection**: AI-driven algorithms select optimal tests based on code changes
 - **Test Categorization**: Automatically categorizes tests (Unit, Integration, Database, API, UI, etc.)
 - **Impact Analysis**: Advanced Roslyn-based analysis of code dependencies and test impact
+- **Method-to-Test Reverse Lookup**: Find all tests that exercise specific production methods
 - **Data Conflict Detection**: Identifies tests that cannot run in parallel due to shared data
 - **Multiple Test Frameworks**: Supports NUnit, MSTest, and xUnit
 - **CLI Tool**: Command-line interface for CI/CD integration
+- **RESTful API**: Production-ready API for AI agent integration
 - **JSON Output**: Machine-readable output for automation workflows
 
 ## 📦 Installation
@@ -78,6 +80,19 @@ test-intel diff \
   --solution MySolution.sln \
   --diff-content "$(git diff HEAD~1)" \
   --format text
+
+# NEW: Find tests that exercise specific methods (Method-to-Test Reverse Lookup)
+test-intel find-tests \
+  --method "MyNamespace.MyClass.MyMethod" \
+  --solution MySolution.sln \
+  --verbose
+
+# Find tests with JSON output
+test-intel find-tests \
+  --method "UserService.CreateUser" \
+  --solution MySolution.sln \
+  --format json \
+  --output method-coverage.json
 ```
 
 ### Programmatic Usage
@@ -142,6 +157,162 @@ Console.WriteLine($"Parallel batches: {testPlan.Batches.Count}");
     }
   }
 }
+```
+
+### Method-to-Test Coverage Report (JSON)
+
+```json
+{
+  "method": "MyApp.Services.UserService.CreateUser",
+  "solutionPath": "MyApp.sln",
+  "analysisTimestamp": "2025-01-15T14:30:00Z",
+  "testsFound": 8,
+  "coverageTests": [
+    {
+      "testName": "CreateUser_WithValidInput_ShouldCreateUser",
+      "testClass": "UserServiceTests", 
+      "testNamespace": "MyApp.Tests.Services",
+      "assemblyPath": "MyApp.Tests.dll",
+      "testMethod": "MyApp.Tests.Services.UserServiceTests.CreateUser_WithValidInput_ShouldCreateUser",
+      "category": "Unit",
+      "framework": "NUnit",
+      "confidence": 0.95,
+      "callDepth": 1,
+      "callPath": [
+        "UserServiceTests.CreateUser_WithValidInput_ShouldCreateUser",
+        "UserService.CreateUser"
+      ],
+      "reasonsForInclusion": [
+        "Direct method call",
+        "Method name similarity",
+        "Type name similarity"
+      ]
+    },
+    {
+      "testName": "EndToEnd_UserRegistration_ShouldPersistUser", 
+      "testClass": "UserIntegrationTests",
+      "testNamespace": "MyApp.Tests.Integration",
+      "assemblyPath": "MyApp.Integration.Tests.dll",
+      "testMethod": "MyApp.Tests.Integration.UserIntegrationTests.EndToEnd_UserRegistration_ShouldPersistUser",
+      "category": "Integration",
+      "framework": "NUnit", 
+      "confidence": 0.72,
+      "callDepth": 3,
+      "callPath": [
+        "UserIntegrationTests.EndToEnd_UserRegistration_ShouldPersistUser",
+        "UserController.RegisterUser", 
+        "UserRegistrationService.RegisterNewUser",
+        "UserService.CreateUser"
+      ],
+      "reasonsForInclusion": [
+        "Transitive method call",
+        "Method name similarity"
+      ]
+    },
+    {
+      "testName": "CreateUser_InvalidInput_ShouldThrow",
+      "testClass": "UserServiceTests",
+      "testNamespace": "MyApp.Tests.Services", 
+      "assemblyPath": "MyApp.Tests.dll",
+      "testMethod": "MyApp.Tests.Services.UserServiceTests.CreateUser_InvalidInput_ShouldThrow",
+      "category": "Unit",
+      "framework": "NUnit",
+      "confidence": 0.95,
+      "callDepth": 1,
+      "callPath": [
+        "UserServiceTests.CreateUser_InvalidInput_ShouldThrow",
+        "UserService.CreateUser"
+      ],
+      "reasonsForInclusion": [
+        "Direct method call",
+        "Method name similarity",
+        "Type name similarity"
+      ]
+    }
+  ],
+  "analysisStatistics": {
+    "totalProjectsAnalyzed": 5,
+    "totalTestMethodsScanned": 247,
+    "totalProductionMethodsInCallGraph": 1342,
+    "callGraphBuildTimeMs": 8450,
+    "testDiscoveryTimeMs": 2100,
+    "coverageMappingTimeMs": 3200,
+    "totalAnalysisTimeMs": 15750
+  },
+  "confidenceDistribution": {
+    "high": 6,
+    "medium": 2, 
+    "low": 0
+  },
+  "testCategoryBreakdown": {
+    "Unit": 5,
+    "Integration": 2,
+    "EndToEnd": 1
+  }
+}
+```
+
+### Method Coverage Analysis (Text)
+
+```
+=== Method-to-Test Coverage Analysis ===
+Method: MyApp.Services.UserService.CreateUser
+Analysis completed: 2025-01-15 14:30:00 UTC
+
+=== Coverage Summary ===
+Tests Found: 8
+High Confidence (≥80%): 6 tests
+Medium Confidence (50-79%): 2 tests  
+Low Confidence (<50%): 0 tests
+
+=== Test Coverage Details ===
+
+High Confidence Tests:
+  [95%] UserServiceTests.CreateUser_WithValidInput_ShouldCreateUser
+    Category: Unit | Framework: NUnit | Call Depth: 1
+    Path: UserServiceTests.CreateUser_WithValidInput_ShouldCreateUser → UserService.CreateUser
+    Reasons: Direct method call, Method name similarity, Type name similarity
+
+  [95%] UserServiceTests.CreateUser_InvalidInput_ShouldThrow  
+    Category: Unit | Framework: NUnit | Call Depth: 1
+    Path: UserServiceTests.CreateUser_InvalidInput_ShouldThrow → UserService.CreateUser
+    Reasons: Direct method call, Method name similarity, Type name similarity
+
+  [89%] UserServiceTests.CreateUser_DuplicateEmail_ShouldThrow
+    Category: Unit | Framework: NUnit | Call Depth: 1
+    Path: UserServiceTests.CreateUser_DuplicateEmail_ShouldThrow → UserService.CreateUser
+    Reasons: Direct method call, Method name similarity, Type name similarity
+
+Medium Confidence Tests:
+  [72%] UserIntegrationTests.EndToEnd_UserRegistration_ShouldPersistUser
+    Category: Integration | Framework: NUnit | Call Depth: 3
+    Path: UserIntegrationTests.EndToEnd_UserRegistration_ShouldPersistUser → 
+          UserController.RegisterUser → UserRegistrationService.RegisterNewUser → 
+          UserService.CreateUser
+    Reasons: Transitive method call, Method name similarity
+
+  [58%] UserWorkflowTests.CompleteUserJourney_ShouldWork
+    Category: EndToEnd | Framework: NUnit | Call Depth: 4
+    Path: UserWorkflowTests.CompleteUserJourney_ShouldWork → ... → UserService.CreateUser
+    Reasons: Deep transitive call, Weak method correlation
+
+=== Performance Statistics ===
+Solution Projects: 5
+Test Methods Scanned: 247
+Call Graph Methods: 1,342
+Analysis Time: 15.8 seconds
+  - Call Graph Building: 8.5s (54%)
+  - Test Discovery: 2.1s (13%) 
+  - Coverage Mapping: 3.2s (20%)
+  - Other Processing: 2.0s (13%)
+
+=== Confidence Scoring Factors ===
+• Direct method calls: +40 points
+• Method name similarity: +25 points  
+• Type name similarity: +20 points
+• Namespace correlation: +10 points
+• Call depth penalty: -5 points per hop
+• Test framework bonus: +5 points (NUnit/xUnit/MSTest)
 ```
 
 ### Categorization Report (Text)
@@ -291,6 +462,61 @@ Total Tests: 156
 - **Performance**: Load and performance tests
 - **Security**: Security and vulnerability tests
 
+## 🔍 Method-to-Test Reverse Lookup (NEW!)
+
+The `find-tests` command performs reverse lookup analysis to find all tests that exercise a specific production method. This powerful feature uses advanced call graph analysis and semantic modeling to trace execution paths from tests to your production code.
+
+### Key Features
+
+- **Deep Call Graph Analysis**: Traces method calls across multiple layers of abstraction
+- **Semantic Symbol Resolution**: Uses Roslyn analyzers for accurate method identification
+- **Confidence Scoring**: Multi-factor scoring based on call depth, method naming, and test patterns
+- **Test Classification**: Advanced heuristics to identify and categorize different test types
+- **Cross-Assembly Analysis**: Finds tests even when they're in different assemblies than the production code
+- **Performance Optimized**: Efficient BFS traversal with caching for large codebases
+
+### Use Cases
+
+- **Refactoring Safety**: Find all tests that might break when changing a method
+- **Test Gap Analysis**: Identify production methods with insufficient test coverage
+- **Impact Analysis**: Understand the testing blast radius of code changes
+- **Code Review**: Verify that new methods have appropriate test coverage
+- **Legacy Code**: Discover existing tests for undocumented legacy methods
+
+### Command Options
+
+```bash
+# Basic method lookup
+test-intel find-tests --method "MethodName" --solution "Solution.sln"
+
+# Full namespace.class.method specification
+test-intel find-tests --method "MyApp.Services.UserService.CreateUser" --solution "MyApp.sln"
+
+# With verbose logging to see analysis process
+test-intel find-tests --method "PaymentService.ProcessPayment" --solution "MyApp.sln" --verbose
+
+# JSON output for automation
+test-intel find-tests \
+  --method "OrderService.CalculateTotal" \
+  --solution "MyApp.sln" \
+  --format json \
+  --output coverage-analysis.json
+```
+
+### Analysis Process
+
+The find-tests command performs the following analysis:
+
+1. **Solution Parsing**: Parses .sln file and loads all C# projects
+2. **Dependency Graph Construction**: Builds project compilation order and dependencies
+3. **MSBuild Workspace Creation**: Creates Roslyn workspace for semantic analysis
+4. **Symbol Resolution**: Resolves the target method using semantic models
+5. **Call Graph Building**: Constructs comprehensive method call graph using syntax tree analysis
+6. **Test Discovery**: Identifies test methods using naming patterns and framework attributes
+7. **Coverage Mapping**: Maps test methods to production methods via call graph traversal
+8. **Confidence Scoring**: Calculates confidence scores based on multiple factors
+9. **Results Ranking**: Sorts results by confidence and provides detailed reasoning
+
 ## 🎯 Git Diff Analysis (NEW!)
 
 TestIntelligence can now analyze git diffs, patch files, or SVN patches to determine which tests are likely impacted by your changes. This is perfect for:
@@ -372,6 +598,16 @@ Content-Type: application/json
 
 # Get test execution history and statistics
 GET /api/testselection/history?filter=UserTests
+
+# NEW: Find tests that exercise specific methods
+POST /api/testselection/find-tests
+Content-Type: application/json
+{
+  "methodId": "MyApp.Services.UserService.CreateUser",
+  "solutionPath": "/path/to/solution.sln",
+  "includeTransitiveCalls": true,
+  "minimumConfidence": 0.5
+}
 ```
 
 #### Test Discovery API
@@ -569,6 +805,34 @@ Medium Confidence (40-69%):
       with:
         name: test-impact-analysis
         path: diff-impact.json
+
+- name: Method Coverage Analysis (NEW!)
+  run: |
+    # Analyze test coverage for critical methods
+    CRITICAL_METHODS=(
+      "PaymentService.ProcessPayment"
+      "UserService.CreateUser" 
+      "OrderService.CalculateTotal"
+    )
+    
+    for method in "${CRITICAL_METHODS[@]}"; do
+      echo "Analyzing test coverage for: $method"
+      test-intel find-tests \
+        --method "$method" \
+        --solution "MySolution.sln" \
+        --format json \
+        --output "coverage-${method//\./-}.json"
+      
+      # Check if method has sufficient test coverage
+      TEST_COUNT=$(jq '.testsFound' "coverage-${method//\./-}.json")
+      if [ "$TEST_COUNT" -lt 3 ]; then
+        echo "⚠️  WARNING: Method $method has only $TEST_COUNT tests (minimum: 3)"
+        echo "method-coverage-warning=true" >> $GITHUB_ENV
+      fi
+    done
+    
+    # Combine all coverage reports
+    jq -s '.' coverage-*.json > combined-coverage-analysis.json
 ```
 
 ### Azure DevOps
