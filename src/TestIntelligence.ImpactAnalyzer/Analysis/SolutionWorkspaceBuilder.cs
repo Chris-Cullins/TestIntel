@@ -5,7 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-// using Microsoft.Build.Locator;
+// MSBuildLocator not compatible with .NET Standard 2.0
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.Extensions.Logging;
@@ -38,8 +38,6 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
     public class SolutionWorkspaceBuilder
     {
         private readonly ILogger<SolutionWorkspaceBuilder> _logger;
-        // private static bool _msbuildRegistered = false;
-        // private static readonly object _lockObject = new object();
 
         public SolutionWorkspaceBuilder(ILogger<SolutionWorkspaceBuilder> logger)
         {
@@ -53,8 +51,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
             _logger.LogInformation("Creating workspace for solution: {SolutionPath}", solutionPath);
 
-            // Ensure MSBuild is registered (only once per process)
-            // EnsureMSBuildRegistered();
+            // Note: MSBuildLocator not compatible with .NET Standard 2.0
+            // Will handle assembly loading issues via graceful error handling
 
             // Configure MSBuild properties to use the local .NET SDK
             var properties = new Dictionary<string, string>
@@ -80,6 +78,13 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                     solution.Projects.Count());
 
                 return new SolutionWorkspace(workspace, solution, projectPathToId, compilations);
+            }
+            catch (System.Reflection.ReflectionTypeLoadException ex)
+            {
+                _logger.LogWarning(ex, "MSBuild assembly loading failed for solution: {SolutionPath}. This is often due to MSBuild version conflicts.", solutionPath);
+                _logger.LogInformation("Specific loading errors: {LoaderExceptions}", string.Join("; ", ex.LoaderExceptions?.Select(le => le.Message) ?? Array.Empty<string>()));
+                workspace.Dispose();
+                throw new InvalidOperationException($"MSBuild workspace creation failed due to assembly loading issues. Try using individual file analysis instead.", ex);
             }
             catch (Exception ex)
             {
@@ -290,47 +295,5 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             return references.ToImmutableArray();
         }
 
-        // private void EnsureMSBuildRegistered()
-        // {
-        //     lock (_lockObject)
-        //     {
-        //         if (!_msbuildRegistered)
-        //         {
-        //             try
-        //             {
-        //                 _logger.LogInformation("Registering MSBuild with MSBuildLocator");
-        //                 
-        //                 // Find the default MSBuild instance
-        //                 var msbuildInstances = MSBuildLocator.QueryVisualStudioInstances().ToList();
-        //                 
-        //                 if (msbuildInstances.Any())
-        //                 {
-        //                     var latestInstance = msbuildInstances
-        //                         .OrderByDescending(i => i.Version)
-        //                         .First();
-        //                     
-        //                     _logger.LogInformation("Found MSBuild instance: {Name} {Version} at {Path}", 
-        //                         latestInstance.Name, latestInstance.Version, latestInstance.MSBuildPath);
-        //                         
-        //                     MSBuildLocator.RegisterInstance(latestInstance);
-        //                 }
-        //                 else
-        //                 {
-        //                     _logger.LogInformation("No Visual Studio instances found, registering default MSBuild");
-        //                     MSBuildLocator.RegisterDefaults();
-        //                 }
-        //                 
-        //                 _msbuildRegistered = true;
-        //                 _logger.LogInformation("MSBuild registration completed successfully");
-        //             }
-        //             catch (Exception ex)
-        //             {
-        //                 _logger.LogWarning(ex, "Failed to register MSBuild with MSBuildLocator, using defaults");
-        //                 // Don't throw - let MSBuildWorkspace.Create try with system defaults
-        //                 _msbuildRegistered = true; // Prevent retries
-        //             }
-        //         }
-        //     }
-        // }
     }
 }

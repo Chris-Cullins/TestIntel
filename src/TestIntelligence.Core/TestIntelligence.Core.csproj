@@ -20,7 +20,7 @@
 
   <ItemGroup>
     <!-- Microsoft.CodeAnalysis.CSharp, Newtonsoft.Json, System.Memory, and System.Collections.Immutable are provided by Directory.Build.props -->
-    <PackageReference Include="System.Reflection.Metadata" Version="7.0.0" />
+    <PackageReference Include="System.Reflection.Metadata" Version="8.0.0" />
     <PackageReference Include="System.Runtime.Loader" Version="4.3.0" />
   </ItemGroup>
 

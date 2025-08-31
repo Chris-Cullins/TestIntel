@@ -261,11 +261,28 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             // Fallback to the original file-based approach
             _logger.LogInformation("Building call graph from individual files (fallback mode)");
 
+            // Expand solution files to individual source files
+            var sourceFiles = new List<string>();
+            foreach (var file in files)
+            {
+                if (file.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogInformation("Expanding solution file to source files: {SolutionFile}", file);
+                    var solutionSourceFiles = GetSourceFilesFromSolution(file);
+                    sourceFiles.AddRange(solutionSourceFiles);
+                    _logger.LogInformation("Found {FileCount} source files in solution", solutionSourceFiles.Length);
+                }
+                else if (file.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && File.Exists(file))
+                {
+                    sourceFiles.Add(file);
+                }
+            }
+
             var callGraph = new Dictionary<string, HashSet<string>>();
             var methodDefinitions = new Dictionary<string, MethodInfo>();
 
             // First pass: Extract method definitions
-            foreach (var file in files)
+            foreach (var file in sourceFiles)
             {
                 if (!File.Exists(file)) continue;
 
@@ -286,7 +303,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             }
 
             // Second pass: Extract method calls
-            foreach (var file in files)
+            foreach (var file in sourceFiles)
             {
                 if (!File.Exists(file)) continue;
 
@@ -662,6 +679,32 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             }
 
             return ImmutableArray.CreateRange(references);
+        }
+
+        private string[] GetSourceFilesFromSolution(string solutionPath)
+        {
+            try
+            {
+                var solutionDir = Path.GetDirectoryName(solutionPath) ?? Path.GetDirectoryName(Path.GetFullPath(solutionPath));
+                if (string.IsNullOrEmpty(solutionDir))
+                {
+                    _logger.LogWarning("Could not determine solution directory for: {SolutionPath}", solutionPath);
+                    return Array.Empty<string>();
+                }
+
+                var sourceFiles = Directory.GetFiles(solutionDir, "*.cs", SearchOption.AllDirectories)
+                    .Where(f => !f.Contains("/bin/") && !f.Contains("\\bin\\") && 
+                               !f.Contains("/obj/") && !f.Contains("\\obj\\")) // Skip build artifacts
+                    .ToArray();
+
+                _logger.LogInformation("Found {FileCount} source files in solution directory: {SolutionDir}", sourceFiles.Length, solutionDir);
+                return sourceFiles;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get source files from solution: {SolutionPath}", solutionPath);
+                return Array.Empty<string>();
+            }
         }
 
         public void Dispose()

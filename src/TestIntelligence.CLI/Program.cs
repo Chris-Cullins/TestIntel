@@ -2,6 +2,7 @@ using System.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Build.Locator;
 using TestIntelligence.CLI.Services;
 using TestIntelligence.SelectionEngine.Engine;
 using TestIntelligence.SelectionEngine.Interfaces;
@@ -16,6 +17,35 @@ public class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        // Initialize MSBuildLocator to register the correct MSBuild version
+        // This must be done before any MSBuildWorkspace operations
+        try
+        {
+            if (!MSBuildLocator.IsRegistered)
+            {
+                // Find the best MSBuild instance (should pick up .NET 8 SDK)
+                var msbuildInstance = MSBuildLocator.QueryVisualStudioInstances()
+                    .OrderByDescending(instance => instance.Version)
+                    .FirstOrDefault() 
+                    ?? MSBuildLocator.QueryVisualStudioInstances().FirstOrDefault();
+
+                if (msbuildInstance != null)
+                {
+                    Console.WriteLine($"Registering MSBuild from: {msbuildInstance.MSBuildPath} (v{msbuildInstance.Version})");
+                    MSBuildLocator.RegisterInstance(msbuildInstance);
+                }
+                else
+                {
+                    Console.WriteLine("Warning: Could not locate MSBuild instance, MSBuild workspace may not work properly");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Warning: Failed to initialize MSBuildLocator: {ex.Message}");
+            Console.WriteLine("MSBuild workspace functionality may be limited, but file-based analysis will still work");
+        }
+
         var host = CreateHostBuilder(args).Build();
         
         var rootCommand = new RootCommand("TestIntelligence - Intelligent test analysis and selection tool")

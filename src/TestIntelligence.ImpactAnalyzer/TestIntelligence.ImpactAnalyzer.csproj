@@ -19,13 +19,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Roslyn packages for syntax tree analysis - using compatible versions -->
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="6.0.4" />
-    <PackageReference Include="Microsoft.Build" Version="17.0.0" ExcludeAssets="runtime" />
-    <PackageReference Include="Microsoft.Build.Locator" Version="1.4.1" />
+    <!-- Roslyn packages for syntax tree analysis - using .NET 8 compatible versions -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Build" Version="17.9.5" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Build.Locator" Version="1.6.10" />
     <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.8.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.8.0" />
     <!-- Other dependencies provided by Directory.Build.props: Microsoft.CodeAnalysis.CSharp, Newtonsoft.Json, System.Collections.Immutable -->
-    <PackageReference Include="System.Reflection.Metadata" Version="7.0.0" />
+    <PackageReference Include="System.Reflection.Metadata" Version="8.0.0" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 
   <ItemGroup>
