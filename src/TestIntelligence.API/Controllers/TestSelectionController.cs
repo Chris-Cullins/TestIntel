@@ -99,23 +99,17 @@ public class TestSelectionController : ControllerBase
                 request.DiffContent ?? "",
                 request.SolutionPath);
 
-            // Create a mock changeSet for now - in production this would come from the impact analyzer
-            var changeSet = new CodeChangeSet(new List<CodeChange>
-            {
-                new("mock.cs", CodeChangeType.Modified, new List<string> { "MockMethod" }, new List<string> { "MockClass" })
-            });
-
             var testPlan = await _selectionEngine.GetOptimalTestPlanAsync(
-                changeSet,
+                impactResult.CodeChanges,
                 request.ConfidenceLevel,
                 cancellationToken);
 
             var result = new DiffAnalysisResult
             {
-                ChangeSet = changeSet,
+                ChangeSet = impactResult.CodeChanges,
                 RecommendedTests = testPlan,
                 AnalysisTimestamp = DateTimeOffset.UtcNow,
-                TotalChanges = changeSet.Changes.Count,
+                TotalChanges = impactResult.CodeChanges.Changes.Count,
                 ImpactScore = 0.5 // Mock score
             };
 

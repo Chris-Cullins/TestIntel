@@ -1,5 +1,0 @@
-=== Test Categorization Report ===
-Path: tests/TestIntelligence.DataTracker.Tests/bin/Debug/net8.0/TestIntelligence.DataTracker.Tests.dll
-Timestamp: 2025-08-30 23:58:15
-Total Tests: 0
-

@@ -28,9 +28,9 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         private static readonly Regex AddedLinePattern = new Regex(@"^\+(.*)$", RegexOptions.Multiline);
         private static readonly Regex RemovedLinePattern = new Regex(@"^-(.*)$", RegexOptions.Multiline);
         
-        // C# method detection patterns - match the last word before parentheses
+        // C# method detection patterns - match method names in various contexts
         private static readonly Regex MethodSignaturePattern = new Regex(
-            @"(?:public|private|protected|internal).*?\s+(\w+)\s*\([^)]*\)",
+            @"(?:(?:public|private|protected|internal)\s+)?(?:(?:static|virtual|override|async|abstract)\s+)*(?:Task<?[\w<>,\s]*>?|void|bool|int|string|[\w<>\[\],]+)\s+(\w+)(?:<[^>]*>)?\s*\([^)]*\)(?:\s+where\s+[^{]*)?\s*",
             RegexOptions.Multiline | RegexOptions.IgnoreCase);
 
         public GitDiffParser(ILogger<GitDiffParser> logger, IRoslynAnalyzer roslynAnalyzer)
@@ -97,7 +97,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                     if (filePath.StartsWith("b/"))
                         filePath = filePath.Substring(2);
                     if (filePath == "/dev/null")
-                        currentChangeType = line.StartsWith("---") ? CodeChangeType.Deleted : CodeChangeType.Added;
+                        currentChangeType = line.StartsWith("---") ? CodeChangeType.Added : CodeChangeType.Deleted;
                     continue;
                 }
 
@@ -205,7 +205,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         private static CodeChangeType DetermineChangeType(string diffLine)
         {
             if (diffLine.Contains("/dev/null"))
-                return diffLine.StartsWith("---") ? CodeChangeType.Deleted : CodeChangeType.Added;
+                return diffLine.StartsWith("---") ? CodeChangeType.Added : CodeChangeType.Deleted;
             
             return CodeChangeType.Modified;
         }

@@ -1,3 +1,9 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
@@ -7,6 +13,9 @@ using TestIntelligence.ImpactAnalyzer.Models;
 using TestIntelligence.ImpactAnalyzer.Services;
 using TestIntelligence.SelectionEngine.Interfaces;
 using TestIntelligence.SelectionEngine.Models;
+using TestIntelligence.Core.Models;
+using TestIntelligence.Core.Assembly;
+using System.Reflection;
 using Xunit;
 
 namespace TestIntelligence.API.Tests.Controllers;
@@ -109,6 +118,13 @@ public class TestSelectionControllerTests
         {
             new("test.cs", CodeChangeType.Modified, new List<string> { "Method1" }, new List<string> { "Class1" })
         });
+        
+        var impactResult = new SimplifiedTestImpactResult(
+            new List<SimplifiedTestReference>(),
+            changeSet,
+            new List<string>(),
+            DateTime.UtcNow
+        );
 
         var testPlan = new TestExecutionPlan(
             Array.Empty<TestInfo>(),
@@ -117,11 +133,11 @@ public class TestSelectionControllerTests
             "Analysis-based plan");
 
         _mockImpactAnalyzer
-            .AnalyzeChangeSetImpactAsync(request.SolutionPath, request.DiffContent, request.ConfidenceLevel)
-            .Returns(changeSet);
+            .AnalyzeDiffImpactAsync(request.DiffContent, request.SolutionPath, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(impactResult));
 
         _mockSelectionEngine
-            .GetOptimalTestPlanAsync(changeSet, request.ConfidenceLevel, Arg.Any<CancellationToken>())
+            .GetOptimalTestPlanAsync(impactResult.CodeChanges, request.ConfidenceLevel, Arg.Any<CancellationToken>())
             .Returns(testPlan);
 
         // Act
@@ -141,8 +157,8 @@ public class TestSelectionControllerTests
         // Arrange
         var results = new List<TestExecutionResult>
         {
-            new("test1", TimeSpan.FromSeconds(1), true, DateTimeOffset.UtcNow, "Success"),
-            new("test2", TimeSpan.FromSeconds(2), false, DateTimeOffset.UtcNow, "Failed")
+            new(true, TimeSpan.FromSeconds(1), DateTimeOffset.UtcNow, "Success"),
+            new(false, TimeSpan.FromSeconds(2), DateTimeOffset.UtcNow, "Failed")
         };
 
         // Act
@@ -162,8 +178,8 @@ public class TestSelectionControllerTests
         var filter = "UserTest";
         var expectedHistory = new List<TestInfo>
         {
-            new("UserTest1", "Assembly1", "Method1", TestCategory.Unit),
-            new("UserTest2", "Assembly1", "Method2", TestCategory.Integration)
+            new(new TestMethod(typeof(object).GetMethod("ToString")!, typeof(object), "Assembly1", FrameworkVersion.Net5Plus), TestCategory.Unit, TimeSpan.FromSeconds(1)),
+            new(new TestMethod(typeof(object).GetMethod("GetHashCode")!, typeof(object), "Assembly1", FrameworkVersion.Net5Plus), TestCategory.Integration, TimeSpan.FromSeconds(2))
         };
 
         _mockSelectionEngine
@@ -190,7 +206,7 @@ public class TestSelectionControllerTests
 
         _mockSelectionEngine
             .GetTestPlanAsync(Arg.Any<ConfidenceLevel>(), Arg.Any<TestSelectionOptions>(), Arg.Any<CancellationToken>())
-            .ThrowsAsync(new InvalidOperationException("Test error"));
+            .Returns(Task.FromException<TestExecutionPlan>(new InvalidOperationException("Test error")));
 
         // Act
         var result = await _controller.GetTestPlan(request);
