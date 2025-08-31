@@ -13,7 +13,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Performance
     public class CompilationCacheIntegrationTests : IDisposable
     {
         private readonly ITestOutputHelper _output;
-        private readonly ILogger<OptimizedRoslynAnalyzer> _analyzerLogger;
+        private readonly ILogger<RoslynAnalyzerV2> _analyzerLogger;
         private readonly ILogger<EnhancedCompilationCache> _cacheLogger;
         private readonly ILogger<FileSystemCache> _fsLogger;
         private readonly IMemoryCache _memoryCache;

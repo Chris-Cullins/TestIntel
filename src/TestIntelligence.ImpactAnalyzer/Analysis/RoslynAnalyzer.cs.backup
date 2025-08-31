@@ -74,19 +74,17 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
                         methodDefinitions[methodId] = methodInfo;
 
+                        // Debug logging for ToString methods
+                        if (methodSymbol.Name == "ToString")
+                        {
+                            _logger.LogInformation("Found ToString method: {MethodId}", methodId);
+                        }
+
                         if (!callGraph.ContainsKey(methodId))
                             callGraph[methodId] = new HashSet<string>();
 
-                        var invocations = method.DescendantNodes().OfType<InvocationExpressionSyntax>();
-                        foreach (var invocation in invocations)
-                        {
-                            var invokedSymbol = semanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol as IMethodSymbol;
-                            if (invokedSymbol != null)
-                            {
-                                var invokedMethodId = GetMethodIdentifier(invokedSymbol);
-                                callGraph[methodId].Add(invokedMethodId);
-                            }
-                        }
+                        // Capture all types of method calls and member access
+                        CaptureMethodCalls(method, semanticModel, callGraph[methodId], cancellationToken, methodId);
                     }
                 }
             }
@@ -279,6 +277,123 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                 _logger.LogWarning(ex, "Failed to create compilation for {FilePath}", filePath);
                 return Task.FromResult<Compilation?>(null);
             }
+        }
+
+        private void CaptureMethodCalls(MethodDeclarationSyntax method, SemanticModel semanticModel, HashSet<string> methodCalls, CancellationToken cancellationToken, string callerMethodId)
+        {
+            // 1. Capture direct method invocations
+            var invocations = method.DescendantNodes().OfType<InvocationExpressionSyntax>();
+            foreach (var invocation in invocations)
+            {
+                var invokedSymbol = semanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol as IMethodSymbol;
+                if (invokedSymbol != null)
+                {
+                    var invokedMethodId = GetMethodIdentifier(invokedSymbol);
+                    methodCalls.Add(invokedMethodId);
+                    
+                    // Debug logging for ToString calls
+                    if (invokedSymbol.Name == "ToString" || callerMethodId.Contains("ToString_ReturnsDisplayName"))
+                    {
+                        _logger.LogInformation("Method {CallerMethod} calls method: {MethodId}", callerMethodId, invokedMethodId);
+                    }
+                }
+            }
+
+            // 2. Capture constructor calls (new expressions)
+            var objectCreations = method.DescendantNodes().OfType<ObjectCreationExpressionSyntax>();
+            foreach (var creation in objectCreations)
+            {
+                var constructorSymbol = semanticModel.GetSymbolInfo(creation, cancellationToken).Symbol as IMethodSymbol;
+                if (constructorSymbol != null)
+                {
+                    var constructorId = GetMethodIdentifier(constructorSymbol);
+                    methodCalls.Add(constructorId);
+                }
+            }
+
+            // 3. Capture property getters and setters
+            var memberAccesses = method.DescendantNodes().OfType<MemberAccessExpressionSyntax>();
+            foreach (var memberAccess in memberAccesses)
+            {
+                var memberSymbol = semanticModel.GetSymbolInfo(memberAccess, cancellationToken).Symbol;
+                
+                if (memberSymbol is IPropertySymbol propertySymbol)
+                {
+                    // Add getter if this is a read access
+                    if (IsReadAccess(memberAccess))
+                    {
+                        if (propertySymbol.GetMethod != null)
+                        {
+                            var getterId = GetMethodIdentifier(propertySymbol.GetMethod);
+                            methodCalls.Add(getterId);
+                        }
+                    }
+                    
+                    // Add setter if this is a write access
+                    if (IsWriteAccess(memberAccess))
+                    {
+                        if (propertySymbol.SetMethod != null)
+                        {
+                            var setterId = GetMethodIdentifier(propertySymbol.SetMethod);
+                            methodCalls.Add(setterId);
+                        }
+                    }
+                }
+                else if (memberSymbol is IMethodSymbol methodSymbol)
+                {
+                    // This handles method calls via member access (e.g., obj.Method())
+                    var methodId = GetMethodIdentifier(methodSymbol);
+                    methodCalls.Add(methodId);
+                }
+            }
+
+            // 4. Capture implicit constructor calls (collection initializers, etc.)
+            var implicitObjectCreations = method.DescendantNodes().OfType<ImplicitObjectCreationExpressionSyntax>();
+            foreach (var implicitCreation in implicitObjectCreations)
+            {
+                var constructorSymbol = semanticModel.GetSymbolInfo(implicitCreation, cancellationToken).Symbol as IMethodSymbol;
+                if (constructorSymbol != null)
+                {
+                    var constructorId = GetMethodIdentifier(constructorSymbol);
+                    methodCalls.Add(constructorId);
+                }
+            }
+
+            // 5. Capture array creation expressions
+            var arrayCreations = method.DescendantNodes().OfType<ArrayCreationExpressionSyntax>();
+            foreach (var arrayCreation in arrayCreations)
+            {
+                var constructorSymbol = semanticModel.GetSymbolInfo(arrayCreation, cancellationToken).Symbol as IMethodSymbol;
+                if (constructorSymbol != null)
+                {
+                    var constructorId = GetMethodIdentifier(constructorSymbol);
+                    methodCalls.Add(constructorId);
+                }
+            }
+        }
+
+        private static bool IsReadAccess(MemberAccessExpressionSyntax memberAccess)
+        {
+            // Check if this member access is on the right side of an assignment or used in an expression
+            var parent = memberAccess.Parent;
+            
+            // If it's the left side of an assignment, it's a write access, not read
+            if (parent is AssignmentExpressionSyntax assignment && assignment.Left == memberAccess)
+                return false;
+                
+            // If it's used in any other context, it's likely a read access
+            return true;
+        }
+
+        private static bool IsWriteAccess(MemberAccessExpressionSyntax memberAccess)
+        {
+            // Check if this member access is on the left side of an assignment
+            var parent = memberAccess.Parent;
+            
+            if (parent is AssignmentExpressionSyntax assignment && assignment.Left == memberAccess)
+                return true;
+                
+            return false;
         }
 
         private static string GetMethodIdentifier(IMethodSymbol methodSymbol)

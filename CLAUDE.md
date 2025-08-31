@@ -42,6 +42,36 @@ dotnet build
 dotnet build src/TestIntelligence.ImpactAnalyzer/
 ```
 
+## CLI Commands
+
+### Find Tests Exercising a Method (Phase 4)
+```bash
+# Find all tests that exercise a specific method
+dotnet src/TestIntelligence.CLI/bin/Debug/net8.0/TestIntelligence.CLI.dll find-tests \
+  --method "MyNamespace.MyClass.MyMethod" \
+  --solution "MySolution.sln" \
+  --verbose
+
+# JSON output format
+dotnet src/TestIntelligence.CLI/bin/Debug/net8.0/TestIntelligence.CLI.dll find-tests \
+  --method "MyNamespace.MyClass.MyMethod" \
+  --solution "MySolution.sln" \
+  --format json \
+  --output results.json
+```
+
+### Other Available Commands
+```bash
+# Show all available commands
+dotnet src/TestIntelligence.CLI/bin/Debug/net8.0/TestIntelligence.CLI.dll --help
+
+# Analyze test assemblies
+dotnet src/TestIntelligence.CLI/bin/Debug/net8.0/TestIntelligence.CLI.dll analyze --path MySolution.sln
+
+# Build call graph
+dotnet src/TestIntelligence.CLI/bin/Debug/net8.0/TestIntelligence.CLI.dll callgraph --path MySolution.sln
+```
+
 ## Project Status
 
 ### ✅ Phase 1: Core Analysis Engine (COMPLETED)
@@ -60,10 +90,14 @@ dotnet build src/TestIntelligence.ImpactAnalyzer/
 - Type usage analysis and semantic modeling
 - **34 tests passing** ✅
 
-### 🚧 Next: Phase 4: AI Agent Integration
-- Test selection engine
-- Multi-factor scoring algorithms
-- RESTful APIs for agent integration
+### ✅ Phase 4: Method-to-Test Reverse Lookup (COMPLETED)
+- **TestCoverageAnalyzer**: Core service for finding tests that exercise specific methods
+- **CLI Integration**: `find-tests` command with method lookup functionality
+- **RESTful API**: Comprehensive endpoints for test coverage analysis
+- **Method-to-Test Mapping**: Reverse lookup from production methods to covering tests
+- **Call Path Analysis**: BFS traversal to find test coverage relationships
+- **Confidence Scoring**: Multi-factor scoring based on call depth and test types
+- **Test Classification**: Advanced heuristics for identifying and categorizing test methods
 
 ## Test Statistics
 - **Core Tests**: 62 passing

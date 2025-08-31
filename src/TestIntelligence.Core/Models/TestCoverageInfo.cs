@@ -147,6 +147,73 @@ namespace TestIntelligence.Core.Models
         }
 
         /// <summary>
+        /// Gets all tests that exercise methods matching the specified method name pattern.
+        /// Supports partial matching when the full signature is not available.
+        /// </summary>
+        public IReadOnlyList<TestCoverageInfo> GetTestsForMethodPattern(string methodPattern)
+        {
+            var allTests = new List<TestCoverageInfo>();
+            
+            // First try exact match
+            if (MethodToTests.TryGetValue(methodPattern, out var exactTests))
+            {
+                allTests.AddRange(exactTests);
+                return allTests.AsReadOnly();
+            }
+            
+            // If no exact match, try pattern matching
+            foreach (var kvp in MethodToTests)
+            {
+                var fullMethodId = kvp.Key;
+                
+                // Check if the method ID matches the pattern
+                if (IsMethodMatch(fullMethodId, methodPattern))
+                {
+                    allTests.AddRange(kvp.Value);
+                }
+            }
+            
+            return allTests.AsReadOnly();
+        }
+
+        /// <summary>
+        /// Determines if a full method ID matches a given pattern.
+        /// Supports various matching scenarios:
+        /// 1. Exact match
+        /// 2. Class.Method match (without parameters)
+        /// 3. Method name only match
+        /// </summary>
+        private static bool IsMethodMatch(string fullMethodId, string pattern)
+        {
+            if (string.IsNullOrEmpty(fullMethodId) || string.IsNullOrEmpty(pattern))
+                return false;
+
+            // Exact match
+            if (fullMethodId.Equals(pattern, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // Extract method name without parameters from full ID
+            // Format: Namespace.Class.Method(params)
+            var parenIndex = fullMethodId.IndexOf('(');
+            var methodWithoutParams = parenIndex > 0 ? fullMethodId.Substring(0, parenIndex) : fullMethodId;
+
+            // Check if pattern matches the method without parameters
+            if (methodWithoutParams.Equals(pattern, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // Check if pattern is just the method name (last part after final dot)
+            var lastDotIndex = methodWithoutParams.LastIndexOf('.');
+            if (lastDotIndex >= 0 && lastDotIndex < methodWithoutParams.Length - 1)
+            {
+                var methodNameOnly = methodWithoutParams.Substring(lastDotIndex + 1);
+                if (methodNameOnly.Equals(pattern, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// Gets all method identifiers that have test coverage.
         /// </summary>
         public IReadOnlyList<string> GetCoveredMethods()

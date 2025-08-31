@@ -44,7 +44,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             _logger.LogInformation("Finding tests exercising method: {MethodId}", methodId);
 
             var coverageMap = await BuildTestCoverageMapAsync(solutionPath, cancellationToken);
-            return coverageMap.GetTestsForMethod(methodId);
+            return coverageMap.GetTestsForMethodPattern(methodId);
         }
 
         public async Task<TestCoverageMap> BuildTestCoverageMapAsync(
@@ -93,6 +93,16 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             _logger.LogInformation("Built coverage map with {CoveredMethodCount} methods having test coverage", 
                 methodToTests.Count);
 
+            // Debug: Log first few covered methods for troubleshooting
+            if (methodToTests.Count > 0)
+            {
+                _logger.LogInformation("Sample covered methods:");
+                foreach (var kvp in methodToTests.Take(5))
+                {
+                    _logger.LogInformation("  {MethodId} -> {TestCount} tests", kvp.Key, kvp.Value.Count);
+                }
+            }
+
             return new TestCoverageMap(
                 methodToTests,
                 DateTime.UtcNow,
@@ -118,7 +128,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             var result = new Dictionary<string, IReadOnlyList<TestCoverageInfo>>();
             foreach (var methodId in methodIdList)
             {
-                result[methodId] = coverageMap.GetTestsForMethod(methodId);
+                result[methodId] = coverageMap.GetTestsForMethodPattern(methodId);
             }
 
             return result;

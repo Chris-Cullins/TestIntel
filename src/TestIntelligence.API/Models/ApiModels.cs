@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using TestIntelligence.SelectionEngine.Models;
 using TestIntelligence.ImpactAnalyzer.Models;
+using TestIntelligence.Core.Models;
+using TestIntelligence.Core.Services;
 
 namespace TestIntelligence.API.Models;
 
@@ -159,4 +161,169 @@ public class TestDiscoverySummary
     /// Number of assemblies analyzed.
     /// </summary>
     public int AssembliesAnalyzed { get; set; }
+}
+
+// Test Coverage API Models
+
+/// <summary>
+/// Request model for finding tests exercising a single method.
+/// </summary>
+public class TestCoverageRequest
+{
+    /// <summary>
+    /// Path to the solution file or directory.
+    /// </summary>
+    public string SolutionPath { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Response model for test coverage analysis.
+/// </summary>
+public class TestCoverageResponse
+{
+    /// <summary>
+    /// Method identifier that was analyzed.
+    /// </summary>
+    public string MethodId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Path to the solution that was analyzed.
+    /// </summary>
+    public string SolutionPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Tests that exercise the method.
+    /// </summary>
+    public List<TestCoverageInfo> Tests { get; set; } = new();
+
+    /// <summary>
+    /// Total number of tests found.
+    /// </summary>
+    public int TotalCount { get; set; }
+
+    /// <summary>
+    /// When the analysis was performed.
+    /// </summary>
+    public DateTime Timestamp { get; set; }
+}
+
+/// <summary>
+/// Request model for bulk test coverage analysis.
+/// </summary>
+public class BulkTestCoverageRequest
+{
+    /// <summary>
+    /// Method identifiers to analyze.
+    /// </summary>
+    public IEnumerable<string> MethodIds { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Path to the solution file or directory.
+    /// </summary>
+    public string SolutionPath { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Response model for bulk test coverage analysis.
+/// </summary>
+public class BulkTestCoverageResponse
+{
+    /// <summary>
+    /// Path to the solution that was analyzed.
+    /// </summary>
+    public string SolutionPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Results for each method.
+    /// </summary>
+    public Dictionary<string, TestCoverageResponse> Results { get; set; } = new();
+
+    /// <summary>
+    /// Total number of methods analyzed.
+    /// </summary>
+    public int TotalMethods { get; set; }
+
+    /// <summary>
+    /// When the analysis was performed.
+    /// </summary>
+    public DateTime Timestamp { get; set; }
+}
+
+/// <summary>
+/// Request model for building test coverage map.
+/// </summary>
+public class TestCoverageMapRequest
+{
+    /// <summary>
+    /// Path to the solution file or directory.
+    /// </summary>
+    public string SolutionPath { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Response model for test coverage map.
+/// </summary>
+public class TestCoverageMapResponse
+{
+    /// <summary>
+    /// Path to the solution that was analyzed.
+    /// </summary>
+    public string SolutionPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// When the coverage map was built.
+    /// </summary>
+    public DateTime BuildTimestamp { get; set; }
+
+    /// <summary>
+    /// Number of methods with test coverage.
+    /// </summary>
+    public int CoveredMethodCount { get; set; }
+
+    /// <summary>
+    /// Total number of coverage relationships.
+    /// </summary>
+    public int TotalCoverageRelationships { get; set; }
+
+    /// <summary>
+    /// List of method IDs that have test coverage.
+    /// </summary>
+    public List<string> CoveredMethods { get; set; } = new();
+
+    /// <summary>
+    /// When the response was generated.
+    /// </summary>
+    public DateTime Timestamp { get; set; }
+}
+
+/// <summary>
+/// Request model for test coverage statistics.
+/// </summary>
+public class TestCoverageStatisticsRequest
+{
+    /// <summary>
+    /// Path to the solution file or directory.
+    /// </summary>
+    public string SolutionPath { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Response model for test coverage statistics.
+/// </summary>
+public class TestCoverageStatisticsResponse
+{
+    /// <summary>
+    /// Path to the solution that was analyzed.
+    /// </summary>
+    public string SolutionPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Test coverage statistics.
+    /// </summary>
+    public TestCoverageStatistics Statistics { get; set; } = null!;
+
+    /// <summary>
+    /// When the statistics were calculated.
+    /// </summary>
+    public DateTime Timestamp { get; set; }
 }

@@ -15,7 +15,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Performance
     public class RoslynAnalyzerBenchmarks
     {
         private readonly ITestOutputHelper _output;
-        private readonly ILogger<RoslynAnalyzer> _logger;
+        private readonly ILogger<RoslynAnalyzerV2> _logger;
 
         public RoslynAnalyzerBenchmarks(ITestOutputHelper output)
         {

@@ -175,10 +175,6 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
 
         private MethodCallGraph CreateMockCallGraph()
         {
-            var mockCallGraph = Substitute.For<MethodCallGraph>(
-                new Dictionary<string, HashSet<string>>(),
-                new Dictionary<string, MethodInfo>());
-
             // Create test methods
             var testMethods = new[]
             {
@@ -187,13 +183,15 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
                     "TestAddition",
                     "CalculatorTests",
                     "/tests/CalculatorTests.cs",
-                    10),
+                    10,
+                    true), // Mark as test method
                 new MethodInfo(
                     "CalculatorTests.TestSubtraction()",
                     "TestSubtraction", 
                     "CalculatorTests",
                     "/tests/CalculatorTests.cs",
-                    20)
+                    20,
+                    true) // Mark as test method
             };
 
             // Create production methods
@@ -204,40 +202,37 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
                     "Add",
                     "BusinessLogic.Calculator",
                     "/src/Calculator.cs",
-                    15),
+                    15,
+                    false), // Not a test method
                 new MethodInfo(
                     "BusinessLogic.Calculator.Subtract(int,int)",
                     "Subtract",
                     "BusinessLogic.Calculator", 
                     "/src/Calculator.cs",
-                    25)
+                    25,
+                    false) // Not a test method
             };
 
-            var allMethods = testMethods.Concat(productionMethods).Select(m => m.Id).ToList();
+            // Create call graph dictionary - who calls whom
+            var callGraphData = new Dictionary<string, HashSet<string>>
+            {
+                // TestAddition calls Add
+                ["CalculatorTests.TestAddition()"] = new HashSet<string> { "BusinessLogic.Calculator.Add(int,int)" },
+                // TestSubtraction calls Subtract  
+                ["CalculatorTests.TestSubtraction()"] = new HashSet<string> { "BusinessLogic.Calculator.Subtract(int,int)" },
+                // Production methods don't call anything in this simple example
+                ["BusinessLogic.Calculator.Add(int,int)"] = new HashSet<string>(),
+                ["BusinessLogic.Calculator.Subtract(int,int)"] = new HashSet<string>()
+            };
 
-            mockCallGraph.GetAllMethods().Returns(allMethods);
-
-            // Setup method info retrieval
+            // Create method definitions dictionary
+            var methodDefinitions = new Dictionary<string, MethodInfo>();
             foreach (var method in testMethods.Concat(productionMethods))
             {
-                mockCallGraph.GetMethodInfo(method.Id).Returns(method);
+                methodDefinitions[method.Id] = method;
             }
 
-            // Setup call relationships: TestAddition -> Add, TestSubtraction -> Subtract
-            mockCallGraph.GetMethodCalls("CalculatorTests.TestAddition()")
-                .Returns(new HashSet<string> { "BusinessLogic.Calculator.Add(int,int)" });
-
-            mockCallGraph.GetMethodCalls("CalculatorTests.TestSubtraction()")
-                .Returns(new HashSet<string> { "BusinessLogic.Calculator.Subtract(int,int)" });
-
-            // Setup empty calls for production methods
-            mockCallGraph.GetMethodCalls("BusinessLogic.Calculator.Add(int,int)")
-                .Returns(new HashSet<string>());
-
-            mockCallGraph.GetMethodCalls("BusinessLogic.Calculator.Subtract(int,int)")
-                .Returns(new HashSet<string>());
-
-            return mockCallGraph;
+            return new MethodCallGraph(callGraphData, methodDefinitions);
         }
     }
 }

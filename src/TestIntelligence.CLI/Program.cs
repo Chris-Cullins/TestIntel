@@ -8,6 +8,7 @@ using TestIntelligence.SelectionEngine.Interfaces;
 using TestIntelligence.ImpactAnalyzer.Analysis;
 using TestIntelligence.ImpactAnalyzer.Services;
 using TestIntelligence.Core.Discovery;
+using TestIntelligence.Core.Services;
 
 namespace TestIntelligence.CLI;
 
@@ -24,6 +25,7 @@ public class Program
             CreateSelectCommand(host),
             CreateDiffCommand(host),
             CreateCallGraphCommand(host),
+            CreateFindTestsCommand(host),
             CreateVersionCommand()
         };
 
@@ -44,11 +46,12 @@ public class Program
                 services.AddTransient<IOutputFormatter, JsonOutputFormatter>();
                 
                 // Impact Analyzer services
-                services.AddTransient<IRoslynAnalyzer, RoslynAnalyzer>();
+                services.AddTransient<IRoslynAnalyzer, RoslynAnalyzerV2>();
                 services.AddTransient<IGitDiffParser, GitDiffParser>();
                 services.AddTransient<ISimplifiedDiffImpactAnalyzer, SimplifiedDiffImpactAnalyzer>();
                 services.AddTransient<ITestDiscovery, NUnitTestDiscovery>();
                 services.AddTransient<ICallGraphService, CallGraphService>();
+                services.AddTransient<ITestCoverageAnalyzer, TestCoverageAnalyzer>();
             });
     }
 
@@ -306,6 +309,132 @@ public class Program
         }, pathOption, outputOption, formatOption, verboseOption, maxMethodsOption);
 
         return callGraphCommand;
+    }
+
+    private static Command CreateFindTestsCommand(IHost host)
+    {
+        var methodOption = new Option<string>(
+            name: "--method",
+            description: "Method identifier to find tests for (e.g., 'MyNamespace.MyClass.MyMethod')")
+        {
+            IsRequired = true
+        };
+        methodOption.AddAlias("-m");
+
+        var solutionOption = new Option<string>(
+            name: "--solution",
+            description: "Path to solution file or directory")
+        {
+            IsRequired = true
+        };
+        solutionOption.AddAlias("-s");
+
+        var outputOption = new Option<string>(
+            name: "--output",
+            description: "Output file path (default: console)")
+        {
+            IsRequired = false
+        };
+        outputOption.AddAlias("-o");
+
+        var formatOption = new Option<string>(
+            name: "--format",
+            description: "Output format: json, text",
+            getDefaultValue: () => "text");
+        formatOption.AddAlias("-f");
+
+        var verboseOption = new Option<bool>(
+            name: "--verbose",
+            description: "Enable verbose output with call paths");
+        verboseOption.AddAlias("-v");
+
+        var findTestsCommand = new Command("find-tests", "Find all tests that exercise a given method")
+        {
+            methodOption,
+            solutionOption,
+            outputOption,
+            formatOption,
+            verboseOption
+        };
+
+        findTestsCommand.SetHandler(async (string method, string solution, string? output, string format, bool verbose) =>
+        {
+            var testCoverageAnalyzer = host.Services.GetRequiredService<ITestCoverageAnalyzer>();
+            var outputFormatter = host.Services.GetRequiredService<IOutputFormatter>();
+            
+            try
+            {
+                Console.WriteLine($"Finding tests that exercise method: {method}");
+                Console.WriteLine($"Solution path: {solution}");
+                Console.WriteLine();
+
+                var tests = await testCoverageAnalyzer.FindTestsExercisingMethodAsync(method, solution);
+                
+                if (!tests.Any())
+                {
+                    Console.WriteLine("No tests found that exercise this method.");
+                    return;
+                }
+
+                Console.WriteLine($"Found {tests.Count} test(s) exercising this method:");
+                Console.WriteLine();
+
+                if (format == "json")
+                {
+                    var json = outputFormatter.FormatAsJson(tests);
+                    if (!string.IsNullOrWhiteSpace(output))
+                    {
+                        await File.WriteAllTextAsync(output, json);
+                        Console.WriteLine($"Results written to: {output}");
+                    }
+                    else
+                    {
+                        Console.WriteLine(json);
+                    }
+                }
+                else
+                {
+                    var result = new System.Text.StringBuilder();
+                    
+                    foreach (var test in tests.OrderByDescending(t => t.Confidence))
+                    {
+                        result.AppendLine($"• {test.TestClassName}.{test.TestMethodName}");
+                        result.AppendLine($"  Assembly: {test.TestAssembly}");
+                        result.AppendLine($"  Type: {test.TestType}");
+                        result.AppendLine($"  Confidence: {test.Confidence:F2}");
+                        result.AppendLine($"  Call Depth: {test.CallDepth}");
+                        
+                        if (verbose)
+                        {
+                            result.AppendLine($"  Call Path: {test.GetCallPathDisplay()}");
+                        }
+                        
+                        result.AppendLine();
+                    }
+
+                    var textOutput = result.ToString();
+                    if (!string.IsNullOrWhiteSpace(output))
+                    {
+                        await File.WriteAllTextAsync(output, textOutput);
+                        Console.WriteLine($"Results written to: {output}");
+                    }
+                    else
+                    {
+                        Console.WriteLine(textOutput);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error finding tests: {ex.Message}");
+                if (verbose)
+                {
+                    Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                }
+            }
+        }, methodOption, solutionOption, outputOption, formatOption, verboseOption);
+
+        return findTestsCommand;
     }
 
     private static Command CreateVersionCommand()

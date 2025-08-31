@@ -54,24 +54,34 @@ namespace TestIntelligence.ImpactAnalyzer.Classification
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         /// <summary>
-        /// Determines if a method is likely a test method based on various heuristics.
+        /// Determines if a method is a test method using the accurate analysis from RoslynAnalyzer.
+        /// Falls back to heuristics only when the IsTestMethod property is not available.
         /// </summary>
         public bool IsTestMethod(MethodInfo methodInfo)
         {
             if (methodInfo == null)
                 throw new ArgumentNullException(nameof(methodInfo));
 
-            // Check if file path contains test indicators
-            if (IsInTestProject(methodInfo.FilePath) || IsTestFile(methodInfo.FilePath))
+            // Primary check: Trust the Roslyn analyzer's accurate attribute parsing
+            // This property is set by analyzing actual [Test], [Fact], [Theory], [TestMethod] attributes
+            if (methodInfo.IsTestMethod)
+                return true;
+
+            // Conservative fallback for cases where attribute parsing might have failed
+            // Only apply to methods in explicitly identified test projects
+            if (IsInTestProject(methodInfo.FilePath))
             {
-                // In test files, use more permissive classification
-                // Accept methods that either have attributes OR follow naming conventions
-                return HasTestAttributes(methodInfo) || HasTestMethodName(methodInfo.Name) || IsInTestClass(methodInfo.ContainingType);
+                var methodName = methodInfo.Name.ToLowerInvariant();
+                
+                // Very restrictive naming patterns - must start with clear test indicators
+                return methodName.StartsWith("test") || 
+                       methodName.StartsWith("should") || 
+                       methodName.StartsWith("when") || 
+                       methodName.StartsWith("given");
             }
 
-            // Outside test projects, require explicit test attributes or very strong naming patterns
-            return HasTestAttributes(methodInfo) || 
-                   (HasTestMethodName(methodInfo.Name) && methodInfo.Name.ToLowerInvariant().StartsWith("test"));
+            // No fallback for production code - if it doesn't have attributes, it's not a test
+            return false;
         }
 
         /// <summary>
@@ -89,23 +99,23 @@ namespace TestIntelligence.ImpactAnalyzer.Classification
             var methodName = methodInfo.Name.ToLowerInvariant();
             var typeName = methodInfo.ContainingType.ToLowerInvariant();
 
-            // Check for integration test indicators
-            if (filePath.Contains("integration") || 
-                methodName.Contains("integration") || 
-                typeName.Contains("integration") ||
-                methodName.Contains("endtoend") ||
-                methodName.Contains("e2e"))
-            {
-                return TestType.Integration;
-            }
-
-            // Check for end-to-end test indicators
+            // Check for end-to-end test indicators first (more specific)
             if (filePath.Contains("e2e") || 
                 filePath.Contains("endtoend") ||
+                methodName.Contains("e2e") ||
+                methodName.Contains("endtoend") ||
                 methodName.Contains("scenario") ||
                 methodName.Contains("journey"))
             {
                 return TestType.End2End;
+            }
+
+            // Check for integration test indicators
+            if (filePath.Contains("integration") || 
+                methodName.Contains("integration") || 
+                typeName.Contains("integration"))
+            {
+                return TestType.Integration;
             }
 
             // Check for performance test indicators
