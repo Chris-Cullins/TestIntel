@@ -38,6 +38,7 @@ public class JsonOutputFormatter : IOutputFormatter
             AnalysisResult analysisResult => FormatAnalysisResult(analysisResult),
             CategorizationResult categorizationResult => FormatCategorizationResult(categorizationResult),
             SelectionResult selectionResult => FormatSelectionResult(selectionResult),
+            CallGraphReport callGraphReport => FormatCallGraphReport(callGraphReport),
             _ => data.ToString() ?? string.Empty
         };
     }
@@ -184,6 +185,119 @@ public class JsonOutputFormatter : IOutputFormatter
                 output.AppendLine($"  Tags: {string.Join(", ", test.Tags)}");
             }
             output.AppendLine();
+        }
+
+        return output.ToString();
+    }
+
+    private string FormatCallGraphReport(CallGraphReport report)
+    {
+        var output = new System.Text.StringBuilder();
+        
+        output.AppendLine("=== Method Call Graph Analysis Report ===");
+        output.AppendLine($"Total Methods Found: {report.TotalMethods}");
+        output.AppendLine($"Total Source Files: {report.TotalSourceFiles}");
+        output.AppendLine($"Showing: {report.ShowingMethodCount} methods");
+        if (report.ShowingMethodCount < report.TotalMethods)
+        {
+            output.AppendLine($"... and {report.TotalMethods - report.ShowingMethodCount} more methods");
+        }
+        output.AppendLine();
+
+        // Methods making most calls
+        if (report.MethodsWithMostCalls.Count > 0)
+        {
+            output.AppendLine("=== Methods Making Most Calls ===");
+            foreach (var method in report.MethodsWithMostCalls)
+            {
+                var info = method.MethodInfo;
+                if (info != null)
+                {
+                    output.AppendLine($"• {info.ContainingType}.{info.Name}: {method.CallCount} calls");
+                    output.AppendLine($"  Location: {Path.GetFileName(info.FilePath)}:{info.LineNumber}");
+                }
+            }
+            output.AppendLine();
+        }
+
+        // Most called methods
+        if (report.MostCalledMethods.Count > 0)
+        {
+            output.AppendLine("=== Most Called Methods ===");
+            foreach (var method in report.MostCalledMethods)
+            {
+                var info = method.MethodInfo;
+                if (info != null)
+                {
+                    output.AppendLine($"• {info.ContainingType}.{info.Name}: called by {method.DependentCount} methods");
+                    output.AppendLine($"  Location: {Path.GetFileName(info.FilePath)}:{info.LineNumber}");
+                }
+            }
+            output.AppendLine();
+        }
+
+        // Method details (verbose mode)
+        if (report.IsVerbose && report.MethodDetails.Count > 0)
+        {
+            output.AppendLine("=== Method Details ===");
+            foreach (var method in report.MethodDetails)
+            {
+                var info = method.MethodInfo;
+                if (info != null)
+                {
+                    output.AppendLine($"Method: {info.Name}");
+                    output.AppendLine($"  Type: {info.ContainingType}");
+                    output.AppendLine($"  Location: {Path.GetFileName(info.FilePath)}:{info.LineNumber}");
+                    
+                    if (method.CallCount > 0)
+                    {
+                        output.AppendLine($"  Calls ({method.CallCount}):");
+                        foreach (var call in method.Calls.Take(5))
+                        {
+                            output.AppendLine($"    → {call.ContainingType}.{call.Name}");
+                        }
+                        if (method.Calls.Count > 5)
+                        {
+                            output.AppendLine($"    ... and {method.Calls.Count - 5} more");
+                        }
+                    }
+                    
+                    if (method.DependentCount > 0)
+                    {
+                        output.AppendLine($"  Called by ({method.DependentCount}):");
+                        foreach (var dependent in method.Dependents.Take(3))
+                        {
+                            output.AppendLine($"    ← {dependent.ContainingType}.{dependent.Name}");
+                        }
+                        if (method.Dependents.Count > 3)
+                        {
+                            output.AppendLine($"    ... and {method.Dependents.Count - 3} more");
+                        }
+                    }
+                    
+                    output.AppendLine();
+                }
+            }
+        }
+        else if (!report.IsVerbose && report.MethodDetails.Count > 0)
+        {
+            output.AppendLine("=== Method Summary ===");
+            foreach (var method in report.MethodDetails.Take(20))
+            {
+                var info = method.MethodInfo;
+                if (info != null)
+                {
+                    output.AppendLine($"• {info.ContainingType}.{info.Name}");
+                    output.AppendLine($"  Calls: {method.CallCount} | Called by: {method.DependentCount} | {Path.GetFileName(info.FilePath)}:{info.LineNumber}");
+                }
+            }
+            
+            if (report.MethodDetails.Count > 20)
+            {
+                output.AppendLine($"... and {report.MethodDetails.Count - 20} more methods");
+            }
+            output.AppendLine();
+            output.AppendLine("Use --verbose for detailed method call information");
         }
 
         return output.ToString();

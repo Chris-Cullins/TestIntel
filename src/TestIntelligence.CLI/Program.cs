@@ -23,6 +23,7 @@ public class Program
             CreateCategorizeCommand(host),
             CreateSelectCommand(host),
             CreateDiffCommand(host),
+            CreateCallGraphCommand(host),
             CreateVersionCommand()
         };
 
@@ -47,6 +48,7 @@ public class Program
                 services.AddTransient<IGitDiffParser, GitDiffParser>();
                 services.AddTransient<ISimplifiedDiffImpactAnalyzer, SimplifiedDiffImpactAnalyzer>();
                 services.AddTransient<ITestDiscovery, NUnitTestDiscovery>();
+                services.AddTransient<ICallGraphService, CallGraphService>();
             });
     }
 
@@ -252,6 +254,58 @@ public class Program
         }, solutionOption, diffContentOption, diffFileOption, gitCommandOption, outputOption, formatOption, verboseOption);
 
         return diffCommand;
+    }
+
+    private static Command CreateCallGraphCommand(IHost host)
+    {
+        var pathOption = new Option<string>(
+            name: "--path",
+            description: "Path to solution file, project directory, or source files")
+        {
+            IsRequired = true
+        };
+        pathOption.AddAlias("-p");
+
+        var outputOption = new Option<string>(
+            name: "--output",
+            description: "Output file path (default: console)")
+        {
+            IsRequired = false
+        };
+        outputOption.AddAlias("-o");
+
+        var formatOption = new Option<string>(
+            name: "--format",
+            description: "Output format: json, text",
+            getDefaultValue: () => "text");
+        formatOption.AddAlias("-f");
+
+        var verboseOption = new Option<bool>(
+            name: "--verbose",
+            description: "Enable verbose output with detailed method call information");
+        verboseOption.AddAlias("-v");
+
+        var maxMethodsOption = new Option<int?>(
+            name: "--max-methods",
+            description: "Maximum number of methods to include in detailed output (default: 50)");
+        maxMethodsOption.AddAlias("-m");
+
+        var callGraphCommand = new Command("callgraph", "Analyze method call graph and generate dependency reports")
+        {
+            pathOption,
+            outputOption,
+            formatOption,
+            verboseOption,
+            maxMethodsOption
+        };
+
+        callGraphCommand.SetHandler(async (string path, string? output, string format, bool verbose, int? maxMethods) =>
+        {
+            var callGraphService = host.Services.GetRequiredService<ICallGraphService>();
+            await callGraphService.AnalyzeCallGraphAsync(path, output, format, verbose, maxMethods);
+        }, pathOption, outputOption, formatOption, verboseOption, maxMethodsOption);
+
+        return callGraphCommand;
     }
 
     private static Command CreateVersionCommand()

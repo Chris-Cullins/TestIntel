@@ -34,6 +34,17 @@ public interface ISelectionService
 }
 
 /// <summary>
+/// Service for analyzing code structure and call graphs.
+/// </summary>
+public interface ICallGraphService
+{
+    /// <summary>
+    /// Generates a method call graph analysis report for the specified path.
+    /// </summary>
+    Task AnalyzeCallGraphAsync(string path, string? outputPath, string format, bool verbose, int? maxMethods);
+}
+
+/// <summary>
 /// Service for formatting output in different formats.
 /// </summary>
 public interface IOutputFormatter

@@ -351,3 +351,5 @@ test-results/
 coverage/
 
 reports/
+CallGraphReports*/
+[cC]overage*/
