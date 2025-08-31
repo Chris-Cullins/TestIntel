@@ -39,6 +39,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         public async Task<MethodCallGraph> BuildCallGraphAsync(string[] solutionFiles, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             _logger.LogInformation("Building call graph for {FileCount} solution files using enhanced analyzer", solutionFiles.Length);
 
             // Find the solution file
@@ -71,6 +73,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         public async Task<IReadOnlyList<string>> GetAffectedMethodsAsync(string[] changedFiles, string[] changedMethods, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             _logger.LogInformation("Analyzing impact of {MethodCount} changed methods in {FileCount} files", changedMethods.Length, changedFiles.Length);
 
             var affectedMethods = new HashSet<string>(changedMethods);
@@ -98,6 +102,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         public async Task<SemanticModel> GetSemanticModelAsync(string filePath, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (_compilationManager != null)
             {
                 var semanticModel = _compilationManager.GetSemanticModel(filePath);
@@ -113,6 +118,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         public async Task<IReadOnlyList<TypeUsageInfo>> AnalyzeTypeUsageAsync(string[] sourceFiles, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             _logger.LogInformation("Analyzing type usage in {FileCount} source files", sourceFiles.Length);
 
             var typeUsages = new List<TypeUsageInfo>();
@@ -139,6 +146,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         public async Task<IReadOnlyList<MethodInfo>> ExtractMethodsFromFileAsync(string filePath, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             if (!File.Exists(filePath))
                 throw new FileNotFoundException($"File not found: {filePath}");
 
@@ -160,6 +169,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         public async Task<IReadOnlyList<TestCoverageResult>> FindTestsExercisingMethodAsync(string methodId, string[] solutionFiles, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             _logger.LogInformation("Finding tests exercising method: {MethodId} using enhanced analyzer", methodId);
             
             var callGraph = await BuildCallGraphAsync(solutionFiles, cancellationToken);
@@ -173,6 +184,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         private async Task InitializeWorkspaceAsync(string solutionPath, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             if (_currentWorkspace != null)
             {
                 _logger.LogDebug("Workspace already initialized for solution");
@@ -258,6 +271,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         private async Task<MethodCallGraph> BuildCallGraphFromFilesAsync(string[] files, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             // Fallback to the original file-based approach
             _logger.LogInformation("Building call graph from individual files (fallback mode)");
 
@@ -284,6 +299,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             // First pass: Extract method definitions
             foreach (var file in sourceFiles)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                
                 if (!File.Exists(file)) continue;
 
                 try
@@ -305,6 +322,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             // Second pass: Extract method calls
             foreach (var file in sourceFiles)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                
                 if (!File.Exists(file)) continue;
 
                 try
@@ -322,6 +341,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         private Task<SemanticModel> GetSemanticModelFallbackAsync(string filePath, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             if (!File.Exists(filePath))
                 throw new FileNotFoundException($"File not found: {filePath}");
 
@@ -339,6 +360,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         private async Task<IReadOnlyList<TypeUsageInfo>> AnalyzeTypeUsageInFileAsync(string filePath, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             var typeUsages = new List<TypeUsageInfo>();
 
             if (_compilationManager != null)
@@ -361,6 +384,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         private async Task<IReadOnlyList<MethodInfo>> ExtractMethodsUsingWorkspaceAsync(string filePath, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             var methods = new List<MethodInfo>();
             
             if (_compilationManager == null)
@@ -398,6 +423,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         private Task<IReadOnlyList<MethodInfo>> ExtractMethodsStandaloneAsync(string filePath, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             // Fallback implementation using standalone compilation
             var methods = new List<MethodInfo>();
             
@@ -438,6 +465,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         private Task ExtractMethodCallsStandaloneAsync(string filePath, Dictionary<string, HashSet<string>> callGraph, 
             Dictionary<string, MethodInfo> methodDefinitions, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var sourceCode = File.ReadAllText(filePath);
             var syntaxTree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(sourceCode, path: filePath);
             var root = syntaxTree.GetRoot(cancellationToken);
@@ -517,6 +545,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         private Task<IReadOnlyList<TypeUsageInfo>> AnalyzeTypeUsageWithSemanticModel(SyntaxNode root, SemanticModel semanticModel, string filePath, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             var typeUsages = new List<TypeUsageInfo>();
 
             // Analyze type declarations
@@ -561,6 +591,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         private Task<IReadOnlyList<TypeUsageInfo>> AnalyzeTypeUsageFallbackAsync(string filePath, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             // Original implementation as fallback
             var typeUsages = new List<TypeUsageInfo>();
 

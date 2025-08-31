@@ -30,7 +30,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         public override string ToString()
         {
-            return $"{TestClassName}.{TestMethodName} (Confidence: {Confidence:F2}, Depth: {CallDepth})";
+            var callPathDisplay = GetCallPathDisplay();
+            return $"[{Confidence:F2}] {TestClassName}.{TestMethodName} - {callPathDisplay}";
         }
 
         public string GetCallPathDisplay()

@@ -662,13 +662,21 @@ namespace TestNamespace
 
         [Theory]
         [InlineData(null, "TestNamespace", "/path/to/file.cs")]
-        [InlineData("TestType", null, "/path/to/file.cs")]
         [InlineData("TestType", "TestNamespace", null)]
         public void Constructor_WithNullParameter_ShouldThrowArgumentNullException(string? typeName, string? @namespace, string? filePath)
         {
             var action = () => new TypeUsageInfo(typeName!, @namespace!, filePath!, 5, TypeUsageContext.Declaration);
 
             action.Should().Throw<ArgumentNullException>();
+        }
+
+        [Fact]
+        public void Constructor_WithNullNamespace_ShouldAllowNullAndConvertToEmpty()
+        {
+            var typeUsage = new TypeUsageInfo("TestType", null!, "/path/to/file.cs", 5, TypeUsageContext.Declaration);
+
+            typeUsage.Namespace.Should().BeEmpty();
+            typeUsage.TypeName.Should().Be("TestType");
         }
 
         [Fact]

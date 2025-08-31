@@ -46,6 +46,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         public async Task<SolutionWorkspace> CreateWorkspaceAsync(string solutionPath, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             if (!File.Exists(solutionPath))
                 throw new FileNotFoundException($"Solution file not found: {solutionPath}");
 
@@ -96,6 +98,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         public Task<IReadOnlyList<Project>> LoadProjectsAsync(SolutionWorkspace solutionWorkspace, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             var projects = new List<Project>();
             
             foreach (var project in solutionWorkspace.Solution.Projects)
@@ -113,6 +117,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         public Task<IReadOnlyList<MetadataReference>> ResolveMetadataReferencesAsync(Project project, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             var references = new List<MetadataReference>();
             
             // Add basic framework references
@@ -148,6 +154,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         private async Task<Solution> LoadSolutionAsync(MSBuildWorkspace workspace, string solutionPath, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             try
             {
                 _logger.LogDebug("Loading solution using MSBuild workspace: {SolutionPath}", solutionPath);
@@ -194,12 +202,16 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         private async Task<IReadOnlyDictionary<ProjectId, Compilation>> BuildSolutionCompilationsAsync(Solution solution, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             var compilations = new Dictionary<ProjectId, Compilation>();
             
             _logger.LogInformation("Building compilations for {ProjectCount} projects", solution.Projects.Count());
             
             foreach (var project in solution.Projects.Where(IsCSharpProject))
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                
                 try
                 {
                     _logger.LogDebug("Building compilation for project: {ProjectName}", project.Name);
