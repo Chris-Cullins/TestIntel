@@ -8,6 +8,7 @@ TestIntelligence helps you run the right tests at the right time. It analyzes yo
 
 - **Smart Test Selection**: Only run tests affected by your code changes
 - **Method Coverage Analysis**: Find all tests that exercise a specific method  
+- **Execution Path Tracing**: Trace all production code executed by test methods for deep analysis
 - **Impact Analysis**: Understand which tests are affected by git diffs or code changes
 - **Test Categorization**: Automatically classify tests as Unit, Integration, Database, API, etc.
 - **Parallel Execution Safety**: Detect data conflicts to prevent test failures
@@ -28,6 +29,9 @@ dotnet tool install -g --add-source ./nupkg TestIntelligence.CLI
 ```bash
 # Find which tests exercise a specific method
 test-intel find-tests --method "UserService.CreateUser" --solution MySolution.sln
+
+# Trace production code execution paths for a test
+test-intel trace-execution --test "MyProject.Tests.UserServiceTests.CreateUser_WithValidData" --solution MySolution.sln
 
 # Analyze what tests are affected by your git changes  
 test-intel diff --solution MySolution.sln --git-command "diff HEAD~1"
@@ -139,6 +143,28 @@ test-intel callgraph \
 
 **Use cases**: Dependency analysis, refactoring impact assessment, code architecture visualization
 
+### 🔍 trace-execution - Trace Production Code Execution
+
+Trace all production code executed by a specific test method to understand execution paths and dependencies.
+
+```bash
+# Trace execution for a specific test method
+test-intel trace-execution \
+  --test "MyProject.Tests.UserServiceTests.CreateUser_WithValidData_ShouldCreateUser" \
+  --solution MySolution.sln \
+  --verbose
+
+# Generate JSON output with limited depth
+test-intel trace-execution \
+  --test "MyProject.Tests.UserServiceTests.CreateUser_WithValidData_ShouldCreateUser" \
+  --solution MySolution.sln \
+  --format json \
+  --output execution-trace.json \
+  --max-depth 10
+```
+
+**Use cases**: Understanding test coverage depth, debugging test failures, code path analysis, refactoring impact assessment
+
 ## RESTful API
 
 Start the API server for programmatic access and AI agent integration:
@@ -178,6 +204,15 @@ POST /api/testselection/plan
   "codeChanges": { /* change set */ },
   "confidenceLevel": "High",
   "maxTests": 50
+}
+
+# Trace execution paths for a test method
+POST /api/execution/trace
+{
+  "testMethod": "MyProject.Tests.UserServiceTests.CreateUser_WithValidData_ShouldCreateUser",
+  "solutionPath": "/path/to/solution.sln",
+  "maxDepth": 10,
+  "includeSystemCalls": false
 }
 ```
 
@@ -357,6 +392,52 @@ Total Tests: 156
 │ Database    │    15 │ UserRepository_DatabaseOperations   │
 │ API         │     7 │ UserController_HttpEndpoints        │
 └─────────────┴───────┴─────────────────────────────────────┘
+```
+</details>
+
+<details>
+<summary>Execution Trace Analysis (JSON)</summary>
+
+```json
+{
+  "testMethod": "MyProject.Tests.UserServiceTests.CreateUser_WithValidData_ShouldCreateUser",
+  "solutionPath": "MyProject.sln",
+  "maxDepth": 10,
+  "executionTrace": {
+    "totalMethods": 45,
+    "maxCallDepth": 8,
+    "executionPaths": [
+      {
+        "depth": 1,
+        "methodName": "MyProject.Services.UserService.CreateUser",
+        "fileName": "UserService.cs", 
+        "lineNumber": 42,
+        "callType": "DirectCall",
+        "children": [
+          {
+            "depth": 2,
+            "methodName": "MyProject.Services.ValidationService.ValidateUser",
+            "fileName": "ValidationService.cs",
+            "lineNumber": 15,
+            "callType": "DirectCall"
+          },
+          {
+            "depth": 2,
+            "methodName": "MyProject.Repositories.UserRepository.SaveUser",
+            "fileName": "UserRepository.cs", 
+            "lineNumber": 28,
+            "callType": "DirectCall"
+          }
+        ]
+      }
+    ]
+  },
+  "analysisStatistics": {
+    "totalProjectsAnalyzed": 3,
+    "totalSourceFilesAnalyzed": 189,
+    "totalAnalysisTimeMs": 8450
+  }
+}
 ```
 </details>
 
