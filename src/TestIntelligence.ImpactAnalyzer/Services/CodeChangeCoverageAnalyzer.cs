@@ -119,10 +119,13 @@ namespace TestIntelligence.ImpactAnalyzer.Services
 
             // Get coverage information for all provided test methods
             var providedTestCoverage = new List<TestCoverageInfo>();
-            foreach (var testMethodId in testMethodIdList)
+            var testMethodIdSet = new HashSet<string>(testMethodIdList, StringComparer.OrdinalIgnoreCase);
+            
+            // Find all coverage relationships where the test method ID matches our provided tests
+            foreach (var kvp in testCoverageMap.MethodToTests)
             {
-                var testsForMethod = testCoverageMap.GetTestsForMethodPattern(testMethodId);
-                providedTestCoverage.AddRange(testsForMethod);
+                var coverageInfos = kvp.Value.Where(coverage => testMethodIdSet.Contains(coverage.TestMethodId));
+                providedTestCoverage.AddRange(coverageInfos);
             }
 
             _logger.LogDebug("Found {CoverageCount} coverage relationships for provided tests", providedTestCoverage.Count);

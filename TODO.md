@@ -2,8 +2,8 @@
 ## TODOs
 
 - [x] Clean up and refactor RoslynAnalyzerV2, it's no longer the V2 now it's the only one! Fix the name, remove the factory selector thing, etc.
-- [ ] 9-1-25-plan.md
-- [ ] additional functionality for the 9-1-25-plan where you give it a test and a specific code change (git diff?) and it tells you if the test sufficently cover the changes.
+- [x] 9-1-25-plan.md
+- [x] additional functionality for the 9-1-25-plan where you give it a test and a specific code change (git diff?) and it tells you if the test sufficently cover the changes.
 - [ ] Implement persistent storage for caching for large solutions, to reduce startup and run times after first pass. and some kind of diff to update caching process.
 - [ ] Increase Test Coverage to at least 90%
 - [ ] Setup CI/CD on Github side. Leave out E2E tests, they take too long.

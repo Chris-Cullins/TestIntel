@@ -378,7 +378,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
         {
             var frameworkPrefixes = new[]
             {
-                "system.", "microsoft.", "newtonsoft.", "automapper.", 
+                "system.", "microsoft.", 
                 "nunit.", "xunit.", "moq.", "fluentassertions."
             };
             
@@ -390,6 +390,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             // Common third-party library indicators
             var thirdPartyPrefixes = new[]
             {
+                "newtonsoft.", "automapper.", 
                 "serilog.", "npgsql.", "entityframework.", "dapper.",
                 "polly.", "mediatr.", "hangfire.", "quartz."
             };
@@ -413,12 +414,25 @@ namespace TestIntelligence.ImpactAnalyzer.Services
         {
             var infrastructureIndicators = new[]
             {
-                "service", "factory", "provider", "manager", "helper",
-                "utility", "configuration", "logging", "caching"
+                "factory", "provider", "manager", "helper",
+                "utility", "configuration", "logging", "logger", "caching", "cache"
             };
             
-            return infrastructureIndicators.Any(indicator => 
+            // More specific service detection - only certain patterns
+            var infrastructureServicePatterns = new[]
+            {
+                "loggingservice", "configurationservice", "cachingservice",
+                "utilityservice", "helperservice"
+            };
+            
+            // Check for infrastructure patterns but exclude business services
+            var hasInfrastructureIndicator = infrastructureIndicators.Any(indicator => 
                 typeName.Contains(indicator) || methodName.Contains(indicator));
+                
+            var hasInfrastructureServicePattern = infrastructureServicePatterns.Any(pattern =>
+                typeName.Contains(pattern));
+                
+            return hasInfrastructureIndicator || hasInfrastructureServicePattern;
         }
 
         private bool IsInTestProject(string filePath)

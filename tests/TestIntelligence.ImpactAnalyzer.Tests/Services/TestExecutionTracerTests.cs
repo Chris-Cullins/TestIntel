@@ -20,13 +20,11 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
         private readonly IRoslynAnalyzer _mockRoslynAnalyzer;
         private readonly ILogger<TestExecutionTracer> _mockLogger;
         private readonly TestExecutionTracer _tracer;
-        private readonly MethodCallGraph _mockCallGraph;
 
         public TestExecutionTracerTests()
         {
             _mockRoslynAnalyzer = Substitute.For<IRoslynAnalyzer>();
             _mockLogger = Substitute.For<ILogger<TestExecutionTracer>>();
-            _mockCallGraph = Substitute.For<MethodCallGraph>();
             _tracer = new TestExecutionTracer(_mockRoslynAnalyzer, _mockLogger);
         }
 
@@ -97,9 +95,12 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
             const string testMethodId = "NonExistentMethod";
             const string solutionPath = "/path/to/solution.sln";
 
+            var methodDefinitions = new Dictionary<string, MethodInfo>();
+            var callRelations = new Dictionary<string, string[]>();
+            var testCallGraph = CreateTestCallGraph(methodDefinitions, callRelations);
+
             _mockRoslynAnalyzer.BuildCallGraphAsync(Arg.Any<string[]>(), Arg.Any<CancellationToken>())
-                .Returns(_mockCallGraph);
-            _mockCallGraph.GetMethodInfo(testMethodId).Returns((MethodInfo?)null);
+                .Returns(testCallGraph);
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<ArgumentException>(() => 
@@ -118,10 +119,12 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
 
             var methodInfo = new MethodInfo(methodId, "SomeProductionMethod", 
                 "MyApp.Services.ProductionService", "/src/ProductionService.cs", 42, false);
+            var methodDefinitions = new Dictionary<string, MethodInfo> { [methodId] = methodInfo };
+            var callRelations = new Dictionary<string, string[]>();
+            var testCallGraph = CreateTestCallGraph(methodDefinitions, callRelations);
 
             _mockRoslynAnalyzer.BuildCallGraphAsync(Arg.Any<string[]>(), Arg.Any<CancellationToken>())
-                .Returns(_mockCallGraph);
-            _mockCallGraph.GetMethodInfo(methodId).Returns(methodInfo);
+                .Returns(testCallGraph);
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<ArgumentException>(() => 
@@ -138,22 +141,30 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
             const string testMethodId = "TestMethod1";
             const string solutionPath = "/path/to/solution.sln";
 
-            var testMethod = CreateTestMethodInfo(testMethodId, "ShouldCalculateTotal", 
-                "MyApp.Tests.CalculatorTests", "/tests/CalculatorTests.cs");
-            var productionMethod1 = CreateProductionMethodInfo("ProductionMethod1", "Calculate", 
-                "MyApp.Services.Calculator", "/src/Calculator.cs");
-            var productionMethod2 = CreateProductionMethodInfo("ProductionMethod2", "Validate", 
-                "MyApp.Services.Validator", "/src/Validator.cs");
+            var testMethod = new MethodInfo(testMethodId, "ShouldCalculateTotal", 
+                "MyApp.Tests.CalculatorTests", "/tests/CalculatorTests.cs", 10, true);
+            var productionMethod1 = new MethodInfo("ProductionMethod1", "Calculate", 
+                "MyApp.Services.Calculator", "/src/Calculator.cs", 20, false);
+            var productionMethod2 = new MethodInfo("ProductionMethod2", "Validate", 
+                "MyApp.Services.Validator", "/src/Validator.cs", 30, false);
 
-            SetupCallGraph(testMethodId, solutionPath, testMethod, new[]
+            var methodDefinitions = new Dictionary<string, MethodInfo>
             {
-                (testMethodId, new[] { "ProductionMethod1" }),
-                ("ProductionMethod1", new[] { "ProductionMethod2" }),
-                ("ProductionMethod2", Array.Empty<string>())
-            });
-
-            _mockCallGraph.GetMethodInfo("ProductionMethod1").Returns(productionMethod1);
-            _mockCallGraph.GetMethodInfo("ProductionMethod2").Returns(productionMethod2);
+                { testMethodId, testMethod },
+                { "ProductionMethod1", productionMethod1 },
+                { "ProductionMethod2", productionMethod2 }
+            };
+            
+            var callRelations = new Dictionary<string, string[]>
+            {
+                { testMethodId, new[] { "ProductionMethod1" } },
+                { "ProductionMethod1", new[] { "ProductionMethod2" } },
+                { "ProductionMethod2", Array.Empty<string>() }
+            };
+            
+            var testCallGraph = CreateTestCallGraph(methodDefinitions, callRelations);
+            _mockRoslynAnalyzer.BuildCallGraphAsync(Arg.Any<string[]>(), Arg.Any<CancellationToken>())
+                .Returns(testCallGraph);
 
             // Act
             var result = await _tracer.TraceTestExecutionAsync(testMethodId, solutionPath);
@@ -190,22 +201,30 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
             const string testMethodId = "TestMethod1";
             const string solutionPath = "/path/to/solution.sln";
 
-            var testMethod = CreateTestMethodInfo(testMethodId, "ShouldDoSomething", 
-                "MyApp.Tests.SomeTests", "/tests/SomeTests.cs");
-            var testUtilityMethod = CreateTestMethodInfo("TestUtility1", "SetupTestData", 
-                "MyApp.Tests.TestUtils", "/tests/TestUtils.cs");
-            var productionMethod = CreateProductionMethodInfo("ProductionMethod1", "DoWork", 
-                "MyApp.Services.Worker", "/src/Worker.cs");
+            var testMethod = new MethodInfo(testMethodId, "ShouldDoSomething", 
+                "MyApp.Tests.SomeTests", "/tests/SomeTests.cs", 10, true);
+            var testUtilityMethod = new MethodInfo("TestUtility1", "SetupTestData", 
+                "MyApp.Tests.TestUtils", "/tests/TestUtils.cs", 15, true);
+            var productionMethod = new MethodInfo("ProductionMethod1", "DoWork", 
+                "MyApp.Services.Worker", "/src/Worker.cs", 20, false);
 
-            SetupCallGraph(testMethodId, solutionPath, testMethod, new[]
+            var methodDefinitions = new Dictionary<string, MethodInfo>
             {
-                (testMethodId, new[] { "TestUtility1", "ProductionMethod1" }),
-                ("TestUtility1", Array.Empty<string>()),
-                ("ProductionMethod1", Array.Empty<string>())
-            });
-
-            _mockCallGraph.GetMethodInfo("TestUtility1").Returns(testUtilityMethod);
-            _mockCallGraph.GetMethodInfo("ProductionMethod1").Returns(productionMethod);
+                { testMethodId, testMethod },
+                { "TestUtility1", testUtilityMethod },
+                { "ProductionMethod1", productionMethod }
+            };
+            
+            var callRelations = new Dictionary<string, string[]>
+            {
+                { testMethodId, new[] { "TestUtility1", "ProductionMethod1" } },
+                { "TestUtility1", Array.Empty<string>() },
+                { "ProductionMethod1", Array.Empty<string>() }
+            };
+            
+            var testCallGraph = CreateTestCallGraph(methodDefinitions, callRelations);
+            _mockRoslynAnalyzer.BuildCallGraphAsync(Arg.Any<string[]>(), Arg.Any<CancellationToken>())
+                .Returns(testCallGraph);
 
             // Act
             var result = await _tracer.TraceTestExecutionAsync(testMethodId, solutionPath);
@@ -231,22 +250,30 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
             const string testMethodId = "TestMethod1";
             const string solutionPath = "/path/to/solution.sln";
 
-            var testMethod = CreateTestMethodInfo(testMethodId, "ShouldSerializeData", 
-                "MyApp.Tests.SerializationTests", "/tests/SerializationTests.cs");
-            var frameworkMethod = CreateProductionMethodInfo("FrameworkMethod1", "Serialize", 
-                "System.Text.Json.JsonSerializer", "system_assembly");
-            var productionMethod = CreateProductionMethodInfo("ProductionMethod1", "PrepareData", 
-                "MyApp.Services.DataService", "/src/DataService.cs");
+            var testMethod = new MethodInfo(testMethodId, "ShouldSerializeData", 
+                "MyApp.Tests.SerializationTests", "/tests/SerializationTests.cs", 10, true);
+            var frameworkMethod = new MethodInfo("FrameworkMethod1", "Serialize", 
+                "System.Text.Json.JsonSerializer", "system_assembly", 20, false);
+            var productionMethod = new MethodInfo("ProductionMethod1", "PrepareData", 
+                "MyApp.Services.DataService", "/src/DataService.cs", 30, false);
 
-            SetupCallGraph(testMethodId, solutionPath, testMethod, new[]
+            var methodDefinitions = new Dictionary<string, MethodInfo>
             {
-                (testMethodId, new[] { "ProductionMethod1" }),
-                ("ProductionMethod1", new[] { "FrameworkMethod1" }),
-                ("FrameworkMethod1", Array.Empty<string>())
-            });
-
-            _mockCallGraph.GetMethodInfo("ProductionMethod1").Returns(productionMethod);
-            _mockCallGraph.GetMethodInfo("FrameworkMethod1").Returns(frameworkMethod);
+                { testMethodId, testMethod },
+                { "ProductionMethod1", productionMethod },
+                { "FrameworkMethod1", frameworkMethod }
+            };
+            
+            var callRelations = new Dictionary<string, string[]>
+            {
+                { testMethodId, new[] { "ProductionMethod1" } },
+                { "ProductionMethod1", new[] { "FrameworkMethod1" } },
+                { "FrameworkMethod1", Array.Empty<string>() }
+            };
+            
+            var testCallGraph = CreateTestCallGraph(methodDefinitions, callRelations);
+            _mockRoslynAnalyzer.BuildCallGraphAsync(Arg.Any<string[]>(), Arg.Any<CancellationToken>())
+                .Returns(testCallGraph);
 
             // Act
             var result = await _tracer.TraceTestExecutionAsync(testMethodId, solutionPath);
@@ -289,28 +316,34 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
             const string solutionPath = "/path/to/solution.sln";
             var testMethodIds = new[] { "TestMethod1", "TestMethod2" };
 
-            var testMethod1 = CreateTestMethodInfo("TestMethod1", "ShouldDoWork1", 
-                "MyApp.Tests.Test1", "/tests/Test1.cs");
-            var testMethod2 = CreateTestMethodInfo("TestMethod2", "ShouldDoWork2", 
-                "MyApp.Tests.Test2", "/tests/Test2.cs");
-            var productionMethod1 = CreateProductionMethodInfo("ProductionMethod1", "Work1", 
-                "MyApp.Services.Service1", "/src/Service1.cs");
-            var productionMethod2 = CreateProductionMethodInfo("ProductionMethod2", "Work2", 
-                "MyApp.Services.Service2", "/src/Service2.cs");
+            var testMethod1 = new MethodInfo("TestMethod1", "ShouldDoWork1", 
+                "MyApp.Tests.Test1", "/tests/Test1.cs", 10, true);
+            var testMethod2 = new MethodInfo("TestMethod2", "ShouldDoWork2", 
+                "MyApp.Tests.Test2", "/tests/Test2.cs", 15, true);
+            var productionMethod1 = new MethodInfo("ProductionMethod1", "Work1", 
+                "MyApp.Services.Service1", "/src/Service1.cs", 20, false);
+            var productionMethod2 = new MethodInfo("ProductionMethod2", "Work2", 
+                "MyApp.Services.Service2", "/src/Service2.cs", 25, false);
 
-            SetupCallGraphForMultipleTests(solutionPath, new Dictionary<string, MethodInfo>
+            var methodDefinitions = new Dictionary<string, MethodInfo>
             {
                 { "TestMethod1", testMethod1 },
                 { "TestMethod2", testMethod2 },
                 { "ProductionMethod1", productionMethod1 },
                 { "ProductionMethod2", productionMethod2 }
-            }, new[]
+            };
+            
+            var callRelations = new Dictionary<string, string[]>
             {
-                ("TestMethod1", new[] { "ProductionMethod1" }),
-                ("TestMethod2", new[] { "ProductionMethod2" }),
-                ("ProductionMethod1", Array.Empty<string>()),
-                ("ProductionMethod2", Array.Empty<string>())
-            });
+                { "TestMethod1", new[] { "ProductionMethod1" } },
+                { "TestMethod2", new[] { "ProductionMethod2" } },
+                { "ProductionMethod1", Array.Empty<string>() },
+                { "ProductionMethod2", Array.Empty<string>() }
+            };
+            
+            var testCallGraph = CreateTestCallGraph(methodDefinitions, callRelations);
+            _mockRoslynAnalyzer.BuildCallGraphAsync(Arg.Any<string[]>(), Arg.Any<CancellationToken>())
+                .Returns(testCallGraph);
 
             // Act
             var result = await _tracer.TraceMultipleTestsAsync(testMethodIds, solutionPath);
@@ -327,19 +360,18 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
             // Arrange
             const string solutionPath = "/path/to/solution.sln";
 
-            var testMethod1 = CreateTestMethodInfo("TestMethod1", "ShouldWork", 
-                "MyApp.Tests.WorkerTests", "/tests/WorkerTests.cs");
-            var testMethod2 = CreateTestMethodInfo("TestMethod2", "ShouldCalculate", 
-                "MyApp.Tests.CalculatorTests", "/tests/CalculatorTests.cs");
-            var productionMethod1 = CreateProductionMethodInfo("ProductionMethod1", "DoWork", 
-                "MyApp.Services.Worker", "/src/Worker.cs");
-            var productionMethod2 = CreateProductionMethodInfo("ProductionMethod2", "Calculate", 
-                "MyApp.Services.Calculator", "/src/Calculator.cs");
-            var uncoveredMethod = CreateProductionMethodInfo("UncoveredMethod", "UnusedMethod", 
-                "MyApp.Services.UnusedService", "/src/UnusedService.cs");
+            var testMethod1 = new MethodInfo("TestMethod1", "ShouldWork", 
+                "MyApp.Tests.WorkerTests", "/tests/WorkerTests.cs", 10, true);
+            var testMethod2 = new MethodInfo("TestMethod2", "ShouldCalculate", 
+                "MyApp.Tests.CalculatorTests", "/tests/CalculatorTests.cs", 15, true);
+            var productionMethod1 = new MethodInfo("ProductionMethod1", "DoWork", 
+                "MyApp.Services.Worker", "/src/Worker.cs", 20, false);
+            var productionMethod2 = new MethodInfo("ProductionMethod2", "Calculate", 
+                "MyApp.Services.Calculator", "/src/Calculator.cs", 25, false);
+            var uncoveredMethod = new MethodInfo("UncoveredMethod", "UnusedMethod", 
+                "MyApp.Services.UnusedService", "/src/UnusedService.cs", 30, false);
 
-            var allMethods = new[] { "TestMethod1", "TestMethod2", "ProductionMethod1", "ProductionMethod2", "UncoveredMethod" };
-            var methodInfoMap = new Dictionary<string, MethodInfo>
+            var methodDefinitions = new Dictionary<string, MethodInfo>
             {
                 { "TestMethod1", testMethod1 },
                 { "TestMethod2", testMethod2 },
@@ -347,21 +379,19 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
                 { "ProductionMethod2", productionMethod2 },
                 { "UncoveredMethod", uncoveredMethod }
             };
-
-            _mockRoslynAnalyzer.BuildCallGraphAsync(Arg.Any<string[]>(), Arg.Any<CancellationToken>())
-                .Returns(_mockCallGraph);
-            _mockCallGraph.GetAllMethods().Returns(allMethods);
-
-            foreach (var kvp in methodInfoMap)
+            
+            var callRelations = new Dictionary<string, string[]>
             {
-                _mockCallGraph.GetMethodInfo(kvp.Key).Returns(kvp.Value);
-            }
-
-            _mockCallGraph.GetMethodCalls("TestMethod1").Returns(new[] { "ProductionMethod1" });
-            _mockCallGraph.GetMethodCalls("TestMethod2").Returns(new[] { "ProductionMethod2" });
-            _mockCallGraph.GetMethodCalls("ProductionMethod1").Returns(Array.Empty<string>());
-            _mockCallGraph.GetMethodCalls("ProductionMethod2").Returns(Array.Empty<string>());
-            _mockCallGraph.GetMethodCalls("UncoveredMethod").Returns(Array.Empty<string>());
+                { "TestMethod1", new[] { "ProductionMethod1" } },
+                { "TestMethod2", new[] { "ProductionMethod2" } },
+                { "ProductionMethod1", Array.Empty<string>() },
+                { "ProductionMethod2", Array.Empty<string>() },
+                { "UncoveredMethod", Array.Empty<string>() }
+            };
+            
+            var testCallGraph = CreateTestCallGraph(methodDefinitions, callRelations);
+            _mockRoslynAnalyzer.BuildCallGraphAsync(Arg.Any<string[]>(), Arg.Any<CancellationToken>())
+                .Returns(testCallGraph);
 
             // Act
             var result = await _tracer.GenerateCoverageReportAsync(solutionPath);
@@ -397,17 +427,25 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
             const string testMethodId = "TestMethod1";
             const string solutionPath = "/path/to/solution.sln";
 
-            var testMethod = CreateTestMethodInfo(testMethodId, "ShouldWork", 
-                "MyApp.Tests.SomeTests", "/tests/SomeTests.cs");
-            var targetMethod = CreateProductionMethodInfo("TargetMethod", methodName, typeName, "/some/path.cs");
+            var testMethod = new MethodInfo(testMethodId, "ShouldWork", 
+                "MyApp.Tests.SomeTests", "/tests/SomeTests.cs", 10, true);
+            var targetMethod = new MethodInfo("TargetMethod", methodName, typeName, "/some/path.cs", 20, false);
 
-            SetupCallGraph(testMethodId, solutionPath, testMethod, new[]
+            var methodDefinitions = new Dictionary<string, MethodInfo>
             {
-                (testMethodId, new[] { "TargetMethod" }),
-                ("TargetMethod", Array.Empty<string>())
-            });
-
-            _mockCallGraph.GetMethodInfo("TargetMethod").Returns(targetMethod);
+                { testMethodId, testMethod },
+                { "TargetMethod", targetMethod }
+            };
+            
+            var callRelations = new Dictionary<string, string[]>
+            {
+                { testMethodId, new[] { "TargetMethod" } },
+                { "TargetMethod", Array.Empty<string>() }
+            };
+            
+            var testCallGraph = CreateTestCallGraph(methodDefinitions, callRelations);
+            _mockRoslynAnalyzer.BuildCallGraphAsync(Arg.Any<string[]>(), Arg.Any<CancellationToken>())
+                .Returns(testCallGraph);
 
             // Act
             var result = await _tracer.TraceTestExecutionAsync(testMethodId, solutionPath);
@@ -417,48 +455,29 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
             result.ExecutedMethods.First().Category.Should().Be(expectedCategory);
         }
 
-        private MethodInfo CreateTestMethodInfo(string id, string name, string containingType, string filePath)
-        {
-            return new MethodInfo(id, name, containingType, filePath, 10, true);
-        }
 
-        private MethodInfo CreateProductionMethodInfo(string id, string name, string containingType, string filePath)
+        private static MethodCallGraph CreateTestCallGraph(
+            Dictionary<string, MethodInfo> methodDefinitions,
+            Dictionary<string, string[]> callRelations)
         {
-            return new MethodInfo(id, name, containingType, filePath, 20, false);
-        }
-
-        private void SetupCallGraph(string testMethodId, string solutionPath, MethodInfo testMethod, 
-            (string methodId, string[] calledMethods)[] callRelations)
-        {
-            _mockRoslynAnalyzer.BuildCallGraphAsync(Arg.Any<string[]>(), Arg.Any<CancellationToken>())
-                .Returns(_mockCallGraph);
-            _mockCallGraph.GetMethodInfo(testMethodId).Returns(testMethod);
-
-            foreach (var (methodId, calledMethods) in callRelations)
+            var callGraph = new Dictionary<string, HashSet<string>>();
+            
+            foreach (var (caller, callees) in callRelations)
             {
-                _mockCallGraph.GetMethodCalls(methodId).Returns(calledMethods);
-            }
-        }
-
-        private void SetupCallGraphForMultipleTests(string solutionPath, 
-            Dictionary<string, MethodInfo> methodInfoMap,
-            (string methodId, string[] calledMethods)[] callRelations)
-        {
-            _mockRoslynAnalyzer.BuildCallGraphAsync(Arg.Any<string[]>(), Arg.Any<CancellationToken>())
-                .Returns(_mockCallGraph);
-
-            var allMethodIds = methodInfoMap.Keys.ToArray();
-            _mockCallGraph.GetAllMethods().Returns(allMethodIds);
-
-            foreach (var kvp in methodInfoMap)
-            {
-                _mockCallGraph.GetMethodInfo(kvp.Key).Returns(kvp.Value);
+                callGraph[caller] = new HashSet<string>(callees);
             }
 
-            foreach (var (methodId, calledMethods) in callRelations)
-            {
-                _mockCallGraph.GetMethodCalls(methodId).Returns(calledMethods);
-            }
+            return new MethodCallGraph(callGraph, methodDefinitions);
+        }
+
+        private static MethodInfo CreateTestMethodInfo(string id, string methodName, string typeName, bool isTest = true)
+        {
+            return new MethodInfo(id, methodName, typeName, isTest ? "/tests/TestClass.cs" : "/src/ProductionClass.cs", 10, isTest);
+        }
+
+        private static MethodInfo CreateProductionMethodInfo(string id, string methodName, string typeName)
+        {
+            return CreateTestMethodInfo(id, methodName, typeName, false);
         }
     }
 }

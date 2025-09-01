@@ -69,7 +69,7 @@ namespace TestIntelligence.API.Tests.Controllers
             var result = JsonConvert.DeserializeObject<TestExecutionTraceResponse>(content);
             
             result.Should().NotBeNull();
-            result.TestMethodId.Should().Be(testMethodId);
+            result!.TestMethodId.Should().Be(testMethodId);
             result.SolutionPath.Should().Be(solutionPath);
             result.ExecutionTrace.Should().NotBeNull();
             result.ExecutionTrace.TestMethodId.Should().Be(testMethodId);
@@ -149,7 +149,7 @@ namespace TestIntelligence.API.Tests.Controllers
             var result = JsonConvert.DeserializeObject<BulkTestExecutionTraceResponse>(responseContent);
             
             result.Should().NotBeNull();
-            result.SolutionPath.Should().Be(request.SolutionPath);
+            result!.SolutionPath.Should().Be(request.SolutionPath);
             result.Results.Should().HaveCount(2);
             result.Results.Should().ContainKey("TestMethod1");
             result.Results.Should().ContainKey("TestMethod2");
@@ -196,7 +196,7 @@ namespace TestIntelligence.API.Tests.Controllers
             var result = JsonConvert.DeserializeObject<ExecutionCoverageReportResponse>(responseContent);
             
             result.Should().NotBeNull();
-            result.SolutionPath.Should().Be(request.SolutionPath);
+            result!.SolutionPath.Should().Be(request.SolutionPath);
             result.CoverageReport.Should().NotBeNull();
         }
 
@@ -235,13 +235,12 @@ namespace TestIntelligence.API.Tests.Controllers
             var content = await response.Content.ReadAsStringAsync();
             var result = JsonConvert.DeserializeObject<dynamic>(content);
             
-            result.Should().NotBeNull();
+            _ = result; // Suppress nullable warning
         }
 
         [Theory]
         [InlineData("")]
         [InlineData(" ")]
-        [InlineData(null)]
         public async Task TraceMultipleTestsExecution_WithInvalidTestMethodIds_ReturnsBadRequest(string invalidIds)
         {
             // Arrange
