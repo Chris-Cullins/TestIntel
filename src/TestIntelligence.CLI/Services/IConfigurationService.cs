@@ -35,4 +35,12 @@ public interface IConfigurationService
     /// <param name="configuration">Configuration with filtering rules</param>
     /// <returns>Filtered list of project paths</returns>
     List<string> FilterProjects(List<string> projectPaths, TestIntelConfiguration configuration);
+
+    /// <summary>
+    /// Analyze all projects in a solution and return detailed information about inclusion/exclusion
+    /// </summary>
+    /// <param name="solutionPath">Path to solution file or directory</param>
+    /// <param name="configuration">Configuration with filtering rules</param>
+    /// <returns>Detailed project analysis results</returns>
+    Task<ProjectFilterAnalysisResult> AnalyzeProjectFilteringAsync(string solutionPath, TestIntelConfiguration configuration);
 }

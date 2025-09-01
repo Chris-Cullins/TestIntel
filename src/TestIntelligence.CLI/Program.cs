@@ -1,9 +1,11 @@
 using System.CommandLine;
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Build.Locator;
 using TestIntelligence.CLI.Services;
+using TestIntelligence.CLI.Models;
 using TestIntelligence.SelectionEngine.Engine;
 using TestIntelligence.SelectionEngine.Interfaces;
 using TestIntelligence.ImpactAnalyzer.Analysis;
@@ -783,12 +785,177 @@ public class Program
             }
         }, pathOption);
 
+        var verifySubcommand = CreateConfigVerifyCommand(host);
+
         var configCommand = new Command("config", "Manage TestIntelligence configuration")
         {
-            initSubcommand
+            initSubcommand,
+            verifySubcommand
         };
 
         return configCommand;
+    }
+
+    private static Command CreateConfigVerifyCommand(IHost host)
+    {
+        var pathOption = new Option<string>(
+            name: "--path",
+            description: "Path to solution file or directory")
+        {
+            IsRequired = true
+        };
+        pathOption.AddAlias("-p");
+
+        var formatOption = new Option<string>(
+            name: "--format",
+            description: "Output format (text or json)")
+        {
+            IsRequired = false
+        };
+        formatOption.AddAlias("-f");
+        formatOption.SetDefaultValue("text");
+
+        var outputOption = new Option<string?>(
+            name: "--output",
+            description: "Output file path (optional)")
+        {
+            IsRequired = false
+        };
+        outputOption.AddAlias("-o");
+
+        var verifySubcommand = new Command("verify", "Verify which projects would be included/excluded based on configuration")
+        {
+            pathOption,
+            formatOption,
+            outputOption
+        };
+
+        verifySubcommand.SetHandler(async (string path, string format, string? output) =>
+        {
+            var configurationService = host.Services.GetRequiredService<IConfigurationService>();
+            var outputFormatter = host.Services.GetRequiredService<IOutputFormatter>();
+            
+            try
+            {
+                Console.WriteLine($"Analyzing project filtering for: {path}");
+                
+                // Load configuration
+                var configuration = await configurationService.LoadConfigurationAsync(path);
+                
+                // Analyze project filtering
+                var analysisResult = await configurationService.AnalyzeProjectFilteringAsync(path, configuration);
+                
+                // Format and display results
+                if (format.Equals("json", StringComparison.OrdinalIgnoreCase))
+                {
+                    await outputFormatter.WriteOutputAsync(analysisResult, "json", output);
+                }
+                else
+                {
+                    await DisplayProjectAnalysisAsync(analysisResult, output);
+                }
+                
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Error analyzing project filtering: {ex.Message}");
+            }
+        }, pathOption, formatOption, outputOption);
+
+        return verifySubcommand;
+    }
+
+    private static async Task DisplayProjectAnalysisAsync(ProjectFilterAnalysisResult result, string? outputPath)
+    {
+        var output = new StringBuilder();
+        
+        // Header
+        output.AppendLine("=== TestIntelligence Project Filtering Analysis ===");
+        output.AppendLine($"Solution: {result.SolutionPath}");
+        output.AppendLine($"Analysis Date: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+        output.AppendLine();
+        
+        // Summary
+        output.AppendLine("=== SUMMARY ===");
+        output.AppendLine($"Total Projects: {result.Summary.TotalProjects}");
+        output.AppendLine($"✅ Included: {result.Summary.IncludedProjects}");
+        output.AppendLine($"❌ Excluded: {result.Summary.ExcludedProjects}");
+        output.AppendLine($"🧪 Test Projects: {result.Summary.TestProjects}");
+        output.AppendLine($"🏭 Production Projects: {result.Summary.ProductionProjects}");
+        output.AppendLine();
+
+        // Configuration Summary
+        output.AppendLine("=== CONFIGURATION APPLIED ===");
+        output.AppendLine($"Test Projects Only: {result.Configuration.Projects.TestProjectsOnly}");
+        
+        if (result.Configuration.Projects.Include.Any())
+        {
+            output.AppendLine($"Include Patterns: {string.Join(", ", result.Configuration.Projects.Include)}");
+        }
+        
+        if (result.Configuration.Projects.Exclude.Any())
+        {
+            output.AppendLine($"Exclude Patterns: {string.Join(", ", result.Configuration.Projects.Exclude)}");
+        }
+        
+        if (result.Configuration.Projects.ExcludeTypes.Any())
+        {
+            output.AppendLine($"Exclude Types: {string.Join(", ", result.Configuration.Projects.ExcludeTypes)}");
+        }
+        output.AppendLine();
+
+        // Project Details
+        output.AppendLine("=== PROJECT DETAILS ===");
+        
+        // Group by included/excluded
+        var includedProjects = result.Projects.Where(p => p.IsIncluded).OrderBy(p => p.ProjectName).ToList();
+        var excludedProjects = result.Projects.Where(p => !p.IsIncluded).OrderBy(p => p.ProjectName).ToList();
+
+        if (includedProjects.Any())
+        {
+            output.AppendLine($"✅ INCLUDED PROJECTS ({includedProjects.Count}):");
+            foreach (var project in includedProjects)
+            {
+                var typeInfo = project.DetectedType != null ? $" [{project.DetectedType}]" : "";
+                var testInfo = project.IsTestProject ? " (Test)" : " (Prod)";
+                output.AppendLine($"  • {project.ProjectName}{typeInfo}{testInfo}");
+                
+                foreach (var reason in project.FilteringReasons)
+                {
+                    output.AppendLine($"    └─ {reason}");
+                }
+                output.AppendLine();
+            }
+        }
+
+        if (excludedProjects.Any())
+        {
+            output.AppendLine($"❌ EXCLUDED PROJECTS ({excludedProjects.Count}):");
+            foreach (var project in excludedProjects)
+            {
+                var typeInfo = project.DetectedType != null ? $" [{project.DetectedType}]" : "";
+                var testInfo = project.IsTestProject ? " (Test)" : " (Prod)";
+                output.AppendLine($"  • {project.ProjectName}{typeInfo}{testInfo}");
+                
+                foreach (var reason in project.FilteringReasons)
+                {
+                    output.AppendLine($"    └─ {reason}");
+                }
+                output.AppendLine();
+            }
+        }
+
+        var outputText = output.ToString();
+        
+        if (!string.IsNullOrEmpty(outputPath))
+        {
+            await File.WriteAllTextAsync(outputPath, outputText);
+            Console.WriteLine($"✓ Analysis saved to: {outputPath}");
+        }
+        else
+        {
+            Console.Write(outputText);
+        }
     }
 
     private static Command CreateVersionCommand()

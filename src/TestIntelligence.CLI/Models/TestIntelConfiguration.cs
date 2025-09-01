@@ -100,3 +100,96 @@ public class OutputConfiguration
     [JsonPropertyName("outputDirectory")]
     public string? OutputDirectory { get; set; }
 }
+
+/// <summary>
+/// Result of project filtering analysis showing which projects are included/excluded and why
+/// </summary>
+public class ProjectFilterAnalysisResult
+{
+    /// <summary>
+    /// Path to the analyzed solution
+    /// </summary>
+    public string SolutionPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Configuration that was applied
+    /// </summary>
+    public TestIntelConfiguration Configuration { get; set; } = new();
+
+    /// <summary>
+    /// All projects found in the solution with their analysis details
+    /// </summary>
+    public List<ProjectAnalysisDetail> Projects { get; set; } = new();
+
+    /// <summary>
+    /// Summary statistics
+    /// </summary>
+    public ProjectFilterSummary Summary { get; set; } = new();
+}
+
+/// <summary>
+/// Detailed analysis of a single project's filtering status
+/// </summary>
+public class ProjectAnalysisDetail
+{
+    /// <summary>
+    /// Full path to the project file
+    /// </summary>
+    public string ProjectPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Project name (without path)
+    /// </summary>
+    public string ProjectName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Whether this project would be included in analysis
+    /// </summary>
+    public bool IsIncluded { get; set; }
+
+    /// <summary>
+    /// Whether this project was identified as a test project
+    /// </summary>
+    public bool IsTestProject { get; set; }
+
+    /// <summary>
+    /// Detected project type (if any)
+    /// </summary>
+    public string? DetectedType { get; set; }
+
+    /// <summary>
+    /// Reasons why this project was included or excluded
+    /// </summary>
+    public List<string> FilteringReasons { get; set; } = new();
+}
+
+/// <summary>
+/// Summary statistics for project filtering analysis
+/// </summary>
+public class ProjectFilterSummary
+{
+    /// <summary>
+    /// Total number of projects found
+    /// </summary>
+    public int TotalProjects { get; set; }
+
+    /// <summary>
+    /// Number of projects that would be included
+    /// </summary>
+    public int IncludedProjects { get; set; }
+
+    /// <summary>
+    /// Number of projects that would be excluded
+    /// </summary>
+    public int ExcludedProjects { get; set; }
+
+    /// <summary>
+    /// Number of projects identified as test projects
+    /// </summary>
+    public int TestProjects { get; set; }
+
+    /// <summary>
+    /// Number of projects identified as production projects
+    /// </summary>
+    public int ProductionProjects { get; set; }
+}

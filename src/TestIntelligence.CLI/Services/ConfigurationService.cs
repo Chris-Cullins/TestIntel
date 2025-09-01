@@ -336,4 +336,274 @@ public class ConfigurationService : IConfigurationService
         _logger.LogInformation("  Max parallelism: {MaxParallelism}", configuration.Analysis.MaxParallelism);
         _logger.LogInformation("  Default format: {Format}", configuration.Output.Format);
     }
+
+    public async Task<ProjectFilterAnalysisResult> AnalyzeProjectFilteringAsync(string solutionPath, TestIntelConfiguration configuration)
+    {
+        try
+        {
+            _logger.LogInformation("Analyzing project filtering for solution: {SolutionPath}", solutionPath);
+
+            var result = new ProjectFilterAnalysisResult
+            {
+                SolutionPath = solutionPath,
+                Configuration = configuration
+            };
+
+            // Find all projects in the solution
+            var allProjectPaths = await FindAllProjectsInSolutionAsync(solutionPath);
+            
+            _logger.LogDebug("Found {Count} projects in solution", allProjectPaths.Count);
+
+            // Analyze each project
+            foreach (var projectPath in allProjectPaths)
+            {
+                var detail = await AnalyzeProjectAsync(projectPath, configuration);
+                result.Projects.Add(detail);
+            }
+
+            // Calculate summary statistics
+            result.Summary = new ProjectFilterSummary
+            {
+                TotalProjects = result.Projects.Count,
+                IncludedProjects = result.Projects.Count(p => p.IsIncluded),
+                ExcludedProjects = result.Projects.Count(p => !p.IsIncluded),
+                TestProjects = result.Projects.Count(p => p.IsTestProject),
+                ProductionProjects = result.Projects.Count(p => !p.IsTestProject)
+            };
+
+            _logger.LogInformation("Project analysis complete: {Total} total, {Included} included, {Excluded} excluded",
+                result.Summary.TotalProjects, result.Summary.IncludedProjects, result.Summary.ExcludedProjects);
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to analyze project filtering");
+            throw;
+        }
+    }
+
+    private async Task<ProjectAnalysisDetail> AnalyzeProjectAsync(string projectPath, TestIntelConfiguration configuration)
+    {
+        var projectName = Path.GetFileNameWithoutExtension(projectPath);
+        var isTestProject = await IsTestProjectAsync(projectPath);
+        var detectedType = DetectProjectType(projectPath);
+        
+        var detail = new ProjectAnalysisDetail
+        {
+            ProjectPath = projectPath,
+            ProjectName = projectName,
+            IsTestProject = isTestProject,
+            DetectedType = detectedType
+        };
+
+        // Determine if this project would be included based on configuration
+        var reasons = new List<string>();
+        var wouldBeIncluded = WouldProjectBeIncluded(projectPath, configuration, isTestProject, detectedType, reasons);
+        
+        detail.IsIncluded = wouldBeIncluded;
+        detail.FilteringReasons = reasons;
+
+        return detail;
+    }
+
+    private bool WouldProjectBeIncluded(string projectPath, TestIntelConfiguration configuration, 
+        bool isTestProject, string? detectedType, List<string> reasons)
+    {
+        var projectConfig = configuration.Projects;
+
+        // Check testProjectsOnly setting
+        if (projectConfig.TestProjectsOnly && !isTestProject)
+        {
+            reasons.Add("Excluded: Not a test project (testProjectsOnly=true)");
+            return false;
+        }
+
+        if (projectConfig.TestProjectsOnly && isTestProject)
+        {
+            reasons.Add("Included: Test project and testProjectsOnly=true");
+        }
+        else if (!projectConfig.TestProjectsOnly)
+        {
+            reasons.Add(isTestProject ? "Included: Test project" : "Included: Production project");
+        }
+
+        // Apply include patterns (if any specified)
+        if (projectConfig.Include.Any())
+        {
+            var matchesInclude = projectConfig.Include.Any(pattern => MatchesPattern(projectPath, pattern));
+            if (!matchesInclude)
+            {
+                reasons.Add($"Excluded: Does not match include patterns [{string.Join(", ", projectConfig.Include)}]");
+                return false;
+            }
+            else
+            {
+                reasons.Add($"Included: Matches include pattern");
+            }
+        }
+
+        // Apply exclude patterns
+        if (projectConfig.Exclude.Any())
+        {
+            var matchingExcludePattern = projectConfig.Exclude.FirstOrDefault(pattern => MatchesPattern(projectPath, pattern));
+            if (matchingExcludePattern != null)
+            {
+                reasons.Add($"Excluded: Matches exclude pattern '{matchingExcludePattern}'");
+                return false;
+            }
+        }
+
+        // Apply type-based exclusions
+        if (projectConfig.ExcludeTypes.Any() && detectedType != null)
+        {
+            var matchingExcludeType = projectConfig.ExcludeTypes.FirstOrDefault(type => 
+                string.Equals(type, detectedType, StringComparison.OrdinalIgnoreCase));
+            if (matchingExcludeType != null)
+            {
+                reasons.Add($"Excluded: Project type '{detectedType}' matches excluded type '{matchingExcludeType}'");
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private string? DetectProjectType(string projectPath)
+    {
+        var projectName = Path.GetFileNameWithoutExtension(projectPath).ToLowerInvariant();
+
+        if (projectName.Contains("orm") || projectName.Contains("entityframework") || projectName.Contains("ef") || projectName.Contains("dapper"))
+            return "orm";
+        
+        if (projectName.Contains("database") || projectName.Contains("db") || projectName.Contains("sql"))
+            return "database";
+        
+        if (projectName.Contains("migration") || projectName.Contains("migrations"))
+            return "migration";
+        
+        if (projectName.Contains("integration"))
+            return "integration";
+        
+        if (projectName.Contains("api") || projectName.Contains("webapi") || projectName.Contains("rest"))
+            return "api";
+        
+        if (projectName.Contains("ui") || projectName.Contains("web") || projectName.Contains("client"))
+            return "ui";
+
+        return null;
+    }
+
+    private async Task<List<string>> FindAllProjectsInSolutionAsync(string solutionPath)
+    {
+        var projects = new List<string>();
+        
+        if (!File.Exists(solutionPath))
+        {
+            _logger.LogWarning("Solution file not found: {SolutionPath}", solutionPath);
+            return projects;
+        }
+
+        _logger.LogDebug("Parsing solution file: {SolutionPath}", solutionPath);
+        var solutionContent = await File.ReadAllTextAsync(solutionPath);
+        var lines = solutionContent.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var solutionDir = Path.GetDirectoryName(solutionPath)!;
+        
+        foreach (var line in lines)
+        {
+            var trimmedLine = line.Trim();
+            if (trimmedLine.StartsWith("Project(") && trimmedLine.Contains(".csproj"))
+            {
+                // Parse: Project("{GUID}") = "ProjectName", "relative\path\Project.csproj", "{GUID}"
+                var parts = trimmedLine.Split(',');
+                if (parts.Length >= 2)
+                {
+                    var projectRelativePath = parts[1].Trim().Trim('"');
+                    var fullProjectPath = Path.Combine(solutionDir, projectRelativePath.Replace('\\', Path.DirectorySeparatorChar));
+                    
+                    if (File.Exists(fullProjectPath))
+                    {
+                        _logger.LogDebug("Found project: {ProjectPath}", fullProjectPath);
+                        projects.Add(fullProjectPath);
+                    }
+                }
+            }
+        }
+
+        _logger.LogInformation("Found {Count} total projects in solution", projects.Count);
+        return projects;
+    }
+
+    private async Task<bool> IsTestProjectAsync(string projectPath)
+    {
+        try
+        {
+            if (!File.Exists(projectPath))
+                return false;
+
+            var projectContent = await File.ReadAllTextAsync(projectPath);
+            
+            // Check for direct test framework package references (more specific)
+            var primaryTestFrameworks = new[]
+            {
+                "<PackageReference Include=\"Microsoft.NET.Test.Sdk\"",
+                "<PackageReference Include=\"xunit\"",
+                "<PackageReference Include=\"NUnit\"", 
+                "<PackageReference Include=\"MSTest\"",
+                "<IsTestProject>true</IsTestProject>"
+            };
+
+            foreach (var framework in primaryTestFrameworks)
+            {
+                if (projectContent.Contains(framework, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            // Check for secondary test-specific packages (less common in production code)
+            var secondaryTestFrameworks = new[]
+            {
+                "FluentAssertions",
+                "Moq", "NSubstitute", 
+                "AutoFixture",
+                "Shouldly"
+            };
+
+            foreach (var framework in secondaryTestFrameworks)
+            {
+                if (projectContent.Contains($"<PackageReference Include=\"{framework}\"", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            // Check project name patterns (be more specific to avoid false positives)
+            var projectName = Path.GetFileNameWithoutExtension(projectPath);
+            if (projectName.EndsWith("Tests", StringComparison.OrdinalIgnoreCase) ||
+                projectName.EndsWith("Test", StringComparison.OrdinalIgnoreCase) ||
+                projectName.EndsWith("Specs", StringComparison.OrdinalIgnoreCase) ||
+                projectName.EndsWith("Spec", StringComparison.OrdinalIgnoreCase) ||
+                projectName.Contains(".Tests.", StringComparison.OrdinalIgnoreCase) ||
+                projectName.Contains(".Test.", StringComparison.OrdinalIgnoreCase) ||
+                projectName.Contains(".Specs.", StringComparison.OrdinalIgnoreCase) ||
+                projectName.Contains(".Spec.", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            // Check for IsTestProject property
+            if (projectContent.Contains("<IsTestProject>true</IsTestProject>", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to determine if project is a test project: {ProjectPath}", projectPath);
+            return false;
+        }
+    }
 }

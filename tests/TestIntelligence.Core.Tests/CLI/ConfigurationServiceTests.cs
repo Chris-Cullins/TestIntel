@@ -250,5 +250,71 @@ namespace TestIntelligence.Core.Tests.CLI
             Assert.Contains("/path/to/Core.Tests.csproj", filtered);
             Assert.DoesNotContain("/path/to/Core.Database.csproj", filtered);
         }
+
+        [Fact]
+        public async Task AnalyzeProjectFilteringAsync_WithNonExistentSolution_ReturnsEmptyResult()
+        {
+            // Arrange
+            var solutionPath = "/path/that/does/not/exist.sln";
+            var config = new TestIntelConfiguration();
+
+            // Act
+            var result = await _service.AnalyzeProjectFilteringAsync(solutionPath, config);
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.Equal(solutionPath, result.SolutionPath);
+            Assert.Equal(config, result.Configuration);
+            Assert.Empty(result.Projects);
+            Assert.Equal(0, result.Summary.TotalProjects);
+        }
+
+        [Fact]
+        public async Task AnalyzeProjectFilteringAsync_WithMockSolution_AnalyzesCorrectly()
+        {
+            // Arrange
+            var solutionPath = Path.Combine(_testDirectory, "test.sln");
+            var projectPath = Path.Combine(_testDirectory, "TestProject.Tests.csproj");
+            
+            // Create mock solution file
+            var solutionContent = @"Microsoft Visual Studio Solution File, Format Version 12.00
+Project(""{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}"") = ""TestProject.Tests"", ""TestProject.Tests.csproj"", ""{12345678-1234-5678-9ABC-123456789ABC}""
+EndProject";
+            await File.WriteAllTextAsync(solutionPath, solutionContent);
+
+            // Create mock project file with test markers
+            var projectContent = @"<Project Sdk=""Microsoft.NET.Sdk"">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include=""Microsoft.NET.Test.Sdk"" Version=""17.0.0"" />
+    <PackageReference Include=""xunit"" Version=""2.4.2"" />
+  </ItemGroup>
+</Project>";
+            await File.WriteAllTextAsync(projectPath, projectContent);
+
+            var config = new TestIntelConfiguration();
+
+            // Act
+            var result = await _service.AnalyzeProjectFilteringAsync(solutionPath, config);
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.Equal(solutionPath, result.SolutionPath);
+            Assert.Single(result.Projects);
+            
+            var project = result.Projects.First();
+            Assert.Equal("TestProject.Tests", project.ProjectName);
+            Assert.True(project.IsTestProject);
+            Assert.True(project.IsIncluded);
+            Assert.Contains("Included: Test project and testProjectsOnly=true", project.FilteringReasons);
+            
+            Assert.Equal(1, result.Summary.TotalProjects);
+            Assert.Equal(1, result.Summary.IncludedProjects);
+            Assert.Equal(0, result.Summary.ExcludedProjects);
+            Assert.Equal(1, result.Summary.TestProjects);
+        }
     }
 }
