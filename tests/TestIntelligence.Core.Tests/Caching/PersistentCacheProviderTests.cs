@@ -145,10 +145,10 @@ namespace TestIntelligence.Core.Tests.Caching
 
             // Act
             await _cache.SetAsync(key, existingData);
-            var result = await _cache.GetOrSetAsync(key, async () =>
+            var result = await _cache.GetOrSetAsync(key, () =>
             {
                 factoryCalled = true;
-                return newData;
+                return Task.FromResult(newData);
             });
 
             // Assert

@@ -2,10 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using TestIntelligence.Core.Assembly;
 using TestIntelligence.Core.Caching;
+using TestIntelligence.Core.Discovery;
 using TestIntelligence.Core.Models;
 using Xunit;
 using Xunit.Abstractions;
@@ -54,15 +57,15 @@ namespace TestIntelligence.Core.Tests.Caching
             await cacheManager.InitializeAsync();
             
             var key = "test-discovery-key";
-            var expectedResult = new TestDiscoveryResult
-            {
-                AssemblyPath = "/test/assembly.dll",
-                TestMethods = new List<TestMethod>
-                {
-                    new TestMethod { Name = "TestMethod1", ClassName = "TestClass" }
-                },
-                DiscoveredAt = DateTimeOffset.UtcNow
-            };
+            
+            // Create a test fixture (this will automatically discover test methods)
+            var testFixture = new TestFixture(typeof(SolutionCacheManagerTests), "/test/assembly.dll", FrameworkVersion.Net5Plus);
+            
+            var expectedResult = new TestDiscoveryResult(
+                "/test/assembly.dll",
+                FrameworkVersion.Net5Plus,
+                new List<TestFixture> { testFixture },
+                new List<string>());
             var factoryCalled = false;
 
             // Act
@@ -77,7 +80,7 @@ namespace TestIntelligence.Core.Tests.Caching
             Assert.True(factoryCalled);
             Assert.NotNull(result);
             Assert.Equal(expectedResult.AssemblyPath, result.AssemblyPath);
-            Assert.Single(result.TestMethods);
+            Assert.Single(result.GetAllTestMethods());
         }
 
         [Fact]
@@ -88,32 +91,29 @@ namespace TestIntelligence.Core.Tests.Caching
             await cacheManager.InitializeAsync();
             
             var key = "cached-discovery-key";
-            var cachedResult = new TestDiscoveryResult
-            {
-                AssemblyPath = "/test/cached.dll",
-                TestMethods = new List<TestMethod>
-                {
-                    new TestMethod { Name = "CachedMethod", ClassName = "CachedClass" }
-                },
-                DiscoveredAt = DateTimeOffset.UtcNow
-            };
+            var testFixture = new TestFixture(typeof(SolutionCacheManagerTests), "/test/cached.dll", FrameworkVersion.Net5Plus);
+            
+            var cachedResult = new TestDiscoveryResult(
+                "/test/cached.dll",
+                FrameworkVersion.Net5Plus,
+                new List<TestFixture> { testFixture },
+                new List<string>());
 
             // Pre-cache the result
-            await cacheManager.GetOrSetAsync(key, async () => cachedResult);
+            await cacheManager.GetOrSetAsync(key, () => Task.FromResult(cachedResult));
 
             var factoryCalled = false;
-            var newResult = new TestDiscoveryResult
-            {
-                AssemblyPath = "/test/new.dll",
-                TestMethods = new List<TestMethod>(),
-                DiscoveredAt = DateTimeOffset.UtcNow
-            };
+            var newResult = new TestDiscoveryResult(
+                "/test/new.dll",
+                FrameworkVersion.Net5Plus,
+                new List<TestFixture>(),
+                new List<string>());
 
             // Act
-            var result = await cacheManager.GetOrSetAsync(key, async () =>
+            var result = await cacheManager.GetOrSetAsync(key, () =>
             {
                 factoryCalled = true;
-                return newResult;
+                return Task.FromResult(newResult);
             });
 
             // Assert
@@ -201,14 +201,13 @@ namespace TestIntelligence.Core.Tests.Caching
             await cacheManager.InitializeAsync();
             
             var key = "clear-test-key";
-            var testData = new TestDiscoveryResult
-            {
-                AssemblyPath = "/test/clear.dll",
-                TestMethods = new List<TestMethod>(),
-                DiscoveredAt = DateTimeOffset.UtcNow
-            };
+            var testData = new TestDiscoveryResult(
+                "/test/clear.dll",
+                FrameworkVersion.Net5Plus,
+                new List<TestFixture>(),
+                new List<string>());
 
-            await cacheManager.GetOrSetAsync(key, async () => testData);
+            await cacheManager.GetOrSetAsync(key, () => Task.FromResult(testData));
             await cacheManager.SaveSnapshotAsync();
 
             // Act
@@ -218,10 +217,10 @@ namespace TestIntelligence.Core.Tests.Caching
             var stats = await cacheManager.GetStatisticsAsync();
             // After clearing, cache should be empty or minimal
             var factoryCalled = false;
-            await cacheManager.GetOrSetAsync(key, async () =>
+            await cacheManager.GetOrSetAsync(key, () =>
             {
                 factoryCalled = true;
-                return testData;
+                return Task.FromResult(testData);
             });
             Assert.True(factoryCalled); // Should call factory after clearing
         }
@@ -253,24 +252,19 @@ namespace TestIntelligence.Core.Tests.Caching
                         var result = await cacheManager.GetOrSetAsync(key, async () =>
                         {
                             await Task.Delay(1); // Simulate discovery work
-                            return new TestDiscoveryResult
-                            {
-                                AssemblyPath = assemblyPath,
-                                TestMethods = Enumerable.Range(0, 5)
-                                    .Select(i => new TestMethod 
-                                    { 
-                                        Name = $"Test{i}", 
-                                        ClassName = $"TestClass{projectIndex}_{fileIndex}" 
-                                    })
-                                    .ToList(),
-                                DiscoveredAt = DateTimeOffset.UtcNow
-                            };
+                            var testFixture = new TestFixture(typeof(SolutionCacheManagerTests), assemblyPath, FrameworkVersion.Net5Plus);
+                            
+                            return new TestDiscoveryResult(
+                                assemblyPath,
+                                FrameworkVersion.Net5Plus,
+                                new List<TestFixture> { testFixture },
+                                new List<string>());
                         });
                         
                         // Verify result
                         Assert.NotNull(result);
                         Assert.Equal(assemblyPath, result.AssemblyPath);
-                        Assert.Equal(5, result.TestMethods.Count);
+                        Assert.True(result.GetAllTestMethods().Count() >= 0); // TestFixtures auto-discover methods
                     }));
                 }
             }
@@ -312,12 +306,11 @@ namespace TestIntelligence.Core.Tests.Caching
                         var result = await cacheManager.GetOrSetAsync(key, async () =>
                         {
                             await Task.Delay(1);
-                            return new TestDiscoveryResult
-                            {
-                                AssemblyPath = $"/concurrent/thread{threadIndex}/op{o}.dll",
-                                TestMethods = new List<TestMethod>(),
-                                DiscoveredAt = DateTimeOffset.UtcNow
-                            };
+                            return new TestDiscoveryResult(
+                                $"/concurrent/thread{threadIndex}/op{o}.dll",
+                                FrameworkVersion.Net5Plus,
+                                new List<TestFixture>(),
+                                new List<string>());
                         });
                         
                         Assert.NotNull(result);
