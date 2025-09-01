@@ -164,7 +164,8 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Caching
             }
 
             // Perform some gets (hits and misses)
-            await cache.GetCallGraphAsync(_testProjectPath, assemblies); // Hit
+            var projectPath0 = Path.Combine(_tempDirectory, $"TestProject0.csproj");
+            await cache.GetCallGraphAsync(projectPath0, assemblies); // Hit (stored above)
             await cache.GetCallGraphAsync("non-existent-project.csproj", assemblies); // Miss
 
             // Act
@@ -258,7 +259,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Caching
         }
 
         [Fact]
-        public async Task CacheEntryValidation_DetectsIntegrityIssues()
+        public void CacheEntryValidation_DetectsIntegrityIssues()
         {
             // Arrange
             var entry = new CompressedCallGraphCacheEntry
@@ -286,7 +287,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Caching
         }
 
         [Fact]
-        public async Task CacheEntryStatistics_ReturnsAccurateMetrics()
+        public void CacheEntryStatistics_ReturnsAccurateMetrics()
         {
             // Arrange
             var callGraph = CreateTestCallGraph();
@@ -454,7 +455,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Caching
 
         private class TestLogger<T> : ILogger<T>
         {
-            public IDisposable BeginScope<TState>(TState state) => null!;
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
             public bool IsEnabled(LogLevel logLevel) => false;
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) { }
         }

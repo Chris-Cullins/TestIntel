@@ -21,6 +21,7 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
         private readonly ILogger<CallGraphCache>? _logger;
         private FileSystemWatcher? _fileWatcher;
         private readonly Dictionary<string, DateTime> _lastModifiedTimes = new();
+        private readonly HashSet<string> _cachedProjectPaths = new();
         private readonly SemaphoreSlim _invalidationLock = new(1, 1);
         private readonly object _statsLock = new();
         private volatile bool _disposed = false;
@@ -65,7 +66,17 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
             
             if (cachedEntry == null)
             {
-                IncrementMiss();
+                // Check if we have any entries for this project with different dependencies
+                // This would indicate an invalidation scenario rather than a pure miss
+                var hasProjectEntry = await HasAnyEntryForProjectAsync(projectPath, cancellationToken);
+                if (hasProjectEntry)
+                {
+                    IncrementInvalidation();
+                }
+                else
+                {
+                    IncrementMiss();
+                }
                 return null;
             }
 
@@ -74,6 +85,7 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
             {
                 _logger?.LogDebug("Cache entry invalid for project: {ProjectPath}", projectPath);
                 await _cache.RemoveAsync(cacheKey, cancellationToken);
+                RemoveProjectFromTracking(projectPath);
                 IncrementInvalidation();
                 return null;
             }
@@ -83,6 +95,7 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
             {
                 _logger?.LogDebug("Project files changed since cache creation: {ProjectPath}", projectPath);
                 await _cache.RemoveAsync(cacheKey, cancellationToken);
+                RemoveProjectFromTracking(projectPath);
                 IncrementInvalidation();
                 return null;
             }
@@ -93,6 +106,7 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
             {
                 _logger?.LogWarning("Cache entry failed integrity check: {Issues}", string.Join(", ", validation.Issues));
                 await _cache.RemoveAsync(cacheKey, cancellationToken);
+                RemoveProjectFromTracking(projectPath);
                 IncrementCorruption();
                 return null;
             }
@@ -151,6 +165,12 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
             
             // Update last modified times for invalidation tracking
             await UpdateProjectModificationTimeAsync(projectPath, cancellationToken);
+            
+            // Track that we have an entry for this project
+            lock (_statsLock)
+            {
+                _cachedProjectPaths.Add(projectPath);
+            }
             
             IncrementStore();
             _logger?.LogDebug("Stored call graph cache for project: {ProjectPath}, build time: {BuildTime}", 
@@ -238,6 +258,7 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
             lock (_statsLock)
             {
                 _statistics = new CallGraphCacheStatistics();
+                _cachedProjectPaths.Clear();
             }
             
             _logger?.LogInformation("Call graph cache cleared");
@@ -408,6 +429,22 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
             lock (_statsLock)
             {
                 _statistics.StoreCount++;
+            }
+        }
+
+        private Task<bool> HasAnyEntryForProjectAsync(string projectPath, CancellationToken cancellationToken)
+        {
+            lock (_statsLock)
+            {
+                return Task.FromResult(_cachedProjectPaths.Contains(projectPath));
+            }
+        }
+
+        private void RemoveProjectFromTracking(string projectPath)
+        {
+            lock (_statsLock)
+            {
+                _cachedProjectPaths.Remove(projectPath);
             }
         }
 
