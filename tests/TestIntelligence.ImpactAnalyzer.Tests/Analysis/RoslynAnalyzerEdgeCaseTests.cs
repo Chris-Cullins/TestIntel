@@ -14,19 +14,19 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Analysis
 {
     public class RoslynAnalyzerEdgeCaseTests : IDisposable
     {
-        private readonly RoslynAnalyzerV2 _analyzer;
-        private readonly ILogger<RoslynAnalyzerV2> _logger;
+        private readonly RoslynAnalyzer _analyzer;
+        private readonly ILogger<RoslynAnalyzer> _logger;
         private readonly ILoggerFactory _loggerFactory;
         private readonly string _tempDirectory;
 
         public RoslynAnalyzerEdgeCaseTests()
         {
             _loggerFactory = Substitute.For<ILoggerFactory>();
-            _logger = Substitute.For<ILogger<RoslynAnalyzerV2>>();
-            _loggerFactory.CreateLogger<RoslynAnalyzerV2>().Returns(_logger);
+            _logger = Substitute.For<ILogger<RoslynAnalyzer>>();
+            _loggerFactory.CreateLogger<RoslynAnalyzer>().Returns(_logger);
             SetupMockLoggers();
             
-            _analyzer = new RoslynAnalyzerV2(_logger, _loggerFactory);
+            _analyzer = new RoslynAnalyzer(_logger, _loggerFactory);
             _tempDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
             Directory.CreateDirectory(_tempDirectory);
         }

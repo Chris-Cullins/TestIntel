@@ -8,26 +8,23 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using TestIntelligence.ImpactAnalyzer.Analysis;
-using TestIntelligence.ImpactAnalyzer.Configuration;
 using Xunit;
 
 namespace TestIntelligence.ImpactAnalyzer.Tests.Analysis
 {
     public class EnhancedRoslynAnalyzerTests : IDisposable
     {
-        private readonly IRoslynAnalyzer _legacyAnalyzer;
-        private readonly IRoslynAnalyzer _enhancedAnalyzer;
+        private readonly IRoslynAnalyzer _analyzer;
         private readonly ILoggerFactory _loggerFactory;
         private readonly string _tempDirectory;
 
         public EnhancedRoslynAnalyzerTests()
         {
             _loggerFactory = Substitute.For<ILoggerFactory>();
-            _loggerFactory.CreateLogger<RoslynAnalyzerV2>().Returns(Substitute.For<ILogger<RoslynAnalyzerV2>>());
-            _loggerFactory.CreateLogger<RoslynAnalyzerV2>().Returns(Substitute.For<ILogger<RoslynAnalyzerV2>>());
+            _loggerFactory.CreateLogger<RoslynAnalyzer>().Returns(Substitute.For<ILogger<RoslynAnalyzer>>());
+            _loggerFactory.CreateLogger<RoslynAnalyzer>().Returns(Substitute.For<ILogger<RoslynAnalyzer>>());
             
-            _legacyAnalyzer = RoslynAnalyzerFactory.Create(_loggerFactory, RoslynAnalyzerConfig.Default);
-            _enhancedAnalyzer = RoslynAnalyzerFactory.Create(_loggerFactory, RoslynAnalyzerConfig.Enhanced);
+            _analyzer = RoslynAnalyzerFactory.Create(_loggerFactory);
             
             _tempDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
             Directory.CreateDirectory(_tempDirectory);
@@ -54,8 +51,8 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Analysis
             var targetMethodId = "TestIntelligence.Production.TestMethod.ToString()";
 
             // Act: Compare coverage detection between analyzers
-            var legacyCoverage = await _legacyAnalyzer.FindTestsExercisingMethodAsync(targetMethodId, files);
-            var enhancedCoverage = await _enhancedAnalyzer.FindTestsExercisingMethodAsync(targetMethodId, files);
+            var legacyCoverage = await _analyzer.FindTestsExercisingMethodAsync(targetMethodId, files);
+            var enhancedCoverage = await _analyzer.FindTestsExercisingMethodAsync(targetMethodId, files);
 
             // Assert: Enhanced analyzer should detect significantly more test coverage
             // Based on roslynfix.md, we expect improvement from ~2% to 80%+
@@ -138,8 +135,8 @@ namespace Tests
             var files = new[] { file1, file2, testFile };
 
             // Act
-            var legacyCallGraph = await _legacyAnalyzer.BuildCallGraphAsync(files);
-            var enhancedCallGraph = await _enhancedAnalyzer.BuildCallGraphAsync(files);
+            var legacyCallGraph = await _analyzer.BuildCallGraphAsync(files);
+            var enhancedCallGraph = await _analyzer.BuildCallGraphAsync(files);
 
             // Assert: Enhanced analyzer should capture more method relationships
             var legacyMethodCount = legacyCallGraph.GetAllMethods().Count;
@@ -159,32 +156,14 @@ namespace Tests
         }
 
         [Fact]
-        public void RoslynAnalyzerFactory_WithEnhancedConfig_ShouldCreateEnhancedAnalyzer()
+        public void RoslynAnalyzerFactory_ShouldCreateRoslynAnalyzer()
         {
-            // Arrange
-            var config = RoslynAnalyzerConfig.Enhanced;
-            
             // Act
-            var analyzer = RoslynAnalyzerFactory.Create(_loggerFactory, config);
+            var analyzer = RoslynAnalyzerFactory.Create(_loggerFactory);
             
             // Assert
             analyzer.Should().NotBeNull();
-            // In a full implementation, this would be a RoslynAnalyzerV2 instance
-            // For now, we're testing the factory infrastructure
-        }
-
-        [Fact]
-        public void RoslynAnalyzerFactory_WithDefaultConfig_ShouldCreateLegacyAnalyzer()
-        {
-            // Arrange
-            var config = RoslynAnalyzerConfig.Default;
-            
-            // Act
-            var analyzer = RoslynAnalyzerFactory.Create(_loggerFactory, config);
-            
-            // Assert
-            analyzer.Should().NotBeNull();
-            analyzer.Should().BeOfType<RoslynAnalyzerV2>("Default config should create RoslynAnalyzerV2");
+            analyzer.Should().BeOfType<RoslynAnalyzer>();
         }
 
         private string CreateTestProjectCode()

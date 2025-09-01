@@ -16,7 +16,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Analysis
         public BasicRoslynTests()
         {
             _loggerFactory = Substitute.For<ILoggerFactory>();
-            _loggerFactory.CreateLogger<RoslynAnalyzerV2>().Returns(Substitute.For<ILogger<RoslynAnalyzerV2>>());
+            _loggerFactory.CreateLogger<RoslynAnalyzer>().Returns(Substitute.For<ILogger<RoslynAnalyzer>>());
             _loggerFactory.CreateLogger<CompilationManager>().Returns(Substitute.For<ILogger<CompilationManager>>());
             _loggerFactory.CreateLogger<SymbolResolutionEngine>().Returns(Substitute.For<ILogger<SymbolResolutionEngine>>());
             _loggerFactory.CreateLogger<SolutionParser>().Returns(Substitute.For<ILogger<SolutionParser>>());
@@ -36,39 +36,39 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Analysis
         }
 
         [Fact]
-        public void RoslynAnalyzerV2_CanBeCreated()
+        public void RoslynAnalyzer_CanBeCreated()
         {
-            var logger = _loggerFactory.CreateLogger<RoslynAnalyzerV2>();
+            var logger = _loggerFactory.CreateLogger<RoslynAnalyzer>();
 
-            var analyzer = new RoslynAnalyzerV2(logger, _loggerFactory);
+            var analyzer = new RoslynAnalyzer(logger, _loggerFactory);
 
             analyzer.Should().NotBeNull();
             analyzer.Dispose();
         }
 
         [Fact]
-        public void RoslynAnalyzerV2_Constructor_WithNullLogger_ThrowsArgumentNullException()
+        public void RoslynAnalyzer_Constructor_WithNullLogger_ThrowsArgumentNullException()
         {
-            var action = () => new RoslynAnalyzerV2(null!, _loggerFactory);
+            var action = () => new RoslynAnalyzer(null!, _loggerFactory);
 
             action.Should().Throw<ArgumentNullException>();
         }
 
         [Fact]
-        public void RoslynAnalyzerV2_Constructor_WithNullLoggerFactory_ThrowsArgumentNullException()
+        public void RoslynAnalyzer_Constructor_WithNullLoggerFactory_ThrowsArgumentNullException()
         {
-            var logger = _loggerFactory.CreateLogger<RoslynAnalyzerV2>();
+            var logger = _loggerFactory.CreateLogger<RoslynAnalyzer>();
 
-            var action = () => new RoslynAnalyzerV2(logger, null!);
+            var action = () => new RoslynAnalyzer(logger, null!);
 
             action.Should().Throw<ArgumentNullException>();
         }
 
         [Fact]
-        public void RoslynAnalyzerV2_Dispose_DoesNotThrow()
+        public void RoslynAnalyzer_Dispose_DoesNotThrow()
         {
-            var logger = _loggerFactory.CreateLogger<RoslynAnalyzerV2>();
-            var analyzer = new RoslynAnalyzerV2(logger, _loggerFactory);
+            var logger = _loggerFactory.CreateLogger<RoslynAnalyzer>();
+            var analyzer = new RoslynAnalyzer(logger, _loggerFactory);
 
             analyzer.Dispose();
 
@@ -76,10 +76,10 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Analysis
         }
 
         [Fact]
-        public void RoslynAnalyzerV2_DoubleDispose_DoesNotThrow()
+        public void RoslynAnalyzer_DoubleDispose_DoesNotThrow()
         {
-            var logger = _loggerFactory.CreateLogger<RoslynAnalyzerV2>();
-            var analyzer = new RoslynAnalyzerV2(logger, _loggerFactory);
+            var logger = _loggerFactory.CreateLogger<RoslynAnalyzer>();
+            var analyzer = new RoslynAnalyzer(logger, _loggerFactory);
 
             analyzer.Dispose();
             analyzer.Dispose();
@@ -90,8 +90,8 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Analysis
         [Fact]
         public async void ExtractMethodsFromFileAsync_WithEmptyFile_ReturnsEmpty()
         {
-            var logger = _loggerFactory.CreateLogger<RoslynAnalyzerV2>();
-            var analyzer = new RoslynAnalyzerV2(logger, _loggerFactory);
+            var logger = _loggerFactory.CreateLogger<RoslynAnalyzer>();
+            var analyzer = new RoslynAnalyzer(logger, _loggerFactory);
             var emptyFile = CreateTempFile("empty.cs", "");
 
             try
@@ -108,8 +108,8 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Analysis
         [Fact]
         public async void ExtractMethodsFromFileAsync_WithValidClass_ExtractsMethods()
         {
-            var logger = _loggerFactory.CreateLogger<RoslynAnalyzerV2>();
-            var analyzer = new RoslynAnalyzerV2(logger, _loggerFactory);
+            var logger = _loggerFactory.CreateLogger<RoslynAnalyzer>();
+            var analyzer = new RoslynAnalyzer(logger, _loggerFactory);
             var sourceCode = @"
 namespace TestNamespace
 {
@@ -137,8 +137,8 @@ namespace TestNamespace
         [Fact]
         public async void GetSemanticModelAsync_WithValidFile_ReturnsSemanticModel()
         {
-            var logger = _loggerFactory.CreateLogger<RoslynAnalyzerV2>();
-            var analyzer = new RoslynAnalyzerV2(logger, _loggerFactory);
+            var logger = _loggerFactory.CreateLogger<RoslynAnalyzer>();
+            var analyzer = new RoslynAnalyzer(logger, _loggerFactory);
             var sourceCode = @"
 namespace TestNamespace
 {
@@ -161,8 +161,8 @@ namespace TestNamespace
         [Fact]
         public async void BuildCallGraphAsync_WithEmptyFiles_ReturnsEmptyGraph()
         {
-            var logger = _loggerFactory.CreateLogger<RoslynAnalyzerV2>();
-            var analyzer = new RoslynAnalyzerV2(logger, _loggerFactory);
+            var logger = _loggerFactory.CreateLogger<RoslynAnalyzer>();
+            var analyzer = new RoslynAnalyzer(logger, _loggerFactory);
 
             try
             {

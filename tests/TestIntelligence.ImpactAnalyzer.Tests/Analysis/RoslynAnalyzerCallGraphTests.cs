@@ -17,15 +17,15 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Analysis
     /// </summary>
     public class RoslynAnalyzerCallGraphTests
     {
-        private readonly RoslynAnalyzerV2 _analyzer;
-        private readonly ILogger<RoslynAnalyzerV2> _mockLogger;
+        private readonly RoslynAnalyzer _analyzer;
+        private readonly ILogger<RoslynAnalyzer> _mockLogger;
 
         public RoslynAnalyzerCallGraphTests()
         {
             var loggerFactory = Substitute.For<ILoggerFactory>();
-            _mockLogger = Substitute.For<ILogger<RoslynAnalyzerV2>>();
-            loggerFactory.CreateLogger<RoslynAnalyzerV2>().Returns(_mockLogger);
-            _analyzer = new RoslynAnalyzerV2(_mockLogger, loggerFactory);
+            _mockLogger = Substitute.For<ILogger<RoslynAnalyzer>>();
+            loggerFactory.CreateLogger<RoslynAnalyzer>().Returns(_mockLogger);
+            _analyzer = new RoslynAnalyzer(_mockLogger, loggerFactory);
         }
 
         [Fact]

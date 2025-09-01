@@ -26,7 +26,10 @@ namespace TestIntelligence.ImpactAnalyzer.Services
         private string? _cachedSolutionPath;
         
         // Cache BFS path calculations to avoid redundant traversals
-        private readonly Dictionary<(string, string), string[]?> _pathCache = new();
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, string), string[]?> _pathCache = new();
+        
+        // Cache size management to prevent memory bloat
+        private const int MaxCacheSize = 10000;
 
         public TestCoverageAnalyzer(
             IRoslynAnalyzer roslynAnalyzer,
@@ -120,17 +123,39 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 testMethods.Count, allMethods.Count);
 
             // Build the coverage map
-            var methodToTests = new Dictionary<string, List<TestCoverageInfo>>();
+            var methodToTests = new System.Collections.Concurrent.ConcurrentDictionary<string, List<TestCoverageInfo>>();
 
-            foreach (var method in allMethods)
+            // Filter out test methods upfront to avoid repeated checks
+            var productionMethods = allMethods.Where(method => !testMethodIds.Contains(method.Id)).ToList();
+            _logger.LogInformation("Processing {ProductionMethodCount} production methods (filtered from {TotalMethodCount})", 
+                productionMethods.Count, allMethods.Count);
+
+            if (productionMethods.Count > 20) // Use parallel for larger codebases
             {
-                if (testMethodIds.Contains(method.Id))
-                    continue; // Skip test methods themselves
+                var parallelOptions = new ParallelOptions 
+                { 
+                    MaxDegreeOfParallelism = Math.Min(Environment.ProcessorCount, 4) // Don't overload with too many threads
+                };
 
-                var coveringTests = FindTestsCoveringMethod(method, testMethods, callGraph);
-                if (coveringTests.Any())
+                Parallel.ForEach(productionMethods, parallelOptions, method =>
                 {
-                    methodToTests[method.Id] = coveringTests.ToList();
+                    var coveringTests = FindTestsCoveringMethod(method, testMethods, callGraph);
+                    if (coveringTests.Any())
+                    {
+                        methodToTests[method.Id] = coveringTests.ToList();
+                    }
+                });
+            }
+            else
+            {
+                // Sequential processing for smaller codebases
+                foreach (var method in productionMethods)
+                {
+                    var coveringTests = FindTestsCoveringMethod(method, testMethods, callGraph);
+                    if (coveringTests.Any())
+                    {
+                        methodToTests[method.Id] = coveringTests.ToList();
+                    }
                 }
             }
 
@@ -148,7 +173,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             }
 
             return new TestCoverageMap(
-                methodToTests,
+                new Dictionary<string, List<TestCoverageInfo>>(methodToTests),
                 DateTime.UtcNow,
                 solutionPath);
         }
@@ -228,26 +253,63 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             IReadOnlyList<MethodInfo> testMethods, 
             MethodCallGraph callGraph)
         {
+            // Use parallel processing for path finding when we have many test methods
             var coverageInfos = new List<TestCoverageInfo>();
-
-            foreach (var testMethod in testMethods)
+            
+            if (testMethods.Count > 50) // Use parallel for large test suites
             {
-                var callPath = FindCallPath(testMethod.Id, targetMethod.Id, callGraph);
-                if (callPath != null && callPath.Any())
+                var parallelOptions = new ParallelOptions 
+                { 
+                    MaxDegreeOfParallelism = Environment.ProcessorCount 
+                };
+                
+                var threadSafeCoverageInfos = new System.Collections.Concurrent.ConcurrentBag<TestCoverageInfo>();
+                
+                Parallel.ForEach(testMethods, parallelOptions, testMethod =>
                 {
-                    var confidence = CalculateConfidence(callPath, testMethod, targetMethod);
-                    var testType = _testClassifier.ClassifyTestType(testMethod);
+                    var callPath = FindCallPath(testMethod.Id, targetMethod.Id, callGraph);
+                    if (callPath != null && callPath.Any())
+                    {
+                        var confidence = CalculateConfidence(callPath, testMethod, targetMethod);
+                        var testType = _testClassifier.ClassifyTestType(testMethod);
 
-                    var coverageInfo = new TestCoverageInfo(
-                        testMethod.Id,
-                        testMethod.Name,
-                        testMethod.ContainingType,
-                        Path.GetFileName(testMethod.FilePath), // Just the assembly name
-                        callPath,
-                        confidence,
-                        testType);
+                        var coverageInfo = new TestCoverageInfo(
+                            testMethod.Id,
+                            testMethod.Name,
+                            testMethod.ContainingType,
+                            Path.GetFileName(testMethod.FilePath), // Just the assembly name
+                            callPath,
+                            confidence,
+                            testType);
 
-                    coverageInfos.Add(coverageInfo);
+                        threadSafeCoverageInfos.Add(coverageInfo);
+                    }
+                });
+                
+                coverageInfos.AddRange(threadSafeCoverageInfos);
+            }
+            else
+            {
+                // Use sequential processing for smaller test suites
+                foreach (var testMethod in testMethods)
+                {
+                    var callPath = FindCallPath(testMethod.Id, targetMethod.Id, callGraph);
+                    if (callPath != null && callPath.Any())
+                    {
+                        var confidence = CalculateConfidence(callPath, testMethod, targetMethod);
+                        var testType = _testClassifier.ClassifyTestType(testMethod);
+
+                        var coverageInfo = new TestCoverageInfo(
+                            testMethod.Id,
+                            testMethod.Name,
+                            testMethod.ContainingType,
+                            Path.GetFileName(testMethod.FilePath), // Just the assembly name
+                            callPath,
+                            confidence,
+                            testType);
+
+                        coverageInfos.Add(coverageInfo);
+                    }
                 }
             }
 
@@ -263,14 +325,36 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 return cachedPath;
             }
 
+            // Manage cache size to prevent memory bloat
+            if (_pathCache.Count >= MaxCacheSize)
+            {
+                var keysToRemove = _pathCache.Keys.Take(MaxCacheSize / 4).ToList(); // Remove oldest 25%
+                foreach (var key in keysToRemove)
+                {
+                    _pathCache.TryRemove(key, out _);
+                }
+                _logger.LogDebug("Cache cleanup: removed {RemovedCount} entries, cache size now {CacheSize}", 
+                    keysToRemove.Count, _pathCache.Count);
+            }
+            
+            // Early termination: if the test and target method are the same, return direct path
+            if (testMethodId == targetMethodId)
+            {
+                var directPath = new[] { testMethodId };
+                _pathCache.TryAdd(cacheKey, directPath);
+                return directPath;
+            }
+            
             // Use BFS to find shortest path from test method to target method
             var queue = new Queue<(string methodId, List<string> path)>();
             var visited = new HashSet<string>();
+            const int maxPathLength = 8; // Reduced from 10 to speed up search
+            const int maxVisitedNodes = 1000; // Limit search space
 
             queue.Enqueue((testMethodId, new List<string> { testMethodId }));
             visited.Add(testMethodId);
 
-            while (queue.Count > 0)
+            while (queue.Count > 0 && visited.Count < maxVisitedNodes)
             {
                 var (currentMethod, currentPath) = queue.Dequeue();
 
@@ -278,16 +362,17 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 if (currentMethod == targetMethodId)
                 {
                     var path = currentPath.ToArray();
-                    _pathCache[cacheKey] = path;
+                    _pathCache.TryAdd(cacheKey, path);
                     return path;
                 }
 
                 // Avoid paths that are too long (prevent infinite recursion and overly complex paths)
-                if (currentPath.Count >= 10)
+                if (currentPath.Count >= maxPathLength)
                     continue;
 
-                // Explore methods called by the current method
-                var calledMethods = callGraph.GetMethodCalls(currentMethod);
+                // Get methods called by the current method and prioritize by call count
+                var calledMethods = callGraph.GetMethodCalls(currentMethod).Take(20); // Limit breadth
+                
                 foreach (var calledMethod in calledMethods)
                 {
                     if (!visited.Contains(calledMethod))
@@ -300,7 +385,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             }
 
             // Cache negative results too
-            _pathCache[cacheKey] = null;
+            _pathCache.TryAdd(cacheKey, null);
             return null; // No path found
         }
 

@@ -12,9 +12,9 @@ using TestIntelligence.ImpactAnalyzer.Models;
 
 namespace TestIntelligence.ImpactAnalyzer.Analysis
 {
-    public class RoslynAnalyzerV2 : IRoslynAnalyzer
+    public class RoslynAnalyzer : IRoslynAnalyzer
     {
-        private readonly ILogger<RoslynAnalyzerV2> _logger;
+        private readonly ILogger<RoslynAnalyzer> _logger;
         private readonly SolutionParser _solutionParser;
         private readonly ProjectParser _projectParser;
         private readonly DependencyGraphBuilder _dependencyGraphBuilder;
@@ -26,7 +26,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         private SymbolResolutionEngine? _symbolResolver;
         private CallGraphBuilderV2? _callGraphBuilder;
 
-        public RoslynAnalyzerV2(ILogger<RoslynAnalyzerV2> logger, ILoggerFactory loggerFactory)
+        public RoslynAnalyzer(ILogger<RoslynAnalyzer> logger, ILoggerFactory loggerFactory)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));

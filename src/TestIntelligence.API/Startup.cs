@@ -38,7 +38,7 @@ namespace TestIntelligence.API
             // Register TestIntelligence services
             services.AddScoped<ITestSelectionEngine, TestSelectionEngine>();
             services.AddScoped<ITestDiscovery, NUnitTestDiscovery>();
-            services.AddScoped<IRoslynAnalyzer, RoslynAnalyzerV2>();
+            services.AddScoped<IRoslynAnalyzer, RoslynAnalyzer>();
             services.AddScoped<IGitDiffParser, GitDiffParser>();
             services.AddScoped<ISimplifiedDiffImpactAnalyzer, SimplifiedDiffImpactAnalyzer>();
             services.AddScoped<ITestCoverageAnalyzer, TestCoverageAnalyzer>();

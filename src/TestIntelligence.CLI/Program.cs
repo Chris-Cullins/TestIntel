@@ -80,7 +80,7 @@ public class Program
                 services.AddTransient<IOutputFormatter, JsonOutputFormatter>();
                 
                 // Impact Analyzer services
-                services.AddTransient<IRoslynAnalyzer, RoslynAnalyzerV2>();
+                services.AddTransient<IRoslynAnalyzer, RoslynAnalyzer>();
                 services.AddTransient<IGitDiffParser, GitDiffParser>();
                 services.AddTransient<ISimplifiedDiffImpactAnalyzer, SimplifiedDiffImpactAnalyzer>();
                 services.AddTransient<ITestDiscovery, NUnitTestDiscovery>();

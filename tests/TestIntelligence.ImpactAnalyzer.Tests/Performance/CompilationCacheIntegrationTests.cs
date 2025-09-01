@@ -13,7 +13,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Performance
     public class CompilationCacheIntegrationTests : IDisposable
     {
         private readonly ITestOutputHelper _output;
-        private readonly ILogger<RoslynAnalyzerV2> _analyzerLogger;
+        private readonly ILogger<RoslynAnalyzer> _analyzerLogger;
         private readonly ILogger<EnhancedCompilationCache> _cacheLogger;
         private readonly ILogger<FileSystemCache> _fsLogger;
         private readonly IMemoryCache _memoryCache;
@@ -23,7 +23,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Performance
         public CompilationCacheIntegrationTests(ITestOutputHelper output)
         {
             _output = output;
-            _analyzerLogger = new TestLogger<RoslynAnalyzerV2>(output);
+            _analyzerLogger = new TestLogger<RoslynAnalyzer>(output);
             _cacheLogger = new TestLogger<EnhancedCompilationCache>(output);
             _fsLogger = new TestLogger<FileSystemCache>(output);
             _memoryCache = new MemoryCache(new MemoryCacheOptions());
@@ -41,7 +41,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Performance
             {
                 // Test original analyzer
                 var loggerFactory = new Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory();
-                var originalAnalyzer = new RoslynAnalyzerV2(new TestLogger<RoslynAnalyzerV2>(_output), loggerFactory);
+                var originalAnalyzer = new RoslynAnalyzer(new TestLogger<RoslynAnalyzer>(_output), loggerFactory);
                 var originalStats = await MeasureAnalyzerPerformance(originalAnalyzer, testFiles, "Original");
 
                 // Test optimized analyzer
@@ -56,7 +56,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Performance
                         FileSystemCacheExpiration = TimeSpan.FromHours(1)
                     });
 
-                var optimizedAnalyzer = new RoslynAnalyzerV2(_analyzerLogger, loggerFactory);
+                var optimizedAnalyzer = new RoslynAnalyzer(_analyzerLogger, loggerFactory);
                 var optimizedStats = await MeasureAnalyzerPerformance(optimizedAnalyzer, testFiles, "Optimized");
 
                 // Validate performance improvement

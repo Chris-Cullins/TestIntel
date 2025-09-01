@@ -60,6 +60,20 @@ dotnet src/TestIntelligence.CLI/bin/Debug/net8.0/TestIntelligence.CLI.dll find-t
   --output results.json
 ```
 
+### Build Call Graph
+```bash
+# Build call graph for entire solution
+dotnet src/TestIntelligence.CLI/bin/Debug/net8.0/TestIntelligence.CLI.dll callgraph \
+  --path MySolution.sln \
+  --verbose
+
+# Build call graph with output to file
+dotnet src/TestIntelligence.CLI/bin/Debug/net8.0/TestIntelligence.CLI.dll callgraph \
+  --path MySolution.sln \
+  --output callgraph.json \
+  --format json
+```
+
 ### Other Available Commands
 ```bash
 # Show all available commands
@@ -67,9 +81,6 @@ dotnet src/TestIntelligence.CLI/bin/Debug/net8.0/TestIntelligence.CLI.dll --help
 
 # Analyze test assemblies
 dotnet src/TestIntelligence.CLI/bin/Debug/net8.0/TestIntelligence.CLI.dll analyze --path MySolution.sln
-
-# Build call graph
-dotnet src/TestIntelligence.CLI/bin/Debug/net8.0/TestIntelligence.CLI.dll callgraph --path MySolution.sln
 ```
 
 ## Project Status

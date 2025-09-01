@@ -15,19 +15,19 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Performance
     public class RoslynAnalyzerBenchmarks
     {
         private readonly ITestOutputHelper _output;
-        private readonly ILogger<RoslynAnalyzerV2> _logger;
+        private readonly ILogger<RoslynAnalyzer> _logger;
 
         public RoslynAnalyzerBenchmarks(ITestOutputHelper output)
         {
             _output = output;
-            _logger = new TestLogger<RoslynAnalyzerV2>(output);
+            _logger = new TestLogger<RoslynAnalyzer>(output);
         }
 
         [Fact]
         public async Task BenchmarkCompilationCaching_SmallCodebase()
         {
             var loggerFactory = new Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory();
-            var analyzer = new RoslynAnalyzerV2(_logger, loggerFactory);
+            var analyzer = new RoslynAnalyzer(_logger, loggerFactory);
             var testFiles = GenerateTestFiles(10, 50); // 10 files, 50 lines each
             
             await RunCompilationBenchmark(analyzer, testFiles, "Small Codebase (10 files)");
@@ -39,7 +39,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Performance
         public async Task BenchmarkCompilationCaching_MediumCodebase()
         {
             var loggerFactory = new Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory();
-            var analyzer = new RoslynAnalyzerV2(_logger, loggerFactory);
+            var analyzer = new RoslynAnalyzer(_logger, loggerFactory);
             var testFiles = GenerateTestFiles(100, 200); // 100 files, 200 lines each
             
             await RunCompilationBenchmark(analyzer, testFiles, "Medium Codebase (100 files)");
@@ -51,7 +51,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Performance
         public async Task BenchmarkCompilationCaching_LargeCodebase()
         {
             var loggerFactory = new Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory();
-            var analyzer = new RoslynAnalyzerV2(_logger, loggerFactory);
+            var analyzer = new RoslynAnalyzer(_logger, loggerFactory);
             var testFiles = GenerateTestFiles(500, 500); // 500 files, 500 lines each
             
             await RunCompilationBenchmark(analyzer, testFiles, "Large Codebase (500 files)");
@@ -63,7 +63,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Performance
         public async Task BenchmarkConcurrentAccess()
         {
             var loggerFactory = new Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory();
-            var analyzer = new RoslynAnalyzerV2(_logger, loggerFactory);
+            var analyzer = new RoslynAnalyzer(_logger, loggerFactory);
             var testFiles = GenerateTestFiles(50, 100);
 
             var sw = Stopwatch.StartNew();
@@ -94,7 +94,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Performance
         public async Task BenchmarkMemoryUsage()
         {
             var loggerFactory = new Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory();
-            var analyzer = new RoslynAnalyzerV2(_logger, loggerFactory);
+            var analyzer = new RoslynAnalyzer(_logger, loggerFactory);
             var testFiles = GenerateTestFiles(100, 200);
 
             var initialMemory = GC.GetTotalMemory(true);

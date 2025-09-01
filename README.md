@@ -122,6 +122,23 @@ Analyze test assemblies for detailed metadata and statistics.
 test-intel analyze --path MyProject.Tests.dll --format json --output analysis.json
 ```
 
+### 🕸️ callgraph - Build Call Graph
+
+Build a comprehensive call graph showing method dependencies across your codebase.
+
+```bash
+# Build call graph for entire solution
+test-intel callgraph --path MySolution.sln --verbose
+
+# Build call graph with JSON output
+test-intel callgraph \
+  --path MySolution.sln \
+  --format json \
+  --output callgraph.json
+```
+
+**Use cases**: Dependency analysis, refactoring impact assessment, code architecture visualization
+
 ## RESTful API
 
 Start the API server for programmatic access and AI agent integration:
@@ -252,13 +269,13 @@ TestIntelligence is built with modular components:
 # Build entire solution
 dotnet build
 
-# Run all tests (215 passing)
+# Run all tests
 dotnet test
 
 # Run specific test suites
-dotnet test tests/TestIntelligence.Core.Tests/          # 62 tests
-dotnet test tests/TestIntelligence.ImpactAnalyzer.Tests/ # 34 tests
-dotnet test tests/TestIntelligence.DataTracker.Tests/   # 119 tests
+dotnet test tests/TestIntelligence.Core.Tests/         
+dotnet test tests/TestIntelligence.ImpactAnalyzer.Tests/ 
+dotnet test tests/TestIntelligence.DataTracker.Tests/   
 ```
 
 ## Contributing
