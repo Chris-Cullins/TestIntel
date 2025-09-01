@@ -327,3 +327,131 @@ public class TestCoverageStatisticsResponse
     /// </summary>
     public DateTime Timestamp { get; set; }
 }
+
+// ====== TEST EXECUTION TRACE API MODELS ======
+
+/// <summary>
+/// Request model for test execution tracing.
+/// </summary>
+public class TestExecutionTraceRequest
+{
+    /// <summary>
+    /// Test method identifier to trace execution for.
+    /// </summary>
+    public string TestMethodId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Path to the solution file or directory.
+    /// </summary>
+    public string SolutionPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Maximum call depth to trace (optional, default: 20).
+    /// </summary>
+    public int? MaxDepth { get; set; }
+}
+
+/// <summary>
+/// Response model for test execution tracing.
+/// </summary>
+public class TestExecutionTraceResponse
+{
+    /// <summary>
+    /// Test method that was traced.
+    /// </summary>
+    public string TestMethodId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Path to the solution that was analyzed.
+    /// </summary>
+    public string SolutionPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Complete execution trace information.
+    /// </summary>
+    public ExecutionTrace ExecutionTrace { get; set; } = null!;
+
+    /// <summary>
+    /// When the analysis was performed.
+    /// </summary>
+    public DateTime Timestamp { get; set; }
+}
+
+/// <summary>
+/// Request model for tracing multiple test methods.
+/// </summary>
+public class BulkTestExecutionTraceRequest
+{
+    /// <summary>
+    /// Test method identifiers to trace execution for.
+    /// </summary>
+    public IEnumerable<string> TestMethodIds { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Path to the solution file or directory.
+    /// </summary>
+    public string SolutionPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Maximum call depth to trace (optional, default: 20).
+    /// </summary>
+    public int? MaxDepth { get; set; }
+}
+
+/// <summary>
+/// Response model for bulk test execution tracing.
+/// </summary>
+public class BulkTestExecutionTraceResponse
+{
+    /// <summary>
+    /// Path to the solution that was analyzed.
+    /// </summary>
+    public string SolutionPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Results for each test method.
+    /// </summary>
+    public Dictionary<string, TestExecutionTraceResponse> Results { get; set; } = new();
+
+    /// <summary>
+    /// Total number of test methods analyzed.
+    /// </summary>
+    public int TotalTestMethods { get; set; }
+
+    /// <summary>
+    /// When the analysis was performed.
+    /// </summary>
+    public DateTime Timestamp { get; set; }
+}
+
+/// <summary>
+/// Request model for execution coverage report.
+/// </summary>
+public class ExecutionCoverageReportRequest
+{
+    /// <summary>
+    /// Path to the solution file or directory.
+    /// </summary>
+    public string SolutionPath { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Response model for execution coverage report.
+/// </summary>
+public class ExecutionCoverageReportResponse
+{
+    /// <summary>
+    /// Path to the solution that was analyzed.
+    /// </summary>
+    public string SolutionPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Complete execution coverage report.
+    /// </summary>
+    public ExecutionCoverageReport CoverageReport { get; set; } = null!;
+
+    /// <summary>
+    /// When the analysis was performed.
+    /// </summary>
+    public DateTime Timestamp { get; set; }
+}

@@ -9,6 +9,7 @@ using TestIntelligence.SelectionEngine.Interfaces;
 using TestIntelligence.ImpactAnalyzer.Analysis;
 using TestIntelligence.ImpactAnalyzer.Services;
 using TestIntelligence.Core.Services;
+using TestIntelligence.Core.Interfaces;
 
 namespace TestIntelligence.API
 {
@@ -42,6 +43,7 @@ namespace TestIntelligence.API
             services.AddScoped<IGitDiffParser, GitDiffParser>();
             services.AddScoped<ISimplifiedDiffImpactAnalyzer, SimplifiedDiffImpactAnalyzer>();
             services.AddScoped<ITestCoverageAnalyzer, TestCoverageAnalyzer>();
+            services.AddScoped<ITestExecutionTracer, TestExecutionTracer>();
 
             // Add CORS for AI agent integration
             services.AddCors(options =>

@@ -9,6 +9,7 @@ using TestIntelligence.SelectionEngine.Interfaces;
 using TestIntelligence.ImpactAnalyzer.Analysis;
 using TestIntelligence.ImpactAnalyzer.Services;
 using TestIntelligence.Core.Discovery;
+using TestIntelligence.Core.Interfaces;
 using TestIntelligence.Core.Services;
 
 namespace TestIntelligence.CLI;
@@ -56,6 +57,7 @@ public class Program
             CreateDiffCommand(host),
             CreateCallGraphCommand(host),
             CreateFindTestsCommand(host),
+            CreateTraceExecutionCommand(host),
             CreateVersionCommand()
         };
 
@@ -86,6 +88,7 @@ public class Program
                 services.AddTransient<ITestDiscovery, NUnitTestDiscovery>();
                 services.AddTransient<ICallGraphService, CallGraphService>();
                 services.AddTransient<ITestCoverageAnalyzer, TestCoverageAnalyzer>();
+                services.AddTransient<ITestExecutionTracer, TestExecutionTracer>();
             });
     }
 
@@ -469,6 +472,165 @@ public class Program
         }, methodOption, solutionOption, outputOption, formatOption, verboseOption);
 
         return findTestsCommand;
+    }
+
+    private static Command CreateTraceExecutionCommand(IHost host)
+    {
+        var testOption = new Option<string>(
+            name: "--test",
+            description: "Test method identifier to trace execution for (e.g., 'MyNamespace.MyTestClass.MyTestMethod')")
+        {
+            IsRequired = true
+        };
+        testOption.AddAlias("-t");
+
+        var solutionOption = new Option<string>(
+            name: "--solution",
+            description: "Path to solution file or directory")
+        {
+            IsRequired = true
+        };
+        solutionOption.AddAlias("-s");
+
+        var outputOption = new Option<string>(
+            name: "--output",
+            description: "Output file path (default: console)")
+        {
+            IsRequired = false
+        };
+        outputOption.AddAlias("-o");
+
+        var formatOption = new Option<string>(
+            name: "--format",
+            description: "Output format: json, text",
+            getDefaultValue: () => "text");
+        formatOption.AddAlias("-f");
+
+        var verboseOption = new Option<bool>(
+            name: "--verbose",
+            description: "Enable verbose output with call paths and method details");
+        verboseOption.AddAlias("-v");
+
+        var maxDepthOption = new Option<int>(
+            name: "--max-depth",
+            description: "Maximum call depth to trace (default: 20)",
+            getDefaultValue: () => 20);
+        maxDepthOption.AddAlias("-d");
+
+        var traceExecutionCommand = new Command("trace-execution", "Trace all production code executed by a test method")
+        {
+            testOption,
+            solutionOption,
+            outputOption,
+            formatOption,
+            verboseOption,
+            maxDepthOption
+        };
+
+        traceExecutionCommand.SetHandler(async (string test, string solution, string? output, string format, bool verbose, int maxDepth) =>
+        {
+            var testExecutionTracer = host.Services.GetRequiredService<ITestExecutionTracer>();
+            var outputFormatter = host.Services.GetRequiredService<IOutputFormatter>();
+            
+            try
+            {
+                Console.WriteLine($"Tracing execution for test method: {test}");
+                Console.WriteLine($"Solution path: {solution}");
+                Console.WriteLine($"Max depth: {maxDepth}");
+                Console.WriteLine();
+
+                var executionTrace = await testExecutionTracer.TraceTestExecutionAsync(test, solution);
+                
+                if (executionTrace.ExecutedMethods.Count == 0)
+                {
+                    Console.WriteLine("No methods found in execution trace.");
+                    return;
+                }
+
+                Console.WriteLine($"Found {executionTrace.TotalMethodsCalled} method(s) in execution trace:");
+                Console.WriteLine($"Production methods: {executionTrace.ProductionMethodsCalled}");
+                Console.WriteLine($"Estimated complexity: {executionTrace.EstimatedExecutionComplexity}");
+                Console.WriteLine();
+
+                if (format == "json")
+                {
+                    var json = outputFormatter.FormatAsJson(executionTrace);
+                    if (!string.IsNullOrWhiteSpace(output))
+                    {
+                        await File.WriteAllTextAsync(output, json);
+                        Console.WriteLine($"Results written to: {output}");
+                    }
+                    else
+                    {
+                        Console.WriteLine(json);
+                    }
+                }
+                else
+                {
+                    var result = new System.Text.StringBuilder();
+                    
+                    // Group by production vs non-production
+                    var productionMethods = executionTrace.ExecutedMethods.Where(em => em.IsProductionCode).ToList();
+                    var nonProductionMethods = executionTrace.ExecutedMethods.Where(em => !em.IsProductionCode).ToList();
+
+                    if (productionMethods.Any())
+                    {
+                        result.AppendLine("=== PRODUCTION CODE ===");
+                        result.AppendLine();
+                        
+                        foreach (var method in productionMethods.OrderBy(em => em.CallDepth))
+                        {
+                            result.AppendLine($"• {method.ContainingType}.{method.MethodName}");
+                            result.AppendLine($"  Category: {method.Category}");
+                            result.AppendLine($"  Call Depth: {method.CallDepth}");
+                            result.AppendLine($"  File: {Path.GetFileName(method.FilePath)}:{method.LineNumber}");
+                            
+                            if (verbose)
+                            {
+                                result.AppendLine($"  Call Path: {string.Join(" → ", method.CallPath)}");
+                            }
+                            
+                            result.AppendLine();
+                        }
+                    }
+
+                    if (nonProductionMethods.Any() && verbose)
+                    {
+                        result.AppendLine("=== FRAMEWORK & TEST CODE ===");
+                        result.AppendLine();
+                        
+                        foreach (var method in nonProductionMethods.OrderBy(em => em.CallDepth))
+                        {
+                            result.AppendLine($"• {method.ContainingType}.{method.MethodName}");
+                            result.AppendLine($"  Category: {method.Category}");
+                            result.AppendLine($"  Call Depth: {method.CallDepth}");
+                            result.AppendLine();
+                        }
+                    }
+
+                    var textOutput = result.ToString();
+                    if (!string.IsNullOrWhiteSpace(output))
+                    {
+                        await File.WriteAllTextAsync(output, textOutput);
+                        Console.WriteLine($"Results written to: {output}");
+                    }
+                    else
+                    {
+                        Console.WriteLine(textOutput);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error tracing execution: {ex.Message}");
+                if (verbose)
+                {
+                    Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                }
+            }
+        }, testOption, solutionOption, outputOption, formatOption, verboseOption, maxDepthOption);
+
+        return traceExecutionCommand;
     }
 
     private static Command CreateVersionCommand()
