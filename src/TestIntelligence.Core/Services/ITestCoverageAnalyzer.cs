@@ -57,6 +57,12 @@ namespace TestIntelligence.Core.Services
         Task<TestCoverageStatistics> GetCoverageStatisticsAsync(
             string solutionPath,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Clears all cached data (call graphs and path calculations).
+        /// Call this when source files or solution structure changes.
+        /// </summary>
+        void ClearCaches();
     }
 
     /// <summary>

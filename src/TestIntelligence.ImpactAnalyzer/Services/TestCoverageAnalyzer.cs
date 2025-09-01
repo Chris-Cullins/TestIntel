@@ -20,6 +20,13 @@ namespace TestIntelligence.ImpactAnalyzer.Services
         private readonly IRoslynAnalyzer _roslynAnalyzer;
         private readonly TestMethodClassifier _testClassifier;
         private readonly ILogger<TestCoverageAnalyzer> _logger;
+        
+        // Cache to avoid rebuilding call graphs for the same solution
+        private MethodCallGraph? _cachedCallGraph;
+        private string? _cachedSolutionPath;
+        
+        // Cache BFS path calculations to avoid redundant traversals
+        private readonly Dictionary<(string, string), string[]?> _pathCache = new();
 
         public TestCoverageAnalyzer(
             IRoslynAnalyzer roslynAnalyzer,
@@ -56,29 +63,46 @@ namespace TestIntelligence.ImpactAnalyzer.Services
 
             _logger.LogInformation("Building test coverage map for solution: {SolutionPath}", solutionPath);
 
-            // Try to build call graph with MSBuild workspace first, fallback to assembly analysis
+            // Check if we have a cached call graph for this solution path
             MethodCallGraph callGraph;
-            try 
+            if (_cachedCallGraph != null && _cachedSolutionPath == solutionPath)
             {
-                // Build the complete call graph using the solution path
-                // The Roslyn analyzer will handle finding source files and prefer MSBuild workspace if .sln is provided
-                callGraph = await _roslynAnalyzer.BuildCallGraphAsync(new[] { solutionPath }, cancellationToken);
+                _logger.LogInformation("Using cached call graph for solution: {SolutionPath}", solutionPath);
+                callGraph = _cachedCallGraph;
             }
-            catch (InvalidOperationException ex) when (ex.Message.Contains("System.CodeDom") || ex.Message.Contains("MSBuild workspace"))
+            else
             {
-                _logger.LogWarning(ex, "MSBuild workspace failed, falling back to assembly-based analysis");
-                
-                // Fallback: Try to analyze compiled assemblies instead
-                var assemblyPaths = FindTestAssembliesInSolution(solutionPath);
-                if (assemblyPaths.Any())
+                // Try to build call graph with MSBuild workspace first, fallback to assembly analysis
+                try 
                 {
-                    _logger.LogInformation("Found {AssemblyCount} test assemblies for fallback analysis", assemblyPaths.Count);
-                    callGraph = await _roslynAnalyzer.BuildCallGraphAsync(assemblyPaths.ToArray(), cancellationToken);
+                    // Build the complete call graph using the solution path
+                    // The Roslyn analyzer will handle finding source files and prefer MSBuild workspace if .sln is provided
+                    callGraph = await _roslynAnalyzer.BuildCallGraphAsync(new[] { solutionPath }, cancellationToken);
+                    
+                    // Cache the result
+                    _cachedCallGraph = callGraph;
+                    _cachedSolutionPath = solutionPath;
                 }
-                else
+                catch (InvalidOperationException ex) when (ex.Message.Contains("System.CodeDom") || ex.Message.Contains("MSBuild workspace"))
                 {
-                    _logger.LogWarning("No assemblies found for fallback analysis");
-                    return new TestCoverageMap(new Dictionary<string, List<TestCoverageInfo>>(), DateTime.UtcNow, solutionPath);
+                    _logger.LogWarning(ex, "MSBuild workspace failed, falling back to assembly-based analysis");
+                    
+                    // Fallback: Try to analyze compiled assemblies instead
+                    var assemblyPaths = FindTestAssembliesInSolution(solutionPath);
+                    if (assemblyPaths.Any())
+                    {
+                        _logger.LogInformation("Found {AssemblyCount} test assemblies for fallback analysis", assemblyPaths.Count);
+                        callGraph = await _roslynAnalyzer.BuildCallGraphAsync(assemblyPaths.ToArray(), cancellationToken);
+                        
+                        // Cache the result
+                        _cachedCallGraph = callGraph;
+                        _cachedSolutionPath = solutionPath;
+                    }
+                    else
+                    {
+                        _logger.LogWarning("No assemblies found for fallback analysis");
+                        return new TestCoverageMap(new Dictionary<string, List<TestCoverageInfo>>(), DateTime.UtcNow, solutionPath);
+                    }
                 }
             }
             
@@ -162,8 +186,14 @@ namespace TestIntelligence.ImpactAnalyzer.Services
 
             var coverageMap = await BuildTestCoverageMapAsync(solutionPath, cancellationToken);
             
-            // Get call graph to count total methods (already built in BuildTestCoverageMapAsync)
-            var callGraph = await _roslynAnalyzer.BuildCallGraphAsync(new[] { solutionPath }, cancellationToken);
+            // Use cached call graph (already built in BuildTestCoverageMapAsync)
+            if (_cachedCallGraph == null)
+            {
+                _logger.LogError("Call graph should be cached after BuildTestCoverageMapAsync, but it's null");
+                throw new InvalidOperationException("Call graph not available after building coverage map");
+            }
+            
+            var callGraph = _cachedCallGraph;
             
             var allMethods = callGraph.GetAllMethods()
                 .Select(methodId => callGraph.GetMethodInfo(methodId))
@@ -226,6 +256,13 @@ namespace TestIntelligence.ImpactAnalyzer.Services
 
         private string[]? FindCallPath(string testMethodId, string targetMethodId, MethodCallGraph callGraph)
         {
+            // Check cache first
+            var cacheKey = (testMethodId, targetMethodId);
+            if (_pathCache.TryGetValue(cacheKey, out var cachedPath))
+            {
+                return cachedPath;
+            }
+
             // Use BFS to find shortest path from test method to target method
             var queue = new Queue<(string methodId, List<string> path)>();
             var visited = new HashSet<string>();
@@ -240,7 +277,9 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 // Check if we found the target
                 if (currentMethod == targetMethodId)
                 {
-                    return currentPath.ToArray();
+                    var path = currentPath.ToArray();
+                    _pathCache[cacheKey] = path;
+                    return path;
                 }
 
                 // Avoid paths that are too long (prevent infinite recursion and overly complex paths)
@@ -260,6 +299,8 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 }
             }
 
+            // Cache negative results too
+            _pathCache[cacheKey] = null;
             return null; // No path found
         }
 
@@ -353,5 +394,15 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             }
         }
 
+        /// <summary>
+        /// Clear all caches. Call this when the solution or source files change.
+        /// </summary>
+        public void ClearCaches()
+        {
+            _cachedCallGraph = null;
+            _cachedSolutionPath = null;
+            _pathCache.Clear();
+            _logger.LogDebug("Cleared all caches");
+        }
     }
 }
