@@ -58,6 +58,7 @@ public class Program
             CreateCallGraphCommand(host),
             CreateFindTestsCommand(host),
             CreateTraceExecutionCommand(host),
+            CreateAnalyzeCoverageCommand(host),
             CreateVersionCommand()
         };
 
@@ -89,6 +90,8 @@ public class Program
                 services.AddTransient<ICallGraphService, CallGraphService>();
                 services.AddTransient<ITestCoverageAnalyzer, TestCoverageAnalyzer>();
                 services.AddTransient<ITestExecutionTracer, TestExecutionTracer>();
+                services.AddTransient<ICodeChangeCoverageAnalyzer, CodeChangeCoverageAnalyzer>();
+                services.AddTransient<ICoverageAnalysisService, CoverageAnalysisService>();
             });
     }
 
@@ -631,6 +634,83 @@ public class Program
         }, testOption, solutionOption, outputOption, formatOption, verboseOption, maxDepthOption);
 
         return traceExecutionCommand;
+    }
+
+    private static Command CreateAnalyzeCoverageCommand(IHost host)
+    {
+        var solutionOption = new Option<string>(
+            name: "--solution",
+            description: "Path to solution file")
+        {
+            IsRequired = true
+        };
+        solutionOption.AddAlias("-s");
+
+        var testsOption = new Option<string[]>(
+            name: "--tests",
+            description: "Test method IDs to analyze (can be specified multiple times)")
+        {
+            IsRequired = true,
+            AllowMultipleArgumentsPerToken = true
+        };
+        testsOption.AddAlias("-t");
+
+        var diffContentOption = new Option<string>(
+            name: "--diff-content",
+            description: "Git diff content as string");
+        diffContentOption.AddAlias("-d");
+
+        var diffFileOption = new Option<string>(
+            name: "--diff-file",
+            description: "Path to git diff file");
+        diffFileOption.AddAlias("-f");
+
+        var gitCommandOption = new Option<string>(
+            name: "--git-command",
+            description: "Git command to generate diff (e.g., 'diff HEAD~1')")
+        {
+            ArgumentHelpName = "COMMAND"
+        };
+        gitCommandOption.AddAlias("-g");
+
+        var outputOption = new Option<string>(
+            name: "--output",
+            description: "Output file path (default: console)")
+        {
+            IsRequired = false
+        };
+        outputOption.AddAlias("-o");
+
+        var formatOption = new Option<string>(
+            name: "--format",
+            description: "Output format: json, text",
+            getDefaultValue: () => "text");
+        formatOption.AddAlias("--fmt");
+
+        var verboseOption = new Option<bool>(
+            name: "--verbose",
+            description: "Enable verbose output with detailed coverage information");
+        verboseOption.AddAlias("-v");
+
+        var analyzeCoverageCommand = new Command("analyze-coverage", "Analyze how well specific tests cover code changes")
+        {
+            solutionOption,
+            testsOption,
+            diffContentOption,
+            diffFileOption,
+            gitCommandOption,
+            outputOption,
+            formatOption,
+            verboseOption
+        };
+
+        analyzeCoverageCommand.SetHandler(async (string solution, string[] tests, string? diffContent, string? diffFile, string? gitCommand, string? output, string format, bool verbose) =>
+        {
+            var coverageAnalysisService = host.Services.GetRequiredService<ICoverageAnalysisService>();
+            await coverageAnalysisService.AnalyzeCoverageAsync(solution, tests, diffContent, diffFile, gitCommand, output, format, verbose);
+        }, solutionOption, testsOption, diffContentOption, diffFileOption, gitCommandOption, outputOption, formatOption, verboseOption);
+
+        return analyzeCoverageCommand;
     }
 
     private static Command CreateVersionCommand()

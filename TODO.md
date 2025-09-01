@@ -9,3 +9,4 @@
 - [ ] Setup CI/CD on Github side. Leave out E2E tests, they take too long.
 - [ ] Add this library to it's own CI/CD to verify tests that are impacted by the change are run as part of the CI
 - [ ] Small Webserver to display data from runs, run history over time, etc. 
+- [ ] ability to filter or target specific projects using configuration file. (might not care about mapping ORM project each time, etc)

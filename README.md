@@ -8,6 +8,7 @@ TestIntelligence helps you run the right tests at the right time. It analyzes yo
 
 - **Smart Test Selection**: Only run tests affected by your code changes
 - **Method Coverage Analysis**: Find all tests that exercise a specific method  
+- **Code Change Coverage Analysis**: Analyze how well specific tests cover your git diff changes
 - **Execution Path Tracing**: Trace all production code executed by test methods for deep analysis
 - **Impact Analysis**: Understand which tests are affected by git diffs or code changes
 - **Test Categorization**: Automatically classify tests as Unit, Integration, Database, API, etc.
@@ -36,6 +37,9 @@ test-intel trace-execution --test "MyProject.Tests.UserServiceTests.CreateUser_W
 # Analyze what tests are affected by your git changes  
 test-intel diff --solution MySolution.sln --git-command "diff HEAD~1"
 
+# Analyze how well specific tests cover your code changes
+test-intel analyze-coverage --solution MySolution.sln --tests "MyProject.Tests.UserServiceTests.CreateUser" --git-command "diff HEAD~1"
+
 # Select optimal tests based on file changes
 test-intel select --path MyProject.Tests.dll --changes "src/UserService.cs" --confidence Medium
 ```
@@ -61,6 +65,43 @@ test-intel find-tests \
 ```
 
 **Use cases**: Refactoring safety, test gap analysis, code review verification
+
+### 📈 analyze-coverage - Code Change Coverage Analysis
+
+Analyze how well specific tests cover your code changes from git diffs. Get precise coverage percentages and actionable recommendations to improve test quality.
+
+```bash
+# Analyze test coverage against recent changes
+test-intel analyze-coverage \
+  --solution MySolution.sln \
+  --tests "MyProject.Tests.UserServiceTests.CreateUser" \
+  --tests "MyProject.Tests.UserServiceTests.UpdateUser" \
+  --git-command "diff HEAD~1"
+
+# Analyze coverage from a diff file
+test-intel analyze-coverage \
+  --solution MySolution.sln \
+  --tests "MyProject.Tests.*" \
+  --diff-file changes.patch \
+  --format json \
+  --output coverage-report.json
+
+# Analyze coverage from diff content with verbose output
+test-intel analyze-coverage \
+  --solution MySolution.sln \
+  --tests "MyProject.Tests.UserServiceTests.CreateUser" \
+  --diff-content "$(git diff HEAD~1)" \
+  --verbose
+```
+
+**Output includes**:
+- **Coverage Percentage**: Exact percentage of changed methods covered by your tests
+- **Confidence Analysis**: Breakdown by high/medium/low confidence test relationships  
+- **Test Type Classification**: Coverage analysis by Unit/Integration/End2End test types
+- **Gap Identification**: Specific methods and files with no test coverage
+- **Actionable Recommendations**: Prioritized suggestions for improving coverage
+
+**Use cases**: Pull request validation, test quality assessment, coverage gap analysis, code review automation
 
 ### 📊 diff - Analyze Git Changes
 
@@ -267,6 +308,28 @@ TestIntelligence integrates seamlessly with your CI/CD pipeline to run only the 
       echo "❌ Insufficient test coverage for PaymentService.ProcessPayment"
       exit 1
     fi
+
+- name: Code Change Coverage Validation
+  run: |
+    # Analyze how well PR tests cover the changes
+    test-intel analyze-coverage \
+      --solution "MySolution.sln" \
+      --tests "MyProject.Tests.UserServiceTests.*" \
+      --tests "MyProject.Tests.PaymentServiceTests.*" \
+      --git-command "diff ${{ github.event.pull_request.base.sha }}" \
+      --format json \
+      --output pr-coverage.json
+    
+    # Check if coverage meets requirements
+    COVERAGE_PERCENTAGE=$(jq '.summary.coveragePercentage' pr-coverage.json)
+    if (( $(echo "$COVERAGE_PERCENTAGE < 80" | bc -l) )); then
+      echo "❌ PR coverage is ${COVERAGE_PERCENTAGE}%, minimum required is 80%"
+      echo "Uncovered methods:"
+      jq -r '.uncovered.methods[]' pr-coverage.json | head -10
+      exit 1
+    else
+      echo "✅ PR coverage is ${COVERAGE_PERCENTAGE}%, meets quality standards"
+    fi
 ```
 
 ### Azure DevOps
@@ -437,6 +500,131 @@ Total Tests: 156
     "totalSourceFilesAnalyzed": 189,
     "totalAnalysisTimeMs": 8450
   }
+}
+```
+</details>
+
+<details>
+<summary>Code Change Coverage Analysis (Text)</summary>
+
+```
+TestIntelligence - Code Change Coverage Analysis
+==================================================
+
+Solution: MySolution.sln
+Tests to analyze: 3
+Test methods:
+  • MyProject.Tests.UserServiceTests.CreateUser_WithValidData
+  • MyProject.Tests.UserServiceTests.UpdateUser_WithModifiedData  
+  • MyProject.Tests.PaymentServiceTests.ProcessPayment_Success
+
+Analyzing code changes and test coverage...
+
+COVERAGE ANALYSIS RESULTS
+==================================================
+Overall Coverage: 73.2%
+Changed Methods: 41/56 covered
+Provided Tests: 3
+
+CONFIDENCE BREAKDOWN
+------------------------------
+High (≥0.8):   15 coverage relationships
+Medium (0.5-0.8): 18 coverage relationships
+Low (<0.5):    8 coverage relationships
+Average:       0.74
+
+COVERAGE BY TEST TYPE
+------------------------------
+Unit: 28 coverage relationships
+Integration: 11 coverage relationships
+API: 2 coverage relationships
+
+UNCOVERED METHODS
+------------------------------
+⚠️  PaymentService.ValidatePaymentMethod
+⚠️  UserService.SendWelcomeEmail
+⚠️  UserService.LogUserActivity
+⚠️  ValidationService.CheckUserPermissions
+⚠️  NotificationService.QueueNotification
+
+FILES WITH NO TEST COVERAGE
+------------------------------
+📁 src/Services/NotificationService.cs
+📁 src/Utils/EmailTemplateHelper.cs
+
+RECOMMENDATIONS
+------------------------------
+🔴 Add tests for 15 uncovered methods: PaymentService.ValidatePaymentMethod, UserService.SendWelcomeEmail, UserService.LogUserActivity...
+🟡 Improve 8 tests with low confidence (< 0.6)
+🟢 Consider adding more direct tests - 5 tests have deep call chains (>3 levels)
+```
+</details>
+
+<details>
+<summary>Code Change Coverage Analysis (JSON)</summary>
+
+```json
+{
+  "summary": {
+    "coveragePercentage": 73.2,
+    "totalChangedMethods": 56,
+    "coveredChangedMethods": 41,
+    "uncoveredChangedMethods": 15,
+    "analyzedAt": "2025-09-01T08:30:45.123Z",
+    "solutionPath": "MySolution.sln"
+  },
+  "codeChanges": {
+    "totalChanges": 8,
+    "changedFiles": [
+      "src/Services/UserService.cs",
+      "src/Services/PaymentService.cs",
+      "src/Controllers/UserController.cs"
+    ],
+    "changedMethods": [
+      "CreateUser", "UpdateUser", "ValidatePaymentMethod", 
+      "ProcessPayment", "SendWelcomeEmail"
+    ],
+    "changedTypes": ["UserService", "PaymentService", "UserController"]
+  },
+  "testCoverage": {
+    "providedTestCount": 3,
+    "coverageByTestType": {
+      "Unit": 28,
+      "Integration": 11, 
+      "API": 2
+    },
+    "confidenceBreakdown": {
+      "high": 15,
+      "medium": 18,
+      "low": 8,
+      "average": 0.74
+    }
+  },
+  "uncovered": {
+    "methods": [
+      "PaymentService.ValidatePaymentMethod",
+      "UserService.SendWelcomeEmail",
+      "UserService.LogUserActivity"
+    ],
+    "files": [
+      "src/Services/NotificationService.cs",
+      "src/Utils/EmailTemplateHelper.cs"
+    ]
+  },
+  "recommendations": [
+    {
+      "type": "MissingTests",
+      "description": "Add tests for 15 uncovered methods: PaymentService.ValidatePaymentMethod, UserService.SendWelcomeEmail, UserService.LogUserActivity...",
+      "priority": "High",
+      "affectedItemCount": 15
+    },
+    {
+      "type": "LowConfidence", 
+      "description": "Improve 8 tests with low confidence (< 0.6)",
+      "priority": "Medium",
+      "affectedItemCount": 8
+    }
+  ]
 }
 ```
 </details>
