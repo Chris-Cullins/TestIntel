@@ -14,11 +14,16 @@ public class AnalysisService : IAnalysisService
 {
     private readonly ILogger<AnalysisService> _logger;
     private readonly IOutputFormatter _outputFormatter;
+    private readonly IConfigurationService _configurationService;
 
-    public AnalysisService(ILogger<AnalysisService> logger, IOutputFormatter outputFormatter)
+    public AnalysisService(
+        ILogger<AnalysisService> logger, 
+        IOutputFormatter outputFormatter,
+        IConfigurationService configurationService)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _outputFormatter = outputFormatter ?? throw new ArgumentNullException(nameof(outputFormatter));
+        _configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
     }
 
     public async Task AnalyzeAsync(string path, string? outputPath, string format, bool verbose)
@@ -27,7 +32,18 @@ public class AnalysisService : IAnalysisService
         {
             _logger.LogInformation("Starting analysis of: {Path}", path);
 
-            if (verbose)
+            // Load configuration
+            var configuration = await _configurationService.LoadConfigurationAsync(path);
+            
+            // Override verbose setting if specified in configuration and not overridden by command line
+            var effectiveVerbose = verbose || configuration.Analysis.Verbose;
+            
+            // Override format if not explicitly specified and configuration has a default
+            var effectiveFormat = string.IsNullOrEmpty(format) || format == "text" 
+                ? configuration.Output.Format 
+                : format;
+
+            if (effectiveVerbose)
             {
                 _logger.LogInformation("Verbose mode enabled");
             }
@@ -38,9 +54,15 @@ public class AnalysisService : IAnalysisService
                 throw new FileNotFoundException($"Path not found: {path}");
             }
 
-            var analysisResult = await PerformAnalysisAsync(path, verbose);
+            var analysisResult = await PerformAnalysisAsync(path, effectiveVerbose, configuration);
 
-            await _outputFormatter.WriteOutputAsync(analysisResult, format, outputPath);
+            // Use configured output directory if not specified
+            var effectiveOutputPath = outputPath ?? 
+                (configuration.Output.OutputDirectory != null 
+                    ? Path.Combine(configuration.Output.OutputDirectory, $"analysis_{DateTime.Now:yyyyMMdd_HHmmss}.{(effectiveFormat == "json" ? "json" : "txt")}")
+                    : null);
+
+            await _outputFormatter.WriteOutputAsync(analysisResult, effectiveFormat, effectiveOutputPath);
 
             _logger.LogInformation("Analysis completed successfully");
         }
@@ -51,7 +73,7 @@ public class AnalysisService : IAnalysisService
         }
     }
 
-    private async Task<AnalysisResult> PerformAnalysisAsync(string path, bool verbose)
+    private async Task<AnalysisResult> PerformAnalysisAsync(string path, bool verbose, TestIntelConfiguration configuration)
     {
         var result = new AnalysisResult
         {
@@ -61,7 +83,15 @@ public class AnalysisService : IAnalysisService
         };
 
         // Discover assemblies to analyze
-        var assemblyPaths = await DiscoverAssembliesAsync(path);
+        var allAssemblyPaths = await DiscoverAssembliesAsync(path, configuration);
+        
+        // Apply configuration filtering
+        var assemblyPaths = allAssemblyPaths;
+        if (allAssemblyPaths.Count != assemblyPaths.Count)
+        {
+            _logger.LogInformation("Configuration filtering: {Original} → {Filtered} assemblies", 
+                allAssemblyPaths.Count, assemblyPaths.Count);
+        }
         
         _logger.LogInformation("Found {Count} assemblies to analyze", assemblyPaths.Count);
 
@@ -104,7 +134,7 @@ public class AnalysisService : IAnalysisService
         return result;
     }
 
-    private async Task<List<string>> DiscoverAssembliesAsync(string path)
+    private async Task<List<string>> DiscoverAssembliesAsync(string path, TestIntelConfiguration configuration)
     {
         var assemblies = new List<string>();
 
@@ -116,11 +146,16 @@ public class AnalysisService : IAnalysisService
             }
             else if (path.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
             {
-                // Parse solution file to find test projects
+                // Parse solution file to find projects
                 var solutionDir = Path.GetDirectoryName(path)!;
-                var testProjectPaths = await FindTestProjectsInSolutionAsync(path);
+                var allProjectPaths = configuration.Projects.TestProjectsOnly 
+                    ? await FindTestProjectsInSolutionAsync(path)
+                    : await FindAllProjectsInSolutionAsync(path);
                 
-                foreach (var projectPath in testProjectPaths)
+                // Apply configuration-based project filtering
+                var filteredProjectPaths = _configurationService.FilterProjects(allProjectPaths, configuration);
+                
+                foreach (var projectPath in filteredProjectPaths)
                 {
                     var assemblyPath = GetAssemblyPathFromProject(projectPath);
                     if (File.Exists(assemblyPath))
@@ -137,11 +172,17 @@ public class AnalysisService : IAnalysisService
         }
         else if (Directory.Exists(path))
         {
-            // Find all test assemblies in directory
+            // Find all assemblies in directory based on configuration
             var dllFiles = Directory.GetFiles(path, "*.dll", SearchOption.AllDirectories)
-                .Where(f => f.Contains("test", StringComparison.OrdinalIgnoreCase) ||
-                           f.Contains("spec", StringComparison.OrdinalIgnoreCase))
                 .Where(f => !f.Contains("obj", StringComparison.OrdinalIgnoreCase));
+            
+            // Filter by test assemblies if configured
+            if (configuration.Projects.TestProjectsOnly)
+            {
+                dllFiles = dllFiles.Where(f => 
+                    f.Contains("test", StringComparison.OrdinalIgnoreCase) ||
+                    f.Contains("spec", StringComparison.OrdinalIgnoreCase));
+            }
             
             assemblies.AddRange(dllFiles);
         }
@@ -304,6 +345,24 @@ public class AnalysisService : IAnalysisService
 
     private async Task<List<string>> FindTestProjectsInSolutionAsync(string solutionPath)
     {
+        var allProjects = await FindAllProjectsInSolutionAsync(solutionPath);
+        var testProjects = new List<string>();
+        
+        foreach (var projectPath in allProjects)
+        {
+            if (await IsTestProjectAsync(projectPath))
+            {
+                _logger.LogDebug("Found test project: {ProjectPath}", projectPath);
+                testProjects.Add(projectPath);
+            }
+        }
+
+        _logger.LogInformation("Found {Count} test projects in solution", testProjects.Count);
+        return testProjects;
+    }
+
+    private async Task<List<string>> FindAllProjectsInSolutionAsync(string solutionPath)
+    {
         var projects = new List<string>();
         
         if (!File.Exists(solutionPath))
@@ -326,16 +385,16 @@ public class AnalysisService : IAnalysisService
                     var projectRelativePath = parts[1].Trim().Trim('"');
                     var fullProjectPath = Path.Combine(solutionDir, projectRelativePath.Replace('\\', Path.DirectorySeparatorChar));
                     
-                    if (File.Exists(fullProjectPath) && await IsTestProjectAsync(fullProjectPath))
+                    if (File.Exists(fullProjectPath))
                     {
-                        _logger.LogDebug("Found test project: {ProjectPath}", fullProjectPath);
+                        _logger.LogDebug("Found project: {ProjectPath}", fullProjectPath);
                         projects.Add(fullProjectPath);
                     }
                 }
             }
         }
 
-        _logger.LogInformation("Found {Count} test projects in solution", projects.Count);
+        _logger.LogInformation("Found {Count} total projects in solution", projects.Count);
         return projects;
     }
 

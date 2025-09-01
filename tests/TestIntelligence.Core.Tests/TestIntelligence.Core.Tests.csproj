@@ -29,6 +29,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\TestIntelligence.Core\TestIntelligence.Core.csproj" />
     <ProjectReference Include="..\..\src\TestIntelligence.ImpactAnalyzer\TestIntelligence.ImpactAnalyzer.csproj" />
+    <ProjectReference Include="..\..\src\TestIntelligence.CLI\TestIntelligence.CLI.csproj" />
   </ItemGroup>
 
 </Project>

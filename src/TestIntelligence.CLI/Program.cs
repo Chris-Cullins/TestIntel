@@ -59,6 +59,7 @@ public class Program
             CreateFindTestsCommand(host),
             CreateTraceExecutionCommand(host),
             CreateAnalyzeCoverageCommand(host),
+            CreateConfigCommand(host),
             CreateVersionCommand()
         };
 
@@ -81,6 +82,7 @@ public class Program
                 services.AddTransient<ISelectionService, SelectionService>();
                 services.AddTransient<IDiffAnalysisService, DiffAnalysisService>();
                 services.AddTransient<IOutputFormatter, JsonOutputFormatter>();
+                services.AddTransient<IConfigurationService, ConfigurationService>();
                 
                 // Impact Analyzer services
                 services.AddTransient<IRoslynAnalyzer, RoslynAnalyzer>();
@@ -711,6 +713,82 @@ public class Program
         }, solutionOption, testsOption, diffContentOption, diffFileOption, gitCommandOption, outputOption, formatOption, verboseOption);
 
         return analyzeCoverageCommand;
+    }
+
+    private static Command CreateConfigCommand(IHost host)
+    {
+        var pathOption = new Option<string>(
+            name: "--path",
+            description: "Path to solution directory where configuration file should be created")
+        {
+            IsRequired = false
+        };
+        pathOption.AddAlias("-p");
+
+        var initSubcommand = new Command("init", "Create a default testintel.config file")
+        {
+            pathOption
+        };
+
+        initSubcommand.SetHandler(async (string? path) =>
+        {
+            var configurationService = host.Services.GetRequiredService<IConfigurationService>();
+            
+            try
+            {
+                // Use current directory if no path specified
+                var targetDirectory = string.IsNullOrEmpty(path) ? Directory.GetCurrentDirectory() : path;
+                
+                // If path is a .sln file, use its directory
+                if (!string.IsNullOrEmpty(path) && File.Exists(path) && path.EndsWith(".sln"))
+                {
+                    targetDirectory = Path.GetDirectoryName(path)!;
+                }
+                
+                var configPath = Path.Combine(targetDirectory, "testintel.config");
+                
+                if (File.Exists(configPath))
+                {
+                    Console.WriteLine($"Configuration file already exists: {configPath}");
+                    Console.Write("Overwrite? (y/N): ");
+                    var response = Console.ReadLine();
+                    if (!string.Equals(response, "y", StringComparison.OrdinalIgnoreCase) && 
+                        !string.Equals(response, "yes", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine("Configuration creation cancelled.");
+                        return;
+                    }
+                }
+                
+                var success = await configurationService.CreateDefaultConfigurationAsync(configPath);
+                
+                if (success)
+                {
+                    Console.WriteLine($"✓ Created default configuration file: {configPath}");
+                    Console.WriteLine();
+                    Console.WriteLine("Edit this file to customize project filtering and analysis settings.");
+                    Console.WriteLine("Common configuration options:");
+                    Console.WriteLine("  - Exclude specific projects or patterns");
+                    Console.WriteLine("  - Filter by project types (ORM, database, etc.)");
+                    Console.WriteLine("  - Set default output formats and directories");
+                }
+                else
+                {
+                    Console.WriteLine("✗ Failed to create configuration file.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Error creating configuration file: {ex.Message}");
+            }
+        }, pathOption);
+
+        var configCommand = new Command("config", "Manage TestIntelligence configuration")
+        {
+            initSubcommand
+        };
+
+        return configCommand;
     }
 
     private static Command CreateVersionCommand()

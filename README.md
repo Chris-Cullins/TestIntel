@@ -44,6 +44,155 @@ test-intel analyze-coverage --solution MySolution.sln --tests "MyProject.Tests.U
 test-intel select --path MyProject.Tests.dll --changes "src/UserService.cs" --confidence Medium
 ```
 
+## Configuration
+
+TestIntelligence supports project-specific configuration files to customize analysis behavior. Place a `testintel.config` file in the same directory as your solution file for automatic pickup.
+
+### Creating Configuration Files
+
+Generate a default configuration file:
+
+```bash
+# Create config in current directory
+test-intel config init
+
+# Create config in specific directory/solution
+test-intel config init --path /path/to/MySolution.sln
+```
+
+### Configuration File Format
+
+The `testintel.config` file uses JSON format with comments:
+
+```json
+{
+  // TestIntelligence Configuration
+  // This file controls which projects are analyzed and how analysis is performed
+  
+  "projects": {
+    // Include specific project patterns (empty = include all)
+    "include": [],
+    
+    // Exclude specific project patterns (wildcards supported)
+    "exclude": [
+      "**/obj/**",
+      "**/bin/**", 
+      "*.Integration.Tests*",
+      "*ORM*",
+      "*Database*"
+    ],
+    
+    // Exclude projects by type/purpose
+    "excludeTypes": [
+      "orm",
+      "database", 
+      "migration"
+    ],
+    
+    // Only analyze test projects (recommended)
+    "testProjectsOnly": true
+  },
+  
+  "analysis": {
+    // Enable verbose logging by default
+    "verbose": false,
+    
+    // Maximum parallel analysis operations
+    "maxParallelism": 8,
+    
+    // Timeout for individual project analysis (seconds)
+    "timeoutSeconds": 300
+  },
+  
+  "output": {
+    // Default output format (text or json)
+    "format": "text",
+    
+    // Default output directory (null = current directory)
+    "outputDirectory": null
+  }
+}
+```
+
+### Project Filtering
+
+Filter which projects are included in analysis:
+
+**Include Patterns**: Only analyze projects matching these patterns
+```json
+"include": ["*Core*", "*Services*"]
+```
+
+**Exclude Patterns**: Skip projects matching these patterns (takes precedence over include)
+```json
+"exclude": ["*Integration*", "*ORM*", "*Migration*", "**/bin/**"]
+```
+
+**Exclude by Type**: Skip projects based on their purpose/content
+```json
+"excludeTypes": ["orm", "database", "migration", "integration"]
+```
+
+Supported project types:
+- `orm`: Entity Framework, Dapper ORM projects
+- `database`: SQL, database-related projects  
+- `migration`: Database migration projects
+- `integration`: Integration test projects
+- `api`: Web API, REST API projects
+- `ui`: User interface, web client projects
+
+### Wildcard Patterns
+
+TestIntelligence supports standard wildcard patterns:
+- `*`: Matches any number of characters
+- `?`: Matches a single character  
+- `**/`: Matches any number of directories
+- `**/*.Tests*`: Matches any test project in any subdirectory
+
+### Configuration Priority
+
+Configuration values are applied in order of precedence:
+1. **Command-line arguments** (highest priority)
+2. **Configuration file settings**
+3. **Default values** (lowest priority)
+
+### Examples
+
+**Focus on Core Projects Only**:
+```json
+{
+  "projects": {
+    "include": ["*Core*", "*Services*", "*Domain*"],
+    "testProjectsOnly": false
+  }
+}
+```
+
+**Exclude Heavy Dependencies**:
+```json
+{
+  "projects": {
+    "exclude": ["*EntityFramework*", "*ORM*", "*Migration*", "*Integration*"],
+    "excludeTypes": ["orm", "database", "integration"]
+  }
+}
+```
+
+**Performance-Focused Analysis**:
+```json
+{
+  "analysis": {
+    "maxParallelism": 4,
+    "timeoutSeconds": 180
+  },
+  "projects": {
+    "exclude": ["**/node_modules/**", "**/wwwroot/**"]
+  }
+}
+```
+
+All CLI commands automatically detect and use configuration files in the solution directory. This makes it easy to customize TestIntelligence behavior per project without affecting global settings.
+
 ## CLI Commands
 
 All commands support `--verbose` for detailed output and `--format json` for machine-readable output.
@@ -183,6 +332,23 @@ test-intel callgraph \
 ```
 
 **Use cases**: Dependency analysis, refactoring impact assessment, code architecture visualization
+
+### ⚙️ config - Configuration Management
+
+Manage TestIntelligence configuration files for project-specific settings.
+
+```bash
+# Create default configuration file in current directory
+test-intel config init
+
+# Create configuration file for specific solution
+test-intel config init --path /path/to/MySolution.sln
+
+# Create config with interactive prompts (overwrite existing)
+test-intel config init --path /path/to/solution/directory
+```
+
+**Use cases**: Project setup, team standardization, CI/CD optimization, excluding heavy dependencies
 
 ### 🔍 trace-execution - Trace Production Code Execution
 
