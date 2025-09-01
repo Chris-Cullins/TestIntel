@@ -284,7 +284,24 @@ namespace TestIntelligence.CLI.Services
             // Initialize traditional caches
             await cacheSetup.InitializeAsync();
             
-            // Enhanced caches initialize automatically when accessed
+            // Initialize enhanced caches by triggering their internal initialization
+            if (verbose)
+            {
+                Console.WriteLine("Initializing enhanced cache structures...");
+            }
+            
+            // Force cache initialization by accessing their statistics
+            // This will create the cache directories and initial metadata
+            var callGraphStats = await enhancedIntegration.GetCacheStatisticsAsync();
+            
+            // The enhanced caches are now initialized but empty (0 entries) until warm-up
+            if (verbose)
+            {
+                Console.WriteLine($"  Call Graph cache structure: Ready (0 entries until warm-up)");
+                Console.WriteLine($"  Project cache structure: Ready (0 entries until warm-up)");
+                Console.WriteLine("  Enhanced caches are initialized but empty until warm-up");
+                Console.WriteLine("  Run 'cache --action warm-up' to populate the caches with data");
+            }
             
             if (verbose)
             {
@@ -293,6 +310,7 @@ namespace TestIntelligence.CLI.Services
 
             await cacheSetup.SaveSnapshotAsync();
             Console.WriteLine("All caches initialized successfully");
+            Console.WriteLine("💡 Tip: Run 'cache --action warm-up' to populate caches with data for better performance");
         }
 
         private async Task HandleWarmUpCommand(LargeSolutionCacheSetup cacheSetup, EnhancedRoslynAnalyzerIntegration enhancedIntegration, string solutionPath, bool verbose)

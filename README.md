@@ -14,6 +14,10 @@ dotnet tool install -g --add-source ./nupkg TestIntelligence.CLI
 
 ### Essential Commands
 ```bash
+# 🏗️ Setup caching for 90% performance boost (run once)
+test-intel cache --solution MySolution.sln --action init
+test-intel cache --solution MySolution.sln --action warm-up
+
 # 🔍 Find tests for a method
 test-intel find-tests --method "UserService.CreateUser" --solution MySolution.sln
 
@@ -233,15 +237,26 @@ test-intel trace-execution --test "MyProject.Tests.UserServiceTests.CreateUser" 
 <summary><strong>cache</strong> - Manage persistent caching (90% performance boost)</summary>
 
 ```bash
-# Initialize cache
+# 1. Initialize cache directories and structure (quick)
 test-intel cache --solution MySolution.sln --action init
 
-# Check status
+# 2. Populate caches with actual data (slower, but only needed once)
+test-intel cache --solution MySolution.sln --action warm-up
+
+# Check cache status and statistics
 test-intel cache --solution MySolution.sln --action status
 
-# Clear cache
+# Clear all cached data
 test-intel cache --solution MySolution.sln --action clear
 ```
+
+**Cache Workflow**:
+- **`init`** - Creates cache directory structure (empty caches, ~1 second)
+- **`warm-up`** - Analyzes solution and populates caches with data (~30 seconds - 5 minutes)
+- **`status`** - Shows cache statistics and entry counts
+- **Subsequent runs** - Use populated caches for 90% performance boost
+
+⚠️ **Important**: Run `warm-up` after `init` to populate caches with actual data.
 </details>
 
 <details>
@@ -391,20 +406,39 @@ Estimated execution time: 2m 30s (vs 12m full suite)
 <details>
 <summary><strong>Performance & Caching</strong></summary>
 
-### Large Solution Caching
-- **First run**: 3-5 minutes (builds cache)
-- **Subsequent runs**: 5-15 seconds (90% faster)
+### Cache Architecture & Performance
+TestIntelligence uses a multi-tier caching system for maximum performance:
+
+#### Cache Types Built During Warm-Up
+- **Call Graph Cache** - Method dependency mappings, transitive relationships
+- **Project Cache** - Assembly metadata, test discovery results
+- **Roslyn Cache** - Parsed syntax trees, semantic analysis
+- **Assembly Cache** - Loaded assemblies, reflection metadata
+
+#### Performance Characteristics
+- **Cache initialization (`init`)**: ~1 second (directory structure only)
+- **Cache warm-up (`warm-up`)**: 30 seconds - 5 minutes (builds all data)  
+- **Subsequent runs**: 5-15 seconds (90% faster with populated caches)
 - **Storage**: 200-500MB per solution
-- **Cleanup**: Automatic based on solution size
+- **Cleanup**: Automatic based on solution size and age
 
-### Cache Management
+#### Cache Workflow Examples
 ```bash
-# Check cache status
-test-intel cache --solution MySolution.sln --action status
+# Initial setup (run once per solution)
+test-intel cache --solution MySolution.sln --action init
+test-intel cache --solution MySolution.sln --action warm-up --verbose
 
-# Warm up cache for faster subsequent runs
-test-intel cache --solution MySolution.sln --action warm-up
+# Check what was built
+test-intel cache --solution MySolution.sln --action status --format json
+
+# Regular usage (fast with populated caches)
+test-intel find-tests --method "UserService.CreateUser" --solution MySolution.sln
+
+# Maintenance
+test-intel cache --solution MySolution.sln --action clear  # if needed
 ```
+
+🚀 **Pro Tip**: Run warm-up during CI setup or overnight for best performance during development.
 </details>
 
 ## 📄 License
