@@ -13,6 +13,7 @@ using TestIntelligence.ImpactAnalyzer.Services;
 using TestIntelligence.Core.Discovery;
 using TestIntelligence.Core.Interfaces;
 using TestIntelligence.Core.Services;
+using TestIntelligence.Core.Assembly;
 
 namespace TestIntelligence.CLI;
 
@@ -97,6 +98,9 @@ public class Program
                 services.AddTransient<ITestExecutionTracer, TestExecutionTracer>();
                 services.AddTransient<ICodeChangeCoverageAnalyzer, CodeChangeCoverageAnalyzer>();
                 services.AddTransient<ICoverageAnalysisService, CoverageAnalysisService>();
+                
+                // Assembly and Cache services
+                services.AddTransient<CrossFrameworkAssemblyLoader>();
                 services.AddTransient<CacheManagementService>();
             });
     }
