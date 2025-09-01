@@ -67,6 +67,7 @@ namespace TestIntelligence.Core.Caching
             
             if (cachedEntry == null)
             {
+                IncrementMiss();
                 return null;
             }
 

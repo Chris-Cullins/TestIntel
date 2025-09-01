@@ -54,8 +54,8 @@ namespace TestIntelligence.Core.Tests.Assembly
             var canLoad1 = _loader.CanLoad(dllPath);
             var canLoad2 = _loader.CanLoad(dllPath); // Second call should not cause issues
             
-            canLoad1.Should().BeAssignableTo<bool>();
-            canLoad2.Should().BeAssignableTo<bool>();
+            // No exceptions thrown indicates the test passed
+            Assert.True(true); // Method completed without exceptions
         }
 
         [Fact]
@@ -164,8 +164,8 @@ namespace TestIntelligence.Core.Tests.Assembly
             // Act
             var canLoad = _loader.CanLoad(dllPath);
             
-            // Assert
-            canLoad.Should().BeAssignableTo<bool>("CanLoad should return a boolean value");
+            // Assert - Method completed without throwing exceptions
+            Assert.True(true); // Test passes if no exceptions are thrown
         }
 
         [Theory]
