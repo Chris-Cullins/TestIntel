@@ -132,7 +132,15 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
             {
                 // Pre-populate project cache
                 var projectPaths = DiscoverProjects(solutionPath);
-                var warmupTasks = projectPaths.Select(async projectPath =>
+                _logger?.LogInformation("Warm-up discovered {ProjectCount} projects from solution: {SolutionPath}", projectPaths.Count, solutionPath);
+                
+                if (projectPaths.Count == 0)
+                {
+                    _logger?.LogWarning("No projects found in solution for warm-up: {SolutionPath}", solutionPath);
+                }
+                
+                // Warmup project cache
+                var projectWarmupTasks = projectPaths.Select(async projectPath =>
                 {
                     try
                     {
@@ -142,19 +150,26 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
                     }
                     catch (Exception ex)
                     {
-                        _logger?.LogWarning(ex, "Failed to warmup cache for project: {ProjectPath}", projectPath);
+                        _logger?.LogWarning(ex, "Failed to warmup project cache for: {ProjectPath}", projectPath);
                         return false;
                     }
                 }).ToArray();
 
-                var warmupResults = await Task.WhenAll(warmupTasks);
-                result.ProjectsWarmedUp = warmupResults.Count(success => success);
+                var projectWarmupResults = await Task.WhenAll(projectWarmupTasks);
+                var projectsWarmedUp = projectWarmupResults.Count(success => success);
+
+                // Warmup call graph cache  
+                var callGraphResults = await BuildCallGraphsAsync(projectPaths, cancellationToken);
+                var callGraphsWarmedUp = callGraphResults.Count(cg => !cg.WasCached); // Count newly built graphs
+
+                // Report the number of projects processed, not the sum of individual cache types
+                result.ProjectsWarmedUp = projectsWarmedUp;
                 result.Success = true;
                 result.EndTime = DateTime.UtcNow;
                 result.Duration = result.EndTime - result.StartTime;
 
-                _logger?.LogInformation("Cache warmup completed: {ProjectsWarmedUp}/{TotalProjects} projects in {Duration}ms",
-                    result.ProjectsWarmedUp, projectPaths.Count, result.Duration.TotalMilliseconds);
+                _logger?.LogInformation("Cache warmup completed: {ProjectsWarmedUp} projects ({ProjectCacheCount} project cache, {CallGraphsWarmedUp} call graphs) in {Duration}ms",
+                    projectsWarmedUp, projectsWarmedUp, callGraphsWarmedUp, result.Duration.TotalMilliseconds);
 
                 return result;
             }
@@ -211,37 +226,84 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
         private List<string> DiscoverProjects(string solutionPath)
         {
             var projects = new List<string>();
-            var solutionDirectory = Path.GetDirectoryName(solutionPath);
+            
+            // Get the absolute path first to handle relative solution paths correctly
+            var fullSolutionPath = Path.GetFullPath(solutionPath);
+            var solutionDirectory = Path.GetDirectoryName(fullSolutionPath);
 
             if (string.IsNullOrEmpty(solutionDirectory))
                 return projects;
 
-            // Simple solution parsing - in a real implementation, you'd use MSBuild APIs
+            // Enhanced solution parsing to properly handle .NET solution file format
             try
             {
-                var solutionContent = File.ReadAllText(solutionPath);
-                var lines = solutionContent.Split('\n');
+                var solutionContent = File.ReadAllText(fullSolutionPath);
+                var lines = solutionContent.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
 
                 foreach (var line in lines)
                 {
-                    if (line.StartsWith("Project(") && line.Contains(".csproj"))
+                    var trimmedLine = line.Trim();
+                    
+                    // Look for project lines: Project("{PROJECT-GUID}") = "ProjectName", "RelativePath", "{PROJECT-GUID}"
+                    if (trimmedLine.StartsWith("Project(\"{", StringComparison.OrdinalIgnoreCase))
                     {
-                        var parts = line.Split(',');
-                        if (parts.Length > 1)
+                        try
                         {
-                            var relativePath = parts[1].Trim(' ', '"');
-                            var fullPath = Path.GetFullPath(Path.Combine(solutionDirectory, relativePath));
-                            if (File.Exists(fullPath))
+                            // Parse the project line format: Project("{GUID}") = "Name", "Path", "{GUID}"
+                            if (!trimmedLine.Contains("="))
+                                continue;
+                                
+                            var afterEquals = trimmedLine.Substring(trimmedLine.IndexOf('=') + 1).Trim();
+                            var parts = afterEquals.Split(',');
+                            
+                            if (parts.Length >= 2)
                             {
-                                projects.Add(fullPath);
+                                // The second part is the relative path to the project file
+                                var relativePath = parts[1].Trim(' ', '"', '\t');
+                                
+                                _logger?.LogDebug("Parsing project line - relative path: '{RelativePath}'", relativePath);
+                                
+                                // Only process C# project files
+                                if (relativePath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    // Normalize path separators for cross-platform compatibility
+                                    relativePath = relativePath.Replace('\\', Path.DirectorySeparatorChar);
+                                    var fullPath = Path.GetFullPath(Path.Combine(solutionDirectory, relativePath));
+                                    
+                                    _logger?.LogDebug("Full project path: '{FullPath}'", fullPath);
+                                    
+                                    if (File.Exists(fullPath))
+                                    {
+                                        projects.Add(fullPath);
+                                        _logger?.LogInformation("Discovered project: {ProjectPath}", fullPath);
+                                    }
+                                    else
+                                    {
+                                        _logger?.LogWarning("Project file not found: {ProjectPath}", fullPath);
+                                    }
+                                }
+                                else
+                                {
+                                    _logger?.LogDebug("Skipping non-C# project: {RelativePath}", relativePath);
+                                }
                             }
+                            else
+                            {
+                                _logger?.LogDebug("Project line has insufficient parts: {PartCount}", parts.Length);
+                            }
+                        }
+                        catch (Exception parseEx)
+                        {
+                            _logger?.LogWarning(parseEx, "Failed to parse project line: {Line}", trimmedLine);
                         }
                     }
                 }
+                
+                _logger?.LogInformation("Discovered {ProjectCount} projects in solution: {SolutionPath}", projects.Count, fullSolutionPath);
             }
             catch (Exception ex)
             {
-                _logger?.LogWarning(ex, "Failed to parse solution file: {SolutionPath}", solutionPath);
+                _logger?.LogError(ex, "Failed to parse solution file: {SolutionPath}", fullSolutionPath);
             }
 
             return projects;
