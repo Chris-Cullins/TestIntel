@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json.Serialization;
 using TestIntelligence.Core.Assembly;
 
 namespace TestIntelligence.Core.Models
@@ -34,6 +35,7 @@ namespace TestIntelligence.Core.Models
         /// <summary>
         /// The reflection type info for this test fixture.
         /// </summary>
+        [JsonIgnore]
         public Type Type { get; }
 
         /// <summary>
@@ -69,6 +71,7 @@ namespace TestIntelligence.Core.Models
         /// <summary>
         /// Test fixture attributes found on this class.
         /// </summary>
+        [JsonIgnore]
         public IReadOnlyList<Attribute> FixtureAttributes { get; private set; }
 
         /// <summary>

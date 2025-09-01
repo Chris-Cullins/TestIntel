@@ -397,7 +397,14 @@ namespace TestIntelligence.Core.Caching
             if (currentSize + requiredSize <= _options.MaxCacheSizeBytes)
                 return;
 
-            await EnforceStorageLimitsAsync(cancellationToken);
+            var evictedCount = await EnforceStorageLimitsAsync(cancellationToken);
+            if (evictedCount > 0)
+            {
+                lock (_statsLock)
+                {
+                    _stats.EvictionCount += evictedCount;
+                }
+            }
         }
 
         private void LoadMetadataIndex()

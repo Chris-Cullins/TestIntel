@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -28,6 +29,33 @@ namespace TestIntelligence.Core.Caching
 
         private SolutionCacheSnapshot? _lastSnapshot;
         private readonly Dictionary<string, HashSet<string>> _fileDependencies = new();
+
+        private static readonly JsonSerializerOptions JsonOptions = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            Converters = { new TypeIgnoreConverter() }
+        };
+
+        /// <summary>
+        /// Custom JsonConverter that ignores System.Type properties during serialization
+        /// </summary>
+        private class TypeIgnoreConverter : JsonConverter<Type>
+        {
+            public override Type? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+            {
+                // Skip reading the value
+                reader.Skip();
+                return null;
+            }
+
+            public override void Write(Utf8JsonWriter writer, Type value, JsonSerializerOptions options)
+            {
+                // Write null instead of trying to serialize the Type
+                writer.WriteNullValue();
+            }
+        }
 
         public SolutionCacheManager(
             string solutionPath,
@@ -255,7 +283,7 @@ namespace TestIntelligence.Core.Caching
             try
             {
                 using var fileStream = new FileStream(snapshotPath, FileMode.Open, FileAccess.Read);
-                var snapshot = await JsonSerializer.DeserializeAsync<SolutionCacheSnapshot>(fileStream, cancellationToken: cancellationToken);
+                var snapshot = await JsonSerializer.DeserializeAsync<SolutionCacheSnapshot>(fileStream, JsonOptions, cancellationToken);
                 return snapshot;
             }
             catch (Exception ex)
@@ -276,7 +304,7 @@ namespace TestIntelligence.Core.Caching
             }
 
             using var fileStream = new FileStream(snapshotPath, FileMode.Create, FileAccess.Write);
-            await JsonSerializer.SerializeAsync(fileStream, snapshot, cancellationToken: cancellationToken);
+            await JsonSerializer.SerializeAsync(fileStream, snapshot, JsonOptions, cancellationToken);
         }
 
         private async Task<SolutionCacheSnapshot> CreateCurrentSnapshotAsync(CancellationToken cancellationToken)

@@ -4,6 +4,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -16,6 +17,25 @@ namespace TestIntelligence.Core.Caching
     /// </summary>
     public class PersistentCacheProvider : ICacheProvider
     {
+        /// <summary>
+        /// Custom JsonConverter that ignores System.Type properties during serialization
+        /// </summary>
+        private class TypeIgnoreConverter : JsonConverter<Type>
+        {
+            public override Type? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+            {
+                // Skip reading the value
+                reader.Skip();
+                return null;
+            }
+
+            public override void Write(Utf8JsonWriter writer, Type value, JsonSerializerOptions options)
+            {
+                // Write null instead of trying to serialize the Type
+                writer.WriteNullValue();
+            }
+        }
+
         private readonly string _cacheDirectory;
         private readonly ILogger<PersistentCacheProvider>? _logger;
         private readonly JsonSerializerOptions _jsonOptions;
@@ -29,8 +49,10 @@ namespace TestIntelligence.Core.Caching
             _jsonOptions = new JsonSerializerOptions
             {
                 WriteIndented = false,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
             };
+            _jsonOptions.Converters.Add(new TypeIgnoreConverter());
             _ioSemaphore = new SemaphoreSlim(Environment.ProcessorCount * 2);
 
             EnsureCacheDirectoryExists();

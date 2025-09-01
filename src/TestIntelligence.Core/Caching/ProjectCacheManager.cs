@@ -57,14 +57,16 @@ namespace TestIntelligence.Core.Caching
             ThrowIfDisposed();
 
             if (string.IsNullOrEmpty(projectPath) || !File.Exists(projectPath))
+            {
+                IncrementMiss();
                 return null;
+            }
 
             var cacheKey = GenerateProjectCacheKey(projectPath, targetFramework);
             var cachedEntry = await _cache.GetAsync(cacheKey, cancellationToken);
             
             if (cachedEntry == null)
             {
-                IncrementMiss();
                 return null;
             }
 
@@ -267,7 +269,7 @@ namespace TestIntelligence.Core.Caching
         /// <param name="targetFramework">Target framework.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Project cache entry with discovered metadata.</returns>
-        public Task<ProjectCacheEntry> CreateProjectEntryAsync(
+        public async Task<ProjectCacheEntry> CreateProjectEntryAsync(
             string projectPath,
             string? targetFramework = null,
             CancellationToken cancellationToken = default)
@@ -309,7 +311,10 @@ namespace TestIntelligence.Core.Caching
             // Discover project references
             entry.ProjectReferences = DiscoverProjectReferences(projectPath);
 
-            return Task.FromResult(entry);
+            // Generate content hash
+            entry.ContentHash = await ComputeProjectContentHashAsync(projectPath, cancellationToken);
+
+            return entry;
         }
 
         private void InitializeFileWatcher()

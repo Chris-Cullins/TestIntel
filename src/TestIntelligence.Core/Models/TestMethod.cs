@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Text.Json.Serialization;
 using TestIntelligence.Core.Assembly;
 
 namespace TestIntelligence.Core.Models
@@ -32,11 +33,13 @@ namespace TestIntelligence.Core.Models
         /// <summary>
         /// The reflection method info for this test method.
         /// </summary>
+        [JsonIgnore]
         public MethodInfo MethodInfo { get; }
 
         /// <summary>
         /// The declaring type that contains this test method.
         /// </summary>
+        [JsonIgnore]
         public Type DeclaringType { get; }
 
         /// <summary>
@@ -67,6 +70,7 @@ namespace TestIntelligence.Core.Models
         /// <summary>
         /// Test-related attributes found on this method.
         /// </summary>
+        [JsonIgnore]
         public IReadOnlyList<Attribute> TestAttributes { get; private set; }
 
         /// <summary>

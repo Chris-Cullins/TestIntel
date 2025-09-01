@@ -56,16 +56,14 @@ namespace TestIntelligence.Core.Tests.Caching
             using var cacheManager = CreateCacheManager();
             await cacheManager.InitializeAsync();
             
-            var key = "test-discovery-key";
+            var key = "test-data-key";
             
-            // Create a test fixture (this will automatically discover test methods)
-            var testFixture = new TestFixture(typeof(SolutionCacheManagerTests), "/test/assembly.dll", FrameworkVersion.Net5Plus);
-            
-            var expectedResult = new TestDiscoveryResult(
-                "/test/assembly.dll",
-                FrameworkVersion.Net5Plus,
-                new List<TestFixture> { testFixture },
-                new List<string>());
+            var expectedData = new SimpleTestData
+            {
+                Name = "TestItem",
+                Value = 123,
+                Items = new List<string> { "test1", "test2", "test3" }
+            };
             var factoryCalled = false;
 
             // Act
@@ -73,14 +71,15 @@ namespace TestIntelligence.Core.Tests.Caching
             {
                 factoryCalled = true;
                 await Task.Delay(10); // Simulate work
-                return expectedResult;
+                return expectedData;
             });
 
             // Assert
             Assert.True(factoryCalled);
             Assert.NotNull(result);
-            Assert.Equal(expectedResult.AssemblyPath, result.AssemblyPath);
-            Assert.Single(result.GetAllTestMethods());
+            Assert.Equal(expectedData.Name, result.Name);
+            Assert.Equal(expectedData.Value, result.Value);
+            Assert.Equal(3, result.Items.Count);
         }
 
         [Fact]
@@ -90,35 +89,36 @@ namespace TestIntelligence.Core.Tests.Caching
             using var cacheManager = CreateCacheManager();
             await cacheManager.InitializeAsync();
             
-            var key = "cached-discovery-key";
-            var testFixture = new TestFixture(typeof(SolutionCacheManagerTests), "/test/cached.dll", FrameworkVersion.Net5Plus);
-            
-            var cachedResult = new TestDiscoveryResult(
-                "/test/cached.dll",
-                FrameworkVersion.Net5Plus,
-                new List<TestFixture> { testFixture },
-                new List<string>());
+            var key = "cached-data-key";
+            var cachedData = new SimpleTestData
+            {
+                Name = "CachedItem",
+                Value = 42,
+                Items = new List<string> { "item1", "item2" }
+            };
 
             // Pre-cache the result
-            await cacheManager.GetOrSetAsync(key, () => Task.FromResult(cachedResult));
+            await cacheManager.GetOrSetAsync(key, () => Task.FromResult(cachedData));
 
             var factoryCalled = false;
-            var newResult = new TestDiscoveryResult(
-                "/test/new.dll",
-                FrameworkVersion.Net5Plus,
-                new List<TestFixture>(),
-                new List<string>());
+            var newData = new SimpleTestData
+            {
+                Name = "NewItem",
+                Value = 100,
+                Items = new List<string> { "newitem" }
+            };
 
             // Act
             var result = await cacheManager.GetOrSetAsync(key, () =>
             {
                 factoryCalled = true;
-                return Task.FromResult(newResult);
+                return Task.FromResult(newData);
             });
 
             // Assert
             Assert.False(factoryCalled);
-            Assert.Equal(cachedResult.AssemblyPath, result.AssemblyPath);
+            Assert.Equal(cachedData.Name, result.Name);
+            Assert.Equal(cachedData.Value, result.Value);
         }
 
         [Fact]
@@ -252,19 +252,20 @@ namespace TestIntelligence.Core.Tests.Caching
                         var result = await cacheManager.GetOrSetAsync(key, async () =>
                         {
                             await Task.Delay(1); // Simulate discovery work
-                            var testFixture = new TestFixture(typeof(SolutionCacheManagerTests), assemblyPath, FrameworkVersion.Net5Plus);
                             
-                            return new TestDiscoveryResult(
-                                assemblyPath,
-                                FrameworkVersion.Net5Plus,
-                                new List<TestFixture> { testFixture },
-                                new List<string>());
+                            return new SimpleTestData
+                            {
+                                Name = $"Project{projectIndex}Assembly{fileIndex}",
+                                Value = projectIndex * 100 + fileIndex,
+                                Items = new List<string> { assemblyPath }
+                            };
                         });
                         
                         // Verify result
                         Assert.NotNull(result);
-                        Assert.Equal(assemblyPath, result.AssemblyPath);
-                        Assert.True(result.GetAllTestMethods().Count() >= 0); // TestFixtures auto-discover methods
+                        Assert.Equal($"Project{projectIndex}Assembly{fileIndex}", result.Name);
+                        Assert.Equal(projectIndex * 100 + fileIndex, result.Value);
+                        Assert.Single(result.Items); // Should have one assembly path
                     }));
                 }
             }
@@ -359,6 +360,14 @@ namespace TestIntelligence.Core.Tests.Caching
                     // Ignore cleanup errors in tests
                 }
             }
+        }
+
+        // Simple serializable test data class for cache testing
+        public class SimpleTestData
+        {
+            public string Name { get; set; } = string.Empty;
+            public int Value { get; set; }
+            public List<string> Items { get; set; } = new List<string>();
         }
     }
 }

@@ -162,8 +162,8 @@ namespace TestIntelligence.Core.Tests.Caching
             // Arrange
             using var cache = CreateCache();
             
-            await cache.SetAsync("key1", CreateTestData("Data 1"));
-            await cache.SetAsync("key2", CreateTestData("Data 2"));
+            await cache.SetAsync("key1", CreateLargeTestData("Data 1"));
+            await cache.SetAsync("key2", CreateLargeTestData("Data 2"));
             await cache.GetAsync("key1"); // Hit
             await cache.GetAsync("non-existent"); // Miss
 
@@ -194,7 +194,7 @@ namespace TestIntelligence.Core.Tests.Caching
             var result = await cache.GetOrSetAsync("existing-key", async () =>
             {
                 factoryCalled = true;
-                return CreateTestData("Factory Data");
+                return await Task.FromResult(CreateTestData("Factory Data"));
             });
 
             // Assert
@@ -210,7 +210,7 @@ namespace TestIntelligence.Core.Tests.Caching
             var factoryData = CreateTestData("Factory Data");
 
             // Act
-            var result = await cache.GetOrSetAsync("new-key", async () => factoryData);
+            var result = await cache.GetOrSetAsync("new-key", async () => await Task.FromResult(factoryData));
             var retrieved = await cache.GetAsync("new-key");
 
             // Assert
@@ -224,8 +224,8 @@ namespace TestIntelligence.Core.Tests.Caching
         {
             // Arrange
             using var cache = CreateCache();
-            await cache.SetAsync("key1", CreateTestData("Data 1"));
-            await cache.SetAsync("key2", CreateTestData("Data 2"));
+            await cache.SetAsync("key1", CreateLargeTestData("Data 1"));
+            await cache.SetAsync("key2", CreateLargeTestData("Data 2"));
 
             // Act
             await cache.ClearAsync();
@@ -400,7 +400,7 @@ namespace TestIntelligence.Core.Tests.Caching
 
         private class TestLogger<T> : ILogger<T>
         {
-            public IDisposable BeginScope<TState>(TState state) => null!;
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
             public bool IsEnabled(LogLevel logLevel) => false;
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) { }
         }

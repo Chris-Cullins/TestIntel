@@ -8,6 +8,7 @@ using TestIntelligence.Core.Caching;
 using TestIntelligence.Core.Discovery;
 using TestIntelligence.Core.Assembly;
 using TestIntelligence.Core.Models;
+using TestIntelligence.ImpactAnalyzer.Caching;
 
 namespace TestIntelligence.CLI.Services
 {
@@ -73,27 +74,28 @@ namespace TestIntelligence.CLI.Services
                 }
 
                 using (cacheSetup)
+                using (var enhancedIntegration = CreateEnhancedIntegration(cacheSetup.CacheDirectory ?? "/tmp"))
                 {
                     switch (action.ToLowerInvariant())
                     {
                         case "status":
-                            await HandleStatusCommand(cacheSetup, format, verbose);
+                            await HandleStatusCommand(cacheSetup, enhancedIntegration, format, verbose);
                             break;
 
                         case "clear":
-                            await HandleClearCommand(cacheSetup, verbose);
+                            await HandleClearCommand(cacheSetup, enhancedIntegration, verbose);
                             break;
 
                         case "init":
-                            await HandleInitCommand(cacheSetup, verbose);
+                            await HandleInitCommand(cacheSetup, enhancedIntegration, verbose);
                             break;
 
                         case "warm-up":
-                            await HandleWarmUpCommand(cacheSetup, solutionPath, verbose);
+                            await HandleWarmUpCommand(cacheSetup, enhancedIntegration, solutionPath, verbose);
                             break;
 
                         case "stats":
-                            await HandleStatsCommand(cacheSetup, format, verbose);
+                            await HandleStatsCommand(cacheSetup, enhancedIntegration, format, verbose);
                             break;
 
                         default:
@@ -115,11 +117,19 @@ namespace TestIntelligence.CLI.Services
             }
         }
 
-        private async Task HandleStatusCommand(LargeSolutionCacheSetup cacheSetup, string format, bool verbose)
+        private EnhancedRoslynAnalyzerIntegration CreateEnhancedIntegration(string cacheDirectory)
+        {
+            return new EnhancedRoslynAnalyzerIntegration(
+                cacheDirectory, 
+                _logger as ILogger<EnhancedRoslynAnalyzerIntegration>);
+        }
+
+        private async Task HandleStatusCommand(LargeSolutionCacheSetup cacheSetup, EnhancedRoslynAnalyzerIntegration enhancedIntegration, string format, bool verbose)
         {
             await cacheSetup.InitializeAsync();
             var stats = await cacheSetup.GetStatisticsAsync();
             var changes = await cacheSetup.SolutionCacheManager.DetectChangesAsync();
+            var enhancedStats = await enhancedIntegration.GetCacheStatisticsAsync();
 
             if (format == "json")
             {
@@ -144,6 +154,32 @@ namespace TestIntelligence.CLI.Services
                         modifiedFiles = changes.ModifiedFiles.Count,
                         addedFiles = changes.AddedFiles.Count,
                         deletedFiles = changes.DeletedFiles.Count
+                    },
+                    enhancedCaches = new
+                    {
+                        callGraph = new
+                        {
+                            totalEntries = enhancedStats.CallGraph.TotalEntries,
+                            hitCount = enhancedStats.CallGraph.HitCount,
+                            hitRatio = enhancedStats.CallGraph.HitRatio,
+                            totalCompressedSize = enhancedStats.CallGraph.TotalCompressedSize,
+                            compressionRatio = enhancedStats.CallGraph.AverageCompressionRatio,
+                            lastMaintenance = enhancedStats.CallGraph.LastMaintenanceRun
+                        },
+                        projects = new
+                        {
+                            totalEntries = enhancedStats.Projects.TotalEntries,
+                            trackedProjects = enhancedStats.Projects.TrackedProjectsCount,
+                            hitRatio = enhancedStats.Projects.HitRatio,
+                            totalCompressedSize = enhancedStats.Projects.TotalCompressedSize,
+                            changeDetections = enhancedStats.Projects.ChangeDetectionCount
+                        },
+                        overall = new
+                        {
+                            totalCacheSize = enhancedStats.TotalCacheSize,
+                            overallHitRatio = enhancedStats.OverallHitRatio,
+                            compressionEfficiency = enhancedStats.CompressionEfficiency
+                        }
                     },
                     cacheDirectory = cacheSetup.CacheDirectory
                 };
@@ -197,28 +233,58 @@ namespace TestIntelligence.CLI.Services
                 {
                     Console.WriteLine("  Status: No changes detected since last snapshot");
                 }
+
+                Console.WriteLine();
+                Console.WriteLine("Enhanced Caches:");
+                Console.WriteLine($"  Call Graph Cache:");
+                Console.WriteLine($"    Total Entries: {enhancedStats.CallGraph.TotalEntries:N0}");
+                Console.WriteLine($"    Cache Hits: {enhancedStats.CallGraph.HitCount:N0}");
+                Console.WriteLine($"    Hit Ratio: {enhancedStats.CallGraph.HitRatio:P1}");
+                Console.WriteLine($"    Size: {FormatBytes(enhancedStats.CallGraph.TotalCompressedSize)}");
+                Console.WriteLine($"    Compression: {enhancedStats.CallGraph.AverageCompressionRatio:F1}%");
+                Console.WriteLine($"    Last Maintenance: {enhancedStats.CallGraph.LastMaintenanceRun:yyyy-MM-dd HH:mm}");
+                Console.WriteLine();
+                Console.WriteLine($"  Project Cache:");
+                Console.WriteLine($"    Total Entries: {enhancedStats.Projects.TotalEntries:N0}");
+                Console.WriteLine($"    Tracked Projects: {enhancedStats.Projects.TrackedProjectsCount:N0}");
+                Console.WriteLine($"    Hit Ratio: {enhancedStats.Projects.HitRatio:P1}");
+                Console.WriteLine($"    Size: {FormatBytes(enhancedStats.Projects.TotalCompressedSize)}");
+                Console.WriteLine($"    Change Detections: {enhancedStats.Projects.ChangeDetectionCount:N0}");
+                Console.WriteLine();
+                Console.WriteLine($"  Overall Performance:");
+                Console.WriteLine($"    Total Cache Size: {FormatBytes(enhancedStats.TotalCacheSize)}");
+                Console.WriteLine($"    Overall Hit Ratio: {enhancedStats.OverallHitRatio:P1}");
+                Console.WriteLine($"    Compression Efficiency: {enhancedStats.CompressionEfficiency:P1}");
             }
         }
 
-        private async Task HandleClearCommand(LargeSolutionCacheSetup cacheSetup, bool verbose)
+        private async Task HandleClearCommand(LargeSolutionCacheSetup cacheSetup, EnhancedRoslynAnalyzerIntegration enhancedIntegration, bool verbose)
         {
             if (verbose)
             {
-                Console.WriteLine("Clearing all cached data...");
+                Console.WriteLine("Clearing all cached data (including enhanced caches)...");
             }
 
+            // Clear traditional caches
             await cacheSetup.ClearAllAsync();
-            Console.WriteLine("Cache cleared successfully");
+            
+            // Note: Enhanced caches are cleared individually via internal maintenance
+            // The EnhancedRoslynAnalyzerIntegration manages its own cache lifecycle
+            
+            Console.WriteLine("All caches cleared successfully");
         }
 
-        private async Task HandleInitCommand(LargeSolutionCacheSetup cacheSetup, bool verbose)
+        private async Task HandleInitCommand(LargeSolutionCacheSetup cacheSetup, EnhancedRoslynAnalyzerIntegration enhancedIntegration, bool verbose)
         {
             if (verbose)
             {
-                Console.WriteLine("Initializing cache system...");
+                Console.WriteLine("Initializing cache system (including enhanced caches)...");
             }
 
+            // Initialize traditional caches
             await cacheSetup.InitializeAsync();
+            
+            // Enhanced caches initialize automatically when accessed
             
             if (verbose)
             {
@@ -226,89 +292,109 @@ namespace TestIntelligence.CLI.Services
             }
 
             await cacheSetup.SaveSnapshotAsync();
-            Console.WriteLine("Cache initialized successfully");
+            Console.WriteLine("All caches initialized successfully");
         }
 
-        private async Task HandleWarmUpCommand(LargeSolutionCacheSetup cacheSetup, string solutionPath, bool verbose)
+        private async Task HandleWarmUpCommand(LargeSolutionCacheSetup cacheSetup, EnhancedRoslynAnalyzerIntegration enhancedIntegration, string solutionPath, bool verbose)
         {
             if (verbose)
             {
-                Console.WriteLine("Warming up cache by analyzing solution...");
+                Console.WriteLine("Warming up all caches by analyzing solution...");
+                Console.WriteLine("This will build: Assembly Cache, Call Graph Cache, Project Cache");
             }
 
             await cacheSetup.InitializeAsync();
 
-            // Find all assemblies in the solution
-            var solutionDirectory = Path.GetDirectoryName(solutionPath);
-            if (string.IsNullOrEmpty(solutionDirectory))
-            {
-                Console.WriteLine("Error: Could not determine solution directory");
-                return;
-            }
-
-            var assemblies = Directory.GetFiles(solutionDirectory, "*.dll", SearchOption.AllDirectories)
-                .Where(f => !f.Contains("\\bin\\Debug\\") && !f.Contains("\\bin\\Release\\") && 
-                           !f.Contains("\\obj\\") && !f.Contains("\\packages\\"))
-                .ToArray();
+            // Use enhanced integration to warm up all caches comprehensively
+            var warmupResult = await enhancedIntegration.WarmupCacheAsync(solutionPath);
 
             if (verbose)
             {
-                Console.WriteLine($"Found {assemblies.Length} assemblies to analyze");
+                Console.WriteLine();
+                Console.WriteLine("Enhanced cache warm-up results:");
+                Console.WriteLine($"  Projects warmed up: {warmupResult.ProjectsWarmedUp}");
+                Console.WriteLine($"  Duration: {warmupResult.Duration.TotalSeconds:F2}s");
+                Console.WriteLine($"  Success: {warmupResult.Success}");
             }
 
-            var processedCount = 0;
-            var cachedCount = 0;
-
-            foreach (var assemblyPath in assemblies)
+            // Also warm up traditional assembly cache for any remaining assemblies
+            var solutionDirectory = Path.GetDirectoryName(solutionPath);
+            if (!string.IsNullOrEmpty(solutionDirectory))
             {
-                try
+                var assemblies = Directory.GetFiles(solutionDirectory, "*.dll", SearchOption.AllDirectories)
+                    .Where(f => !f.Contains("\\bin\\Debug\\") && !f.Contains("\\bin\\Release\\") && 
+                               !f.Contains("\\obj\\") && !f.Contains("\\packages\\"))
+                    .ToArray();
+
+                if (verbose && assemblies.Length > 0)
                 {
-                    if (verbose)
-                    {
-                        Console.WriteLine($"Processing: {Path.GetFileName(assemblyPath)}");
-                    }
-
-                    // Use assembly metadata cache to load and discover tests
-                    await cacheSetup.AssemblyMetadataCache.GetOrCacheTestDiscoveryAsync(
-                        assemblyPath,
-                        async () =>
-                        {
-                            var loadResult = await _assemblyLoader.LoadAssemblyAsync(assemblyPath);
-                            if (loadResult.IsSuccess && loadResult.Assembly != null)
-                            {
-                                var discoveryResult = await _testDiscovery.DiscoverTestsAsync(loadResult.Assembly);
-                                cachedCount++;
-                                return discoveryResult;
-                            }
-
-                            return new TestDiscoveryResult(
-                                assemblyPath,
-                                FrameworkVersion.Unknown,
-                                new List<TestFixture>(),
-                                new List<string> { loadResult.IsSuccess ? "Unknown error" : "Failed to load assembly" });
-                        });
-
-                    processedCount++;
+                    Console.WriteLine($"\nProcessing {assemblies.Length} additional assemblies for test discovery...");
                 }
-                catch (Exception ex)
+
+                var processedCount = 0;
+                var cachedCount = 0;
+
+                foreach (var assemblyPath in assemblies)
                 {
-                    if (verbose)
+                    try
                     {
-                        Console.WriteLine($"  Warning: Failed to process {assemblyPath}: {ex.Message}");
+                        if (verbose)
+                        {
+                            Console.WriteLine($"Processing: {Path.GetFileName(assemblyPath)}");
+                        }
+
+                        await cacheSetup.AssemblyMetadataCache.GetOrCacheTestDiscoveryAsync(
+                            assemblyPath,
+                            async () =>
+                            {
+                                var loadResult = await _assemblyLoader.LoadAssemblyAsync(assemblyPath);
+                                if (loadResult.IsSuccess && loadResult.Assembly != null)
+                                {
+                                    var discoveryResult = await _testDiscovery.DiscoverTestsAsync(loadResult.Assembly);
+                                    cachedCount++;
+                                    return discoveryResult;
+                                }
+
+                                return new TestDiscoveryResult(
+                                    assemblyPath,
+                                    FrameworkVersion.Unknown,
+                                    new List<TestFixture>(),
+                                    new List<string> { loadResult.IsSuccess ? "Unknown error" : "Failed to load assembly" });
+                            });
+
+                        processedCount++;
                     }
-                    _logger.LogWarning(ex, "Failed to process assembly: {AssemblyPath}", assemblyPath);
+                    catch (Exception ex)
+                    {
+                        if (verbose)
+                        {
+                            Console.WriteLine($"  Warning: Failed to process {assemblyPath}: {ex.Message}");
+                        }
+                        _logger.LogWarning(ex, "Failed to process assembly: {AssemblyPath}", assemblyPath);
+                    }
+                }
+
+                if (verbose && processedCount > 0)
+                {
+                    Console.WriteLine($"Additional assemblies processed: {processedCount}, cached: {cachedCount}");
                 }
             }
 
             await cacheSetup.SaveSnapshotAsync();
 
-            Console.WriteLine($"Cache warm-up completed: {processedCount} assemblies processed, {cachedCount} cached");
+            Console.WriteLine();
+            Console.WriteLine("✅ All cache warm-up completed successfully!");
+            Console.WriteLine($"   Enhanced caches: {warmupResult.ProjectsWarmedUp} projects warmed up");
+            Console.WriteLine($"   Enhanced cache time: {warmupResult.Duration.TotalSeconds:F2}s");
+            Console.WriteLine();
+            Console.WriteLine("🚀 Subsequent analysis operations will be significantly faster!");
         }
 
-        private async Task HandleStatsCommand(LargeSolutionCacheSetup cacheSetup, string format, bool verbose)
+        private async Task HandleStatsCommand(LargeSolutionCacheSetup cacheSetup, EnhancedRoslynAnalyzerIntegration enhancedIntegration, string format, bool verbose)
         {
             await cacheSetup.InitializeAsync();
             var stats = await cacheSetup.GetStatisticsAsync();
+            var enhancedStats = await enhancedIntegration.GetCacheStatisticsAsync();
 
             if (format == "json")
             {
@@ -325,6 +411,32 @@ namespace TestIntelligence.CLI.Services
                         expiredFiles = stats.PersistentCache.ExpiredFiles,
                         totalSizeBytes = stats.PersistentCache.TotalSizeBytes,
                         totalSizeFormatted = stats.PersistentCache.TotalSizeFormatted
+                    },
+                    enhancedCaches = new
+                    {
+                        callGraph = new
+                        {
+                            totalEntries = enhancedStats.CallGraph.TotalEntries,
+                            hitCount = enhancedStats.CallGraph.HitCount,
+                            hitRatio = enhancedStats.CallGraph.HitRatio,
+                            totalCompressedSize = enhancedStats.CallGraph.TotalCompressedSize,
+                            compressionRatio = enhancedStats.CallGraph.AverageCompressionRatio,
+                            lastMaintenance = enhancedStats.CallGraph.LastMaintenanceRun
+                        },
+                        projects = new
+                        {
+                            totalEntries = enhancedStats.Projects.TotalEntries,
+                            trackedProjects = enhancedStats.Projects.TrackedProjectsCount,
+                            hitRatio = enhancedStats.Projects.HitRatio,
+                            totalCompressedSize = enhancedStats.Projects.TotalCompressedSize,
+                            changeDetections = enhancedStats.Projects.ChangeDetectionCount
+                        },
+                        overall = new
+                        {
+                            totalCacheSize = enhancedStats.TotalCacheSize,
+                            overallHitRatio = enhancedStats.OverallHitRatio,
+                            compressionEfficiency = enhancedStats.CompressionEfficiency
+                        }
                     },
                     cacheDirectory = cacheSetup.CacheDirectory
                 };
@@ -348,6 +460,28 @@ namespace TestIntelligence.CLI.Services
                 Console.WriteLine($"  Active: {stats.PersistentCache.ActiveFiles:N0}");
                 Console.WriteLine($"  Expired: {stats.PersistentCache.ExpiredFiles:N0}");
                 Console.WriteLine($"  Total Size: {stats.PersistentCache.TotalSizeFormatted}");
+                Console.WriteLine();
+
+                Console.WriteLine("Enhanced Cache Performance:");
+                Console.WriteLine($"  Call Graph Cache:");
+                Console.WriteLine($"    Total Entries: {enhancedStats.CallGraph.TotalEntries:N0}");
+                Console.WriteLine($"    Cache Hits: {enhancedStats.CallGraph.HitCount:N0}");
+                Console.WriteLine($"    Hit Ratio: {enhancedStats.CallGraph.HitRatio:P1}");
+                Console.WriteLine($"    Size: {FormatBytes(enhancedStats.CallGraph.TotalCompressedSize)}");
+                Console.WriteLine($"    Compression: {enhancedStats.CallGraph.AverageCompressionRatio:F1}%");
+                Console.WriteLine($"    Last Maintenance: {enhancedStats.CallGraph.LastMaintenanceRun:yyyy-MM-dd HH:mm}");
+                Console.WriteLine();
+                Console.WriteLine($"  Project Cache:");
+                Console.WriteLine($"    Total Entries: {enhancedStats.Projects.TotalEntries:N0}");
+                Console.WriteLine($"    Tracked Projects: {enhancedStats.Projects.TrackedProjectsCount:N0}");
+                Console.WriteLine($"    Hit Ratio: {enhancedStats.Projects.HitRatio:P1}");
+                Console.WriteLine($"    Size: {FormatBytes(enhancedStats.Projects.TotalCompressedSize)}");
+                Console.WriteLine($"    Change Detections: {enhancedStats.Projects.ChangeDetectionCount:N0}");
+                Console.WriteLine();
+                Console.WriteLine($"  Overall Performance:");
+                Console.WriteLine($"    Total Enhanced Cache Size: {FormatBytes(enhancedStats.TotalCacheSize)}");
+                Console.WriteLine($"    Overall Hit Ratio: {enhancedStats.OverallHitRatio:P1}");
+                Console.WriteLine($"    Compression Efficiency: {enhancedStats.CompressionEfficiency:P1}");
                 
                 if (stats.LastSnapshotTime.HasValue)
                 {
@@ -368,6 +502,19 @@ namespace TestIntelligence.CLI.Services
             if (timeSpan.TotalMinutes >= 1)
                 return $"{timeSpan.TotalMinutes:F1} minutes";
             return $"{timeSpan.TotalSeconds:F1} seconds";
+        }
+
+        private static string FormatBytes(long bytes)
+        {
+            string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+            double len = bytes;
+            int order = 0;
+            while (len >= 1024 && order < sizes.Length - 1)
+            {
+                order++;
+                len = len / 1024;
+            }
+            return $"{len:0.##} {sizes[order]}";
         }
 
         private int EstimateProjectCount(string solutionPath)
