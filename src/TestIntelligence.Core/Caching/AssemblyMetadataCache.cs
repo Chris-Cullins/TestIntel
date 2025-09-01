@@ -14,10 +14,12 @@ namespace TestIntelligence.Core.Caching
 {
     /// <summary>
     /// Caches assembly metadata and test discovery results to improve performance.
+    /// Enhanced with persistent caching and solution-level dependency tracking.
     /// </summary>
     public class AssemblyMetadataCache : IDisposable
     {
         private readonly ICacheProvider _cacheProvider;
+        private readonly SolutionCacheManager? _solutionCacheManager;
         private readonly TimeSpan _defaultExpiration;
         private volatile bool _disposed = false;
 
@@ -25,10 +27,15 @@ namespace TestIntelligence.Core.Caching
         /// Initializes a new instance of the AssemblyMetadataCache.
         /// </summary>
         /// <param name="cacheProvider">Cache provider to use. If null, uses in-memory cache.</param>
+        /// <param name="solutionCacheManager">Solution-level cache manager for persistent storage.</param>
         /// <param name="defaultExpiration">Default expiration time for cached entries. Default is 1 hour.</param>
-        public AssemblyMetadataCache(ICacheProvider? cacheProvider = null, TimeSpan? defaultExpiration = null)
+        public AssemblyMetadataCache(
+            ICacheProvider? cacheProvider = null, 
+            SolutionCacheManager? solutionCacheManager = null,
+            TimeSpan? defaultExpiration = null)
         {
             _cacheProvider = cacheProvider ?? new MemoryCacheProvider();
+            _solutionCacheManager = solutionCacheManager;
             _defaultExpiration = defaultExpiration ?? TimeSpan.FromHours(1);
         }
 
@@ -59,8 +66,27 @@ namespace TestIntelligence.Core.Caching
             if (forceRefresh)
             {
                 await _cacheProvider.RemoveAsync(cacheKey, cancellationToken).ConfigureAwait(false);
+                if (_solutionCacheManager != null)
+                {
+                    await _solutionCacheManager.RegisterFileDependenciesAsync(
+                        cacheKey, 
+                        new[] { assemblyPath }, 
+                        cancellationToken).ConfigureAwait(false);
+                }
             }
 
+            // Use solution cache manager if available for persistent caching
+            if (_solutionCacheManager != null)
+            {
+                return await _solutionCacheManager.GetOrSetAsync(
+                    cacheKey,
+                    discoveryFactory,
+                    new[] { assemblyPath }, // Register assembly as dependency
+                    GetExpirationForAssembly(assemblyPath),
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            // Fallback to regular cache provider
             return await _cacheProvider.GetOrSetAsync(
                 cacheKey,
                 async () =>
@@ -99,8 +125,27 @@ namespace TestIntelligence.Core.Caching
             if (forceRefresh)
             {
                 await _cacheProvider.RemoveAsync(cacheKey, cancellationToken).ConfigureAwait(false);
+                if (_solutionCacheManager != null)
+                {
+                    await _solutionCacheManager.RegisterFileDependenciesAsync(
+                        cacheKey, 
+                        new[] { assemblyPath }, 
+                        cancellationToken).ConfigureAwait(false);
+                }
             }
 
+            // Use solution cache manager if available for persistent caching
+            if (_solutionCacheManager != null)
+            {
+                return await _solutionCacheManager.GetOrSetAsync(
+                    cacheKey,
+                    loadFactory,
+                    new[] { assemblyPath }, // Register assembly as dependency
+                    GetExpirationForAssembly(assemblyPath),
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            // Fallback to regular cache provider
             return await _cacheProvider.GetOrSetAsync(
                 cacheKey,
                 loadFactory,

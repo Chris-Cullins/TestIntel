@@ -61,6 +61,7 @@ public class Program
             CreateFindTestsCommand(host),
             CreateTraceExecutionCommand(host),
             CreateAnalyzeCoverageCommand(host),
+            CreateCacheCommand(host),
             CreateConfigCommand(host),
             CreateVersionCommand()
         };
@@ -96,6 +97,7 @@ public class Program
                 services.AddTransient<ITestExecutionTracer, TestExecutionTracer>();
                 services.AddTransient<ICodeChangeCoverageAnalyzer, CodeChangeCoverageAnalyzer>();
                 services.AddTransient<ICoverageAnalysisService, CoverageAnalysisService>();
+                services.AddTransient<CacheManagementService>();
             });
     }
 
@@ -956,6 +958,67 @@ public class Program
         {
             Console.Write(outputText);
         }
+    }
+
+    private static Command CreateCacheCommand(IHost host)
+    {
+        var solutionOption = new Option<string>(
+            name: "--solution",
+            description: "Path to the solution file (.sln)")
+        {
+            IsRequired = true
+        };
+        solutionOption.AddAlias("-s");
+
+        var actionOption = new Option<string>(
+            name: "--action",
+            description: "Cache action to perform")
+        {
+            IsRequired = true
+        };
+        actionOption.AddAlias("-a");
+        actionOption.FromAmong("status", "clear", "init", "warm-up", "stats");
+
+        var cacheDirectoryOption = new Option<string?>(
+            name: "--cache-dir",
+            description: "Custom cache directory (optional)")
+        {
+            IsRequired = false
+        };
+        cacheDirectoryOption.AddAlias("-d");
+
+        var formatOption = new Option<string>(
+            name: "--format",
+            description: "Output format",
+            getDefaultValue: () => "text")
+        {
+            IsRequired = false
+        };
+        formatOption.AddAlias("-f");
+        formatOption.FromAmong("text", "json");
+
+        var verboseOption = new Option<bool>(
+            name: "--verbose",
+            description: "Enable verbose output",
+            getDefaultValue: () => false);
+        verboseOption.AddAlias("-v");
+
+        var cacheCommand = new Command("cache", "Manage persistent cache for large solutions")
+        {
+            solutionOption,
+            actionOption,
+            cacheDirectoryOption,
+            formatOption,
+            verboseOption
+        };
+
+        cacheCommand.SetHandler(async (string solution, string action, string? cacheDir, string format, bool verbose) =>
+        {
+            var cacheService = host.Services.GetRequiredService<CacheManagementService>();
+            await cacheService.HandleCacheCommandAsync(solution, action, cacheDir, format, verbose);
+        }, solutionOption, actionOption, cacheDirectoryOption, formatOption, verboseOption);
+
+        return cacheCommand;
     }
 
     private static Command CreateVersionCommand()
