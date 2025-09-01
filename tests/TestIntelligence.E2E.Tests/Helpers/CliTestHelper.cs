@@ -8,55 +8,101 @@ namespace TestIntelligence.E2E.Tests.Helpers;
 public static class CliTestHelper
 {
     private static readonly string CliExecutablePath = GetCliExecutablePath();
+    private static readonly SemaphoreSlim ProcessSemaphore = new(1, 1); // Allow only 1 concurrent process
     
-    public static Task<CliResult> RunCliCommandAsync(string command, string arguments = "", int timeoutMs = 180000)
+    public static async Task<CliResult> RunCliCommandAsync(string command, string arguments = "", int timeoutMs = 180000)
     {
-        var startInfo = new ProcessStartInfo
+        // Ensure only one CLI process runs at a time to eliminate contention
+        await ProcessSemaphore.WaitAsync();
+        
+        try
         {
-            FileName = "dotnet",
-            Arguments = $"{CliExecutablePath} {command} {arguments}".Trim(),
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "dotnet",
+                Arguments = $"{CliExecutablePath} {command} {arguments}".Trim(),
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
 
-        var output = new StringBuilder();
-        var error = new StringBuilder();
-        
-        using var process = new Process { StartInfo = startInfo };
-        
-        process.OutputDataReceived += (sender, e) =>
-        {
-            if (e.Data != null)
-                output.AppendLine(e.Data);
-        };
-        
-        process.ErrorDataReceived += (sender, e) =>
-        {
-            if (e.Data != null)
-                error.AppendLine(e.Data);
-        };
+            var output = new StringBuilder();
+            var error = new StringBuilder();
+            Process? process = null;
+            
+            try
+            {
+                process = new Process { StartInfo = startInfo };
+                
+                process.OutputDataReceived += (sender, e) =>
+                {
+                    if (e.Data != null)
+                        output.AppendLine(e.Data);
+                };
+                
+                process.ErrorDataReceived += (sender, e) =>
+                {
+                    if (e.Data != null)
+                        error.AppendLine(e.Data);
+                };
 
-        process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
 
-        var completed = process.WaitForExit(timeoutMs);
-        
-        if (!completed)
-        {
-            process.Kill();
-            throw new TimeoutException($"CLI command timed out after {timeoutMs}ms");
+                var completed = process.WaitForExit(timeoutMs);
+                
+                if (!completed)
+                {
+                    // Attempt graceful shutdown first
+                    try
+                    {
+                        if (!process.HasExited)
+                        {
+                            process.Kill();
+                            process.WaitForExit(5000); // Wait up to 5 seconds for cleanup
+                        }
+                    }
+                    catch (Exception killEx)
+                    {
+                        // Log but don't fail the test due to kill issues
+                        Console.WriteLine($"Warning: Failed to kill process: {killEx.Message}");
+                    }
+                    
+                    throw new TimeoutException($"CLI command '{command} {arguments}' timed out after {timeoutMs}ms");
+                }
+
+                // Wait for async output reading to complete
+                await Task.Delay(100); // Small delay to ensure all output is captured
+
+                return new CliResult
+                {
+                    ExitCode = process.ExitCode,
+                    StandardOutput = output.ToString(),
+                    StandardError = error.ToString(),
+                    Success = process.ExitCode == 0
+                };
+            }
+            finally
+            {
+                // Ensure proper process cleanup
+                try
+                {
+                    process?.Dispose();
+                }
+                catch (Exception disposeEx)
+                {
+                    // Log but don't fail the test due to disposal issues
+                    Console.WriteLine($"Warning: Failed to dispose process: {disposeEx.Message}");
+                }
+            }
         }
-
-        return Task.FromResult(new CliResult
+        finally
         {
-            ExitCode = process.ExitCode,
-            StandardOutput = output.ToString(),
-            StandardError = error.ToString(),
-            Success = process.ExitCode == 0
-        });
+            // Always release the semaphore
+            ProcessSemaphore.Release();
+        }
     }
 
     public static async Task<T> RunCliCommandWithJsonOutputAsync<T>(string command, string arguments = "", int timeoutMs = 180000)
