@@ -12,11 +12,13 @@ using NSubstitute;
 using TestIntelligence.Core.Interfaces;
 using TestIntelligence.Core.Models;
 using TestIntelligence.CLI;
+using TestIntelligence.CLI.Commands;
+using TestIntelligence.CLI.Services;
 using Xunit;
 
 namespace TestIntelligence.CLI.Tests.Commands
 {
-    public class TraceExecutionCommandTests
+    public class TraceExecutionCommandTests : IDisposable
     {
         private readonly StringWriter _output;
         private readonly StringWriter _error;
@@ -200,115 +202,37 @@ namespace TestIntelligence.CLI.Tests.Commands
                 {
                     services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Warning));
                     
+                    // Add all command handlers
+                    services.AddTransient<AnalyzeCommandHandler>();
+                    services.AddTransient<CategorizeCommandHandler>();
+                    services.AddTransient<SelectCommandHandler>();
+                    services.AddTransient<DiffCommandHandler>();
+                    services.AddTransient<CallGraphCommandHandler>();
+                    services.AddTransient<FindTestsCommandHandler>();
+                    services.AddTransient<TraceExecutionCommandHandler>();
+                    services.AddTransient<AnalyzeCoverageCommandHandler>();
+                    services.AddTransient<ConfigCommandHandler>();
+                    services.AddTransient<CacheCommandHandler>();
+                    services.AddTransient<VersionCommandHandler>();
+                    services.AddTransient<ICommandFactory, CommandFactory>();
+                    
                     // Add default mock services if not provided
                     services.AddSingleton(Substitute.For<ITestExecutionTracer>());
+                    services.AddSingleton(Substitute.For<IOutputFormatter>());
                     
                     configureServices?.Invoke(services);
                 });
 
             var host = hostBuilder.Build();
 
-            // Create a root command with the trace-execution command
-            var rootCommand = new RootCommand("TestIntelligence CLI")
-            {
-                CreateTraceExecutionCommand(host)
-            };
+            // Use CommandFactory to create all commands (same as Program.cs)
+            var commandFactory = host.Services.GetRequiredService<ICommandFactory>();
+            var rootCommand = commandFactory.CreateRootCommand(host);
 
             return await rootCommand.InvokeAsync(args);
         }
 
-        private static Command CreateTraceExecutionCommand(IHost host)
-        {
-            var testOption = new Option<string>(
-                name: "--test",
-                description: "Test method identifier to trace execution for")
-            {
-                IsRequired = true
-            };
-
-            var solutionOption = new Option<string>(
-                name: "--solution",
-                description: "Path to solution file or directory")
-            {
-                IsRequired = true
-            };
-
-            var formatOption = new Option<string>(
-                name: "--format",
-                description: "Output format: json, text",
-                getDefaultValue: () => "text");
-
-            var verboseOption = new Option<bool>(
-                name: "--verbose",
-                description: "Enable verbose output");
-
-            var maxDepthOption = new Option<int>(
-                name: "--max-depth",
-                description: "Maximum call depth to trace",
-                getDefaultValue: () => 20);
-
-            var command = new Command("trace-execution", "Trace all production code executed by a test method")
-            {
-                testOption,
-                solutionOption,
-                formatOption,
-                verboseOption,
-                maxDepthOption
-            };
-
-            command.SetHandler(async (string test, string solution, string format, bool verbose, int maxDepth) =>
-            {
-                var tracer = host.Services.GetRequiredService<ITestExecutionTracer>();
-
-                try
-                {
-                    Console.WriteLine($"Tracing execution for test method: {test}");
-                    Console.WriteLine($"Solution path: {solution}");
-                    Console.WriteLine($"Max depth: {maxDepth}");
-                    Console.WriteLine();
-
-                    var trace = await tracer.TraceTestExecutionAsync(test, solution);
-
-                    Console.WriteLine($"Found {trace.TotalMethodsCalled} method(s) in execution trace:");
-                    Console.WriteLine($"Production methods: {trace.ProductionMethodsCalled}");
-
-                    if (format == "json")
-                    {
-                        var json = System.Text.Json.JsonSerializer.Serialize(trace, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-                        Console.WriteLine(json);
-                    }
-                    else
-                    {
-                        var productionMethods = trace.ExecutedMethods.Where(em => em.IsProductionCode).ToList();
-                        if (productionMethods.Any())
-                        {
-                            Console.WriteLine("=== PRODUCTION CODE ===");
-                            Console.WriteLine();
-                            
-                            foreach (var method in productionMethods.OrderBy(em => em.CallDepth))
-                            {
-                                Console.WriteLine($"• {method.ContainingType}.{method.MethodName}");
-                                Console.WriteLine($"  Category: {method.Category}");
-                                Console.WriteLine($"  Call Depth: {method.CallDepth}");
-                                
-                                if (verbose)
-                                {
-                                    Console.WriteLine($"  Call Path: {string.Join(" → ", method.CallPath)}");
-                                }
-                                
-                                Console.WriteLine();
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.Error.WriteLine($"Error: {ex.Message}");
-                }
-            }, testOption, solutionOption, formatOption, verboseOption, maxDepthOption);
-
-            return command;
-        }
+        // Command creation is now handled by CommandFactory and TraceExecutionCommandHandler
 
         private static ExecutionTrace CreateSampleExecutionTrace(string testMethodId)
         {

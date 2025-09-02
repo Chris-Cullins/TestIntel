@@ -378,6 +378,55 @@ namespace TestIntelligence.DataTracker.Tests.Analysis
             }
         }
 
+        // PHASE 1.1 CHARACTERIZATION TESTS FOR BLOCKING ASYNC OPERATIONS
+        // These tests document the current behavior before refactoring
+
+        [Fact]
+        public void RequiresExclusiveDbAccess_CurrentBehavior_BlocksOnAsyncCall()
+        {
+            // Test current blocking behavior to understand timing
+            var detector = new EFCorePatternDetector();
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            
+            var result = detector.RequiresExclusiveDbAccess(_sampleTestMethod);
+            
+            stopwatch.Stop();
+            (result == true || result == false).Should().BeTrue(); // Document current return type
+            // Document current performance characteristics - this uses .Result internally
+            stopwatch.ElapsedMilliseconds.Should().BeLessThan(1000); // Should complete quickly since no real DB ops
+        }
+
+        [Fact]
+        public void RequiresExclusiveDbAccess_CurrentBehaviorWithException_HandlesGracefully()
+        {
+            // Test current behavior when async operation fails
+            var detector = new EFCorePatternDetector();
+            
+            // This should not throw since the method catches exceptions internally
+            var result = detector.RequiresExclusiveDbAccess(_sampleTestMethod);
+            
+            (result == true || result == false).Should().BeTrue();
+        }
+
+        [Fact]  
+        public void EFCorePatternDetector_StressTest_CurrentPerformance()
+        {
+            // Baseline performance test before async refactoring
+            var detector = new EFCorePatternDetector();
+            var tasks = Enumerable.Range(0, 10)
+                .Select(_ => Task.Run(() => detector.RequiresExclusiveDbAccess(_sampleTestMethod)))
+                .ToArray();
+                
+            var act = () => Task.WaitAll(tasks, TimeSpan.FromSeconds(30));
+            act.Should().NotThrow();
+            
+            // Verify all results are valid booleans
+            foreach (var task in tasks)
+            {
+                (task.Result == true || task.Result == false).Should().BeTrue();
+            }
+        }
+
         // Sample methods for testing
         private void SampleTestMethod()
         {

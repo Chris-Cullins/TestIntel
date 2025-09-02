@@ -457,6 +457,45 @@ namespace TestIntelligence.Core.Tests.Assembly
 
         #endregion
 
+        #region PHASE 1.1 CHARACTERIZATION TESTS FOR BLOCKING ASYNC OPERATIONS
+        // These tests document the current behavior before refactoring
+
+        [Fact]
+        public void LoadAssembly_CurrentBehavior_BlocksOnAsyncCall()
+        {
+            // Test current blocking behavior in sync LoadAssembly method
+            // This method internally calls LoadAssemblyAsync().GetAwaiter().GetResult()
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            
+            var result = _loader.LoadAssembly(_validAssemblyPath);
+            
+            stopwatch.Stop();
+            result.IsSuccess.Should().BeFalse(); // Document current return type for invalid assembly
+            // Document current performance characteristics - this blocks on async internally
+            stopwatch.ElapsedMilliseconds.Should().BeLessThan(2000); // Should complete quickly for file ops
+        }
+
+        [Fact]
+        public void LoadAssembly_CurrentBehaviorWithMultipleThreads_HandlesBlocking()
+        {
+            // Test current behavior when multiple threads call the blocking sync method
+            var tasks = Enumerable.Range(0, 5)
+                .Select(_ => Task.Run(() => _loader.LoadAssembly(_validAssemblyPath)))
+                .ToArray();
+                
+            var act = () => Task.WaitAll(tasks, TimeSpan.FromSeconds(30));
+            act.Should().NotThrow();
+            
+            // Verify all results are consistent (all should fail due to invalid assembly format)
+            foreach (var task in tasks)
+            {
+                task.Result.IsSuccess.Should().BeFalse();
+                task.Result.Errors.Should().NotBeEmpty();
+            }
+        }
+
+        #endregion
+
         #region Error Handling Tests
 
         [Fact]

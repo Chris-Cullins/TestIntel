@@ -36,7 +36,7 @@ namespace TestIntelligence.Framework48Adapter
                 cancellationToken.ThrowIfCancellationRequested();
 
                 // Load assembly with metadata-only context to avoid execution issues
-                var assembly = await Task.Run(() => Assembly.LoadFrom(assemblyPath), cancellationToken);
+                var assembly = await Task.Run(() => Assembly.LoadFrom(assemblyPath), cancellationToken).ConfigureAwait(false);
                 
                 var frameworkVersion = DetectFrameworkVersion(assembly);
                 var testAssembly = new Framework48TestAssembly(assemblyPath, assembly, frameworkVersion);
@@ -57,7 +57,10 @@ namespace TestIntelligence.Framework48Adapter
         /// <inheritdoc />
         public ITestAssembly LoadAssembly(string assemblyPath)
         {
-            return LoadAssemblyAsync(assemblyPath).GetAwaiter().GetResult();
+            return LoadAssemblyAsync(assemblyPath)
+                .ConfigureAwait(false)
+                .GetAwaiter()
+                .GetResult();
         }
 
         /// <inheritdoc />

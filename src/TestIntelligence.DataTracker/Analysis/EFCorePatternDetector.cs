@@ -144,7 +144,7 @@ namespace TestIntelligence.DataTracker.Analysis
         }
 
         /// <inheritdoc />
-        public bool RequiresExclusiveDbAccess(TestMethod testMethod)
+        public async Task<bool> RequiresExclusiveDbAccessAsync(TestMethod testMethod, CancellationToken cancellationToken = default)
         {
             if (testMethod == null)
                 throw new ArgumentNullException(nameof(testMethod));
@@ -153,7 +153,8 @@ namespace TestIntelligence.DataTracker.Analysis
             {
                 // EF Core in-memory databases are typically isolated per test
                 // Check if the test uses a real database connection
-                var dependencies = DetectDatabaseOperationsAsync(testMethod).Result;
+                var dependencies = await DetectDatabaseOperationsAsync(testMethod, cancellationToken)
+                    .ConfigureAwait(false);
                 
                 foreach (var dependency in dependencies)
                 {
@@ -189,6 +190,12 @@ namespace TestIntelligence.DataTracker.Analysis
                 // Conservative approach - assume no exclusive access for EF Core (due to in-memory defaults)
                 return false;
             }
+        }
+
+        /// <inheritdoc />
+        public bool RequiresExclusiveDbAccess(TestMethod testMethod)
+        {
+            return RequiresExclusiveDbAccessAsync(testMethod).ConfigureAwait(false).GetAwaiter().GetResult();
         }
 
         /// <inheritdoc />

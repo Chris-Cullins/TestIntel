@@ -55,7 +55,7 @@ public class TestSelectionController : ControllerBase
                 plan = await _selectionEngine.GetOptimalTestPlanAsync(
                     request.CodeChanges, 
                     request.ConfidenceLevel, 
-                    cancellationToken);
+                    cancellationToken).ConfigureAwait(false);
             }
             else
             {
@@ -70,7 +70,7 @@ public class TestSelectionController : ControllerBase
                 plan = await _selectionEngine.GetTestPlanAsync(
                     request.ConfidenceLevel, 
                     options, 
-                    cancellationToken);
+                    cancellationToken).ConfigureAwait(false);
             }
 
             return Ok(plan);
@@ -97,12 +97,12 @@ public class TestSelectionController : ControllerBase
 
             var impactResult = await _impactAnalyzer.AnalyzeDiffImpactAsync(
                 request.DiffContent ?? "",
-                request.SolutionPath);
+                request.SolutionPath).ConfigureAwait(false);
 
             var testPlan = await _selectionEngine.GetOptimalTestPlanAsync(
                 impactResult.CodeChanges,
                 request.ConfidenceLevel,
-                cancellationToken);
+                cancellationToken).ConfigureAwait(false);
 
             var result = new DiffAnalysisResult
             {
@@ -134,7 +134,7 @@ public class TestSelectionController : ControllerBase
         {
             _logger.LogInformation("Updating execution history for {ResultCount} test results", results.Count);
 
-            await _selectionEngine.UpdateTestExecutionHistoryAsync(results, cancellationToken);
+            await _selectionEngine.UpdateTestExecutionHistoryAsync(results, cancellationToken).ConfigureAwait(false);
 
             return Ok(new { message = $"Updated execution history for {results.Count} tests" });
         }
@@ -155,7 +155,7 @@ public class TestSelectionController : ControllerBase
     {
         try
         {
-            var history = await _selectionEngine.GetTestHistoryAsync(filter, cancellationToken);
+            var history = await _selectionEngine.GetTestHistoryAsync(filter, cancellationToken).ConfigureAwait(false);
             return Ok(history);
         }
         catch (Exception ex)

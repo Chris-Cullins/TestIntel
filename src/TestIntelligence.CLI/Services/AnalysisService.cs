@@ -33,7 +33,7 @@ public class AnalysisService : IAnalysisService
             _logger.LogInformation("Starting analysis of: {Path}", path);
 
             // Load configuration
-            var configuration = await _configurationService.LoadConfigurationAsync(path);
+            var configuration = await _configurationService.LoadConfigurationAsync(path).ConfigureAwait(false);
             
             // Override verbose setting if specified in configuration and not overridden by command line
             var effectiveVerbose = verbose || configuration.Analysis.Verbose;
@@ -54,7 +54,7 @@ public class AnalysisService : IAnalysisService
                 throw new FileNotFoundException($"Path not found: {path}");
             }
 
-            var analysisResult = await PerformAnalysisAsync(path, effectiveVerbose, configuration);
+            var analysisResult = await PerformAnalysisAsync(path, effectiveVerbose, configuration).ConfigureAwait(false);
 
             // Use configured output directory if not specified
             var effectiveOutputPath = outputPath ?? 
@@ -62,7 +62,7 @@ public class AnalysisService : IAnalysisService
                     ? Path.Combine(configuration.Output.OutputDirectory, $"analysis_{DateTime.Now:yyyyMMdd_HHmmss}.{(effectiveFormat == "json" ? "json" : "txt")}")
                     : null);
 
-            await _outputFormatter.WriteOutputAsync(analysisResult, effectiveFormat, effectiveOutputPath);
+            await _outputFormatter.WriteOutputAsync(analysisResult, effectiveFormat, effectiveOutputPath).ConfigureAwait(false);
 
             _logger.LogInformation("Analysis completed successfully");
         }
@@ -83,7 +83,7 @@ public class AnalysisService : IAnalysisService
         };
 
         // Discover assemblies to analyze
-        var allAssemblyPaths = await DiscoverAssembliesAsync(path, configuration);
+        var allAssemblyPaths = await DiscoverAssembliesAsync(path, configuration).ConfigureAwait(false);
         
         // Apply configuration filtering
         var assemblyPaths = allAssemblyPaths;
@@ -103,7 +103,7 @@ public class AnalysisService : IAnalysisService
             try
             {
                 _logger.LogDebug("Starting analysis of assembly: {AssemblyPath}", assemblyPath);
-                var assemblyAnalysis = await AnalyzeAssemblyAsync(assemblyPath, verbose, sharedLoader);
+                var assemblyAnalysis = await AnalyzeAssemblyAsync(assemblyPath, verbose, sharedLoader).ConfigureAwait(false);
                 _logger.LogDebug("Assembly {AssemblyName} analysis completed: {TestCount} tests found", 
                     Path.GetFileName(assemblyPath), assemblyAnalysis.TestMethods.Count);
                 result.Assemblies.Add(assemblyAnalysis);
@@ -150,7 +150,7 @@ public class AnalysisService : IAnalysisService
                 var solutionDir = Path.GetDirectoryName(path)!;
                 var allProjectPaths = configuration.Projects.TestProjectsOnly 
                     ? await FindTestProjectsInSolutionAsync(path)
-                    : await FindAllProjectsInSolutionAsync(path);
+                    : await FindAllProjectsInSolutionAsync(path).ConfigureAwait(false);
                 
                 // Apply configuration-based project filtering
                 var filteredProjectPaths = _configurationService.FilterProjects(allProjectPaths, configuration);
@@ -205,7 +205,7 @@ public class AnalysisService : IAnalysisService
             // Load assembly and discover tests
             var loader = sharedLoader ?? new CrossFrameworkAssemblyLoader();
             var shouldDisposeLoader = sharedLoader == null;
-            var loadResult = await loader.LoadAssemblyAsync(assemblyPath);
+            var loadResult = await loader.LoadAssemblyAsync(assemblyPath).ConfigureAwait(false);
             
             if (!loadResult.IsSuccess || loadResult.Assembly == null)
             {
@@ -213,7 +213,7 @@ public class AnalysisService : IAnalysisService
             }
             
             var discovery = TestDiscoveryFactory.CreateNUnitTestDiscovery();
-            var discoveryResult = await discovery.DiscoverTestsAsync(loadResult.Assembly);
+            var discoveryResult = await discovery.DiscoverTestsAsync(loadResult.Assembly).ConfigureAwait(false);
             
             if (discoveryResult.Errors.Any())
             {
@@ -249,7 +249,7 @@ public class AnalysisService : IAnalysisService
 
                 if (verbose)
                 {
-                    methodAnalysis.Dependencies = await ExtractDependenciesAsync(testMethod);
+                    methodAnalysis.Dependencies = await ExtractDependenciesAsync(testMethod).ConfigureAwait(false);
                 }
 
                 analysis.TestMethods.Add(methodAnalysis);
@@ -345,7 +345,7 @@ public class AnalysisService : IAnalysisService
 
     private async Task<List<string>> FindTestProjectsInSolutionAsync(string solutionPath)
     {
-        var allProjects = await FindAllProjectsInSolutionAsync(solutionPath);
+        var allProjects = await FindAllProjectsInSolutionAsync(solutionPath).ConfigureAwait(false);
         var testProjects = new List<string>();
         
         foreach (var projectPath in allProjects)
@@ -369,7 +369,7 @@ public class AnalysisService : IAnalysisService
             return projects;
 
         _logger.LogDebug("Parsing solution file: {SolutionPath}", solutionPath);
-        var solutionContent = await File.ReadAllTextAsync(solutionPath);
+        var solutionContent = await File.ReadAllTextAsync(solutionPath).ConfigureAwait(false);
         var lines = solutionContent.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         var solutionDir = Path.GetDirectoryName(solutionPath)!;
         
@@ -475,7 +475,7 @@ public class AnalysisService : IAnalysisService
     {
         try
         {
-            var projectContent = await File.ReadAllTextAsync(projectPath);
+            var projectContent = await File.ReadAllTextAsync(projectPath).ConfigureAwait(false);
             
             // Check for test indicators in project name/path
             var projectName = Path.GetFileNameWithoutExtension(projectPath).ToLowerInvariant();

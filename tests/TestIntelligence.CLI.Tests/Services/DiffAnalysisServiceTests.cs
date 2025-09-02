@@ -233,7 +233,7 @@ namespace TestIntelligence.CLI.Tests.Services
             var diffContent = "sample diff content";
 
             _diffImpactAnalyzer.AnalyzeDiffImpactAsync(diffContent, tempSolution)
-                .Throws(new InvalidOperationException("Test exception"));
+                .Returns(Task.FromException<SimplifiedTestImpactResult>(new InvalidOperationException("Test exception")));
             
             try
             {

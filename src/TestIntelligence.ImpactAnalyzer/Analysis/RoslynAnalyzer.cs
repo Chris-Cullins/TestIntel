@@ -48,13 +48,13 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             if (solutionFile == null)
             {
                 _logger.LogWarning("No solution file found, falling back to individual file analysis");
-                return await BuildCallGraphFromFilesAsync(solutionFiles, cancellationToken);
+                return await BuildCallGraphFromFilesAsync(solutionFiles, cancellationToken).ConfigureAwait(false);
             }
 
             try
             {
                 // Initialize workspace if not already done
-                await InitializeWorkspaceAsync(solutionFile, cancellationToken);
+                await InitializeWorkspaceAsync(solutionFile, cancellationToken).ConfigureAwait(false);
 
                 if (_callGraphBuilder == null)
                 {
@@ -62,12 +62,12 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                     throw new InvalidOperationException("Call graph builder not initialized");
                 }
 
-                return await _callGraphBuilder.BuildCallGraphAsync(cancellationToken);
+                return await _callGraphBuilder.BuildCallGraphAsync(cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to build call graph using enhanced analyzer, falling back to file-based analysis");
-                return await BuildCallGraphFromFilesAsync(solutionFiles, cancellationToken);
+                return await BuildCallGraphFromFilesAsync(solutionFiles, cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -78,7 +78,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             _logger.LogInformation("Analyzing impact of {MethodCount} changed methods in {FileCount} files", changedMethods.Length, changedFiles.Length);
 
             var affectedMethods = new HashSet<string>(changedMethods);
-            var callGraph = await BuildCallGraphAsync(changedFiles, cancellationToken);
+            var callGraph = await BuildCallGraphAsync(changedFiles, cancellationToken).ConfigureAwait(false);
 
             var queue = new Queue<string>(changedMethods);
             
@@ -113,7 +113,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             }
 
             // Fallback to individual file compilation
-            return await GetSemanticModelFallbackAsync(filePath, cancellationToken);
+            return await GetSemanticModelFallbackAsync(filePath, cancellationToken).ConfigureAwait(false);
         }
 
         public async Task<IReadOnlyList<TypeUsageInfo>> AnalyzeTypeUsageAsync(string[] sourceFiles, CancellationToken cancellationToken = default)
@@ -132,7 +132,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
                 try
                 {
-                    var usages = await AnalyzeTypeUsageInFileAsync(filePath, cancellationToken);
+                    var usages = await AnalyzeTypeUsageInFileAsync(filePath, cancellationToken).ConfigureAwait(false);
                     typeUsages.AddRange(usages);
                 }
                 catch (Exception ex)
@@ -155,7 +155,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             {
                 if (_compilationManager != null)
                 {
-                    return await ExtractMethodsUsingWorkspaceAsync(filePath, cancellationToken);
+                    return await ExtractMethodsUsingWorkspaceAsync(filePath, cancellationToken).ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
@@ -164,7 +164,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             }
 
             // Fallback to standalone analysis
-            return await ExtractMethodsStandaloneAsync(filePath, cancellationToken);
+            return await ExtractMethodsStandaloneAsync(filePath, cancellationToken).ConfigureAwait(false);
         }
 
         public async Task<IReadOnlyList<TestCoverageResult>> FindTestsExercisingMethodAsync(string methodId, string[] solutionFiles, CancellationToken cancellationToken = default)
@@ -173,7 +173,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             
             _logger.LogInformation("Finding tests exercising method: {MethodId} using enhanced analyzer", methodId);
             
-            var callGraph = await BuildCallGraphAsync(solutionFiles, cancellationToken);
+            var callGraph = await BuildCallGraphAsync(solutionFiles, cancellationToken).ConfigureAwait(false);
             var results = callGraph.GetTestCoverageForMethod(methodId);
             
             _logger.LogInformation("Found {TestCount} tests exercising method {MethodId} with enhanced accuracy", 
@@ -197,14 +197,14 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             try
             {
                 // Parse solution structure
-                var solutionInfo = await _solutionParser.ParseSolutionAsync(solutionPath, cancellationToken);
+                var solutionInfo = await _solutionParser.ParseSolutionAsync(solutionPath, cancellationToken).ConfigureAwait(false);
                 
                 // Parse individual projects
                 var projectTasks = solutionInfo.Projects.Select(async p =>
                 {
                     try
                     {
-                        return await _projectParser.ParseProjectAsync(p.Path, cancellationToken);
+                        return await _projectParser.ParseProjectAsync(p.Path, cancellationToken).ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {
@@ -213,13 +213,13 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                     }
                 });
                 
-                var projectDetails = (await Task.WhenAll(projectTasks)).Where(p => p != null).ToList();
+                var projectDetails = (await Task.WhenAll(projectTasks).ConfigureAwait(false)).Where(p => p != null).ToList();
                 
                 // Build dependency graph
                 var dependencyGraph = _dependencyGraphBuilder.BuildDependencyGraph(projectDetails!);
                 
                 // Create workspace
-                _currentWorkspace = await _workspaceBuilder.CreateWorkspaceAsync(solutionPath, cancellationToken);
+                _currentWorkspace = await _workspaceBuilder.CreateWorkspaceAsync(solutionPath, cancellationToken).ConfigureAwait(false);
                 
                 // Initialize managers
                 _compilationManager = new CompilationManager(

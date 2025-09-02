@@ -63,7 +63,7 @@ public class TestDiscoveryController : ControllerBase
             {
                 // For now, we'll create mock test info since the discovery service
                 // in production would integrate with the actual test assemblies
-                var mockTests = await CreateMockTestsAsync(request.Path, cancellationToken);
+                var mockTests = await CreateMockTestsAsync(request.Path, cancellationToken).ConfigureAwait(false);
                 
                 // Apply category filter if specified
                 if (request.CategoryFilter?.Any() == true)
@@ -134,7 +134,7 @@ public class TestDiscoveryController : ControllerBase
     {
         // In production, this would use the actual test discovery service
         // For demonstration, create mock tests based on the path
-        await Task.Delay(100, cancellationToken); // Simulate analysis time
+        await Task.Delay(100, cancellationToken).ConfigureAwait(false); // Simulate analysis time
 
         var tests = new List<TestInfo>();
         var random = new Random(path.GetHashCode()); // Consistent mock data

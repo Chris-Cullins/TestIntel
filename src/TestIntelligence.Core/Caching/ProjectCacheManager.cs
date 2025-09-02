@@ -63,7 +63,7 @@ namespace TestIntelligence.Core.Caching
             }
 
             var cacheKey = GenerateProjectCacheKey(projectPath, targetFramework);
-            var cachedEntry = await _cache.GetAsync(cacheKey, cancellationToken);
+            var cachedEntry = await _cache.GetAsync(cacheKey, cancellationToken).ConfigureAwait(false);
             
             if (cachedEntry == null)
             {
@@ -72,10 +72,10 @@ namespace TestIntelligence.Core.Caching
             }
 
             // Validate that the cached entry is still valid
-            if (!await IsProjectEntryValidAsync(cachedEntry, cancellationToken))
+            if (!await IsProjectEntryValidAsync(cachedEntry, cancellationToken).ConfigureAwait(false))
             {
                 _logger?.LogDebug("Project cache entry invalid: {ProjectPath}", projectPath);
-                await _cache.RemoveAsync(cacheKey, cancellationToken);
+                await _cache.RemoveAsync(cacheKey, cancellationToken).ConfigureAwait(false);
                 IncrementInvalidation();
                 return null;
             }
@@ -108,15 +108,15 @@ namespace TestIntelligence.Core.Caching
             
             // Update metadata
             projectEntry.LastAnalyzed = DateTime.UtcNow;
-            projectEntry.ContentHash = await ComputeProjectContentHashAsync(projectEntry.ProjectPath, cancellationToken);
+            projectEntry.ContentHash = await ComputeProjectContentHashAsync(projectEntry.ProjectPath, cancellationToken).ConfigureAwait(false);
 
             // Set default expiration if not specified
             var cacheExpiration = expiration ?? TimeSpan.FromDays(7);
             
-            await _cache.SetAsync(cacheKey, projectEntry, cacheExpiration, cancellationToken);
+            await _cache.SetAsync(cacheKey, projectEntry, cacheExpiration, cancellationToken).ConfigureAwait(false);
             
             // Start tracking changes for this project
-            await StartTrackingProjectAsync(projectEntry.ProjectPath, cancellationToken);
+            await StartTrackingProjectAsync(projectEntry.ProjectPath, cancellationToken).ConfigureAwait(false);
             
             IncrementStore();
             _logger?.LogDebug("Stored project cache entry: {ProjectPath}", projectEntry.ProjectPath);
@@ -139,11 +139,11 @@ namespace TestIntelligence.Core.Caching
             var results = new Dictionary<string, ProjectCacheEntry>();
             var tasks = projectPaths.Select(async path =>
             {
-                var entry = await GetProjectAsync(path, targetFramework, cancellationToken);
+                var entry = await GetProjectAsync(path, targetFramework, cancellationToken).ConfigureAwait(false);
                 return (Path: path, Entry: entry);
             });
 
-            var completedTasks = await Task.WhenAll(tasks);
+            var completedTasks = await Task.WhenAll(tasks).ConfigureAwait(false);
             
             foreach (var (path, entry) in completedTasks)
             {
