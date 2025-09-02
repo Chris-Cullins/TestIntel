@@ -339,6 +339,23 @@ namespace TestIntelligence.Core.Caching
             }
         }
 
+        private void StartFileSystemWatchingForDirectory(string projectDirectory)
+        {
+            try
+            {
+                if (_fileWatcher != null && !_fileWatcher.EnableRaisingEvents)
+                {
+                    _fileWatcher.Path = projectDirectory;
+                    _fileWatcher.EnableRaisingEvents = true;
+                    _logger?.LogDebug("Started file system watching for directory: {ProjectDirectory}", projectDirectory);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to start file system watching for directory: {ProjectDirectory}", projectDirectory);
+            }
+        }
+
         private async void OnFileChanged(object sender, FileSystemEventArgs e)
         {
             if (IsProjectRelatedFile(e.FullPath))
@@ -434,31 +451,69 @@ namespace TestIntelligence.Core.Caching
         {
             try
             {
-                var projectInfo = new FileInfo(projectPath);
-                var hashInput = $"{projectPath}|{projectInfo.LastWriteTimeUtc:O}|{projectInfo.Length}";
+                var hashInputs = new List<string>();
                 
-                // Include source files in hash for more sensitive change detection
+                // Hash the project file itself
+                if (File.Exists(projectPath))
+                {
+                    var projectContent = File.ReadAllText(projectPath);
+                    hashInputs.Add($"project:{ComputeHash(projectContent)}");
+                }
+                
+                // Hash important source files with content (not just timestamps)
                 var projectDirectory = Path.GetDirectoryName(projectPath);
                 if (!string.IsNullOrEmpty(projectDirectory) && Directory.Exists(projectDirectory))
                 {
                     var sourceFiles = Directory.GetFiles(projectDirectory, "*.cs", SearchOption.AllDirectories)
                         .Concat(Directory.GetFiles(projectDirectory, "*.vb", SearchOption.AllDirectories))
-                        .OrderBy(f => f);
+                        .Where(f => !IsExcludedFromHashing(f))
+                        .OrderBy(f => f)
+                        .Take(100); // Increased limit but still bounded
                     
-                    foreach (var sourceFile in sourceFiles.Take(50)) // Limit to avoid excessive hashing
+                    var sourceHashes = sourceFiles.Select(sourceFile =>
                     {
-                        var fileInfo = new FileInfo(sourceFile);
-                        hashInput += $"|{sourceFile}|{fileInfo.LastWriteTimeUtc:O}";
-                    }
+                        try
+                        {
+                            var content = File.ReadAllText(sourceFile);
+                            var contentHash = ComputeHash(content);
+                            return $"file:{Path.GetFileName(sourceFile)}:{contentHash}";
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogDebug(ex, "Failed to hash source file: {SourceFile}", sourceFile);
+                            // Fallback to file info for files we can't read
+                            var fileInfo = new FileInfo(sourceFile);
+                            return $"file:{Path.GetFileName(sourceFile)}:{fileInfo.LastWriteTimeUtc:O}:{fileInfo.Length}";
+                        }
+                    });
+                    hashInputs.AddRange(sourceHashes);
                 }
 
-                return Task.FromResult(ComputeHash(hashInput));
+                var combinedHash = ComputeHash(string.Join("|", hashInputs));
+                return Task.FromResult(combinedHash);
             }
             catch (Exception ex)
             {
                 _logger?.LogWarning(ex, "Failed to compute project content hash: {ProjectPath}", projectPath);
                 return Task.FromResult(ComputeHash($"{projectPath}|{DateTime.UtcNow:O}")); // Fallback
             }
+        }
+
+        private static bool IsExcludedFromHashing(string filePath)
+        {
+            var fileName = Path.GetFileName(filePath);
+            var directoryName = Path.GetDirectoryName(filePath);
+            
+            // Exclude generated files and build artifacts
+            if (fileName.EndsWith(".g.cs") || fileName.EndsWith(".designer.cs"))
+                return true;
+                
+            // Exclude files in bin/obj directories
+            if (directoryName != null && (directoryName.Contains("\\bin\\") || directoryName.Contains("\\obj\\") || 
+                directoryName.Contains("/bin/") || directoryName.Contains("/obj/")))
+                return true;
+                
+            return false;
         }
 
         private static Dictionary<string, object> ParseProjectProperties(string projectContent)
@@ -533,6 +588,13 @@ namespace TestIntelligence.Core.Caching
                         LastAccessed = DateTime.UtcNow,
                         ChangeCount = 0
                     };
+                    
+                    // Start file system watching for project directory
+                    var projectDirectory = Path.GetDirectoryName(projectPath);
+                    if (!string.IsNullOrEmpty(projectDirectory) && Directory.Exists(projectDirectory))
+                    {
+                        StartFileSystemWatchingForDirectory(projectDirectory);
+                    }
                 }
                 else
                 {

@@ -414,8 +414,9 @@ namespace TestIntelligence.Core.Caching
         private async Task InvalidateChangedEntriesAsync(SolutionChanges changes, CancellationToken cancellationToken)
         {
             var invalidatedKeys = new HashSet<string>();
-            var allChangedFiles = changes.ModifiedFiles.Concat(changes.AddedFiles).Concat(changes.DeletedFiles);
+            var allChangedFiles = changes.ModifiedFiles.Concat(changes.AddedFiles).Concat(changes.DeletedFiles).ToList();
 
+            // Direct dependency invalidation
             foreach (var changedFile in allChangedFiles)
             {
                 foreach (var kvp in _fileDependencies)
@@ -430,6 +431,13 @@ namespace TestIntelligence.Core.Caching
                 }
             }
 
+            // Pattern-based invalidation for files without explicit dependencies tracked
+            var patternInvalidatedKeys = await InvalidateCacheEntriesByPatternAsync(allChangedFiles, cancellationToken);
+            foreach (var key in patternInvalidatedKeys)
+            {
+                invalidatedKeys.Add(key);
+            }
+
             // Invalidate cache entries
             var invalidationTasks = invalidatedKeys.Select(async key =>
             {
@@ -437,11 +445,60 @@ namespace TestIntelligence.Core.Caching
                     _persistentCache.RemoveAsync(key, cancellationToken),
                     _fallbackCache.RemoveAsync(key, cancellationToken)
                 );
+                
+                // Also remove the file dependency tracking for invalidated entries
+                _fileDependencies.Remove(key);
             });
 
             await Task.WhenAll(invalidationTasks);
 
-            _logger?.LogInformation("Invalidated {CacheEntryCount} cache entries due to file changes", invalidatedKeys.Count);
+            if (invalidatedKeys.Count > 0)
+            {
+                _logger?.LogInformation("Invalidated {CacheEntryCount} cache entries due to file changes: {ChangedFiles}", 
+                    invalidatedKeys.Count, string.Join(", ", allChangedFiles.Take(5)));
+            }
+        }
+
+        private async Task<List<string>> InvalidateCacheEntriesByPatternAsync(List<string> changedFiles, CancellationToken cancellationToken)
+        {
+            var patternInvalidatedKeys = new List<string>();
+            var cacheStats = await _persistentCache.GetStatisticsAsync(cancellationToken);
+            
+            // For changed project files, invalidate all related cache entries
+            var changedProjects = changedFiles.Where(f => f.EndsWith(".csproj") || f.EndsWith(".vbproj") || f.EndsWith(".fsproj"));
+            foreach (var projectFile in changedProjects)
+            {
+                var projectName = Path.GetFileNameWithoutExtension(projectFile);
+                
+                // Find cache keys that likely belong to this project
+                foreach (var kvp in _fileDependencies)
+                {
+                    var cacheKey = kvp.Key;
+                    if (cacheKey.IndexOf(projectName, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        patternInvalidatedKeys.Add(cacheKey);
+                    }
+                }
+            }
+            
+            // For changed source files, invalidate compilation and analysis caches
+            var changedSourceFiles = changedFiles.Where(f => f.EndsWith(".cs") || f.EndsWith(".vb") || f.EndsWith(".fs"));
+            if (changedSourceFiles.Any())
+            {
+                // Invalidate cache entries that are likely related to compilation or analysis
+                foreach (var kvp in _fileDependencies)
+                {
+                    var cacheKey = kvp.Key;
+                    if (cacheKey.IndexOf("compilation", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        cacheKey.IndexOf("analysis", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        cacheKey.IndexOf("callgraph", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        patternInvalidatedKeys.Add(cacheKey);
+                    }
+                }
+            }
+
+            return patternInvalidatedKeys;
         }
 
         private async Task<string> CalculateFileHashAsync(string filePath, CancellationToken cancellationToken)

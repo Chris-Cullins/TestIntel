@@ -189,10 +189,55 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
             await _invalidationLock.WaitAsync(cancellationToken);
             try
             {
-                // We would need to iterate through cache keys, but since we're using hashed keys,
-                // we'll implement a metadata-based approach for this
+                var invalidatedCount = 0;
+                
+                // Remove from modification time tracking
                 _lastModifiedTimes.Remove(projectPath);
-                _logger?.LogInformation("Invalidated cache entries for project: {ProjectPath}", projectPath);
+                
+                // Remove from cached project paths
+                lock (_statsLock)
+                {
+                    _cachedProjectPaths.Remove(projectPath);
+                }
+                
+                // Since we use hashed cache keys, we need to invalidate by checking all assemblies for this project
+                // This is a limitation of the current design, but we'll do our best
+                var projectDirectory = Path.GetDirectoryName(projectPath);
+                if (!string.IsNullOrEmpty(projectDirectory))
+                {
+                    var assemblyFiles = Directory.GetFiles(projectDirectory, "*.dll", SearchOption.AllDirectories)
+                        .Concat(Directory.GetFiles(projectDirectory, "*.exe", SearchOption.AllDirectories))
+                        .ToList();
+                    
+                    foreach (var assemblyFile in assemblyFiles.Take(10)) // Limit to prevent excessive processing
+                    {
+                        try
+                        {
+                            var dependencyHashes = await ComputeDependencyHashesAsync(new[] { assemblyFile }, cancellationToken);
+                            var compilerVersion = GetCompilerVersion();
+                            var possibleCacheKey = CompressedCallGraphCacheEntry.GenerateCacheKey(projectPath, dependencyHashes, compilerVersion);
+                            
+                            if (await _cache.RemoveAsync(possibleCacheKey, cancellationToken))
+                            {
+                                invalidatedCount++;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogDebug(ex, "Failed to invalidate cache for assembly: {AssemblyFile}", assemblyFile);
+                        }
+                    }
+                }
+                
+                if (invalidatedCount > 0)
+                {
+                    IncrementInvalidation();
+                    _logger?.LogInformation("Invalidated {Count} cache entries for project: {ProjectPath}", invalidatedCount, projectPath);
+                }
+                else
+                {
+                    _logger?.LogDebug("No cache entries found to invalidate for project: {ProjectPath}", projectPath);
+                }
             }
             finally
             {
@@ -284,14 +329,49 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
             }
         }
 
-        private void OnFileChanged(object sender, FileSystemEventArgs e)
+        private async void OnFileChanged(object sender, FileSystemEventArgs e)
         {
-            if (e.FullPath.EndsWith(".cs") || e.FullPath.EndsWith(".csproj") || e.FullPath.EndsWith(".vb"))
+            if (IsRelevantFileForCacheInvalidation(e.FullPath))
             {
                 // Mark for invalidation on next access
                 _lastModifiedTimes[e.FullPath] = DateTime.UtcNow;
                 _logger?.LogDebug("File change detected: {FilePath}", e.FullPath);
+                
+                // Proactively invalidate cache entries for the affected project
+                var projectPath = FindProjectFileForSourceFile(e.FullPath);
+                if (!string.IsNullOrEmpty(projectPath))
+                {
+                    await InvalidateProjectAsync(projectPath!);
+                }
             }
+        }
+
+        private static bool IsRelevantFileForCacheInvalidation(string filePath)
+        {
+            var extension = Path.GetExtension(filePath).ToLowerInvariant();
+            return extension is ".cs" or ".vb" or ".fs" or ".csproj" or ".vbproj" or ".fsproj";
+        }
+
+        private string? FindProjectFileForSourceFile(string sourceFilePath)
+        {
+            var directory = Path.GetDirectoryName(sourceFilePath);
+            
+            while (!string.IsNullOrEmpty(directory))
+            {
+                var projectFiles = Directory.GetFiles(directory, "*.csproj")
+                    .Concat(Directory.GetFiles(directory, "*.vbproj"))
+                    .Concat(Directory.GetFiles(directory, "*.fsproj"));
+                
+                var projectFile = projectFiles.FirstOrDefault();
+                if (projectFile != null)
+                {
+                    return projectFile;
+                }
+                
+                directory = Path.GetDirectoryName(directory);
+            }
+            
+            return null;
         }
 
         private Task<List<string>> ComputeDependencyHashesAsync(IEnumerable<string> assemblies, CancellationToken cancellationToken)
