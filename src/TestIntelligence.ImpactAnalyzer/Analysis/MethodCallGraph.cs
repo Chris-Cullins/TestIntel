@@ -18,6 +18,16 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             _reverseGraph = BuildReverseGraph();
         }
 
+        /// <summary>
+        /// Gets the internal call graph for advanced operations
+        /// </summary>
+        public IReadOnlyDictionary<string, HashSet<string>> CallGraph => _callGraph;
+
+        /// <summary>
+        /// Gets the method definitions for advanced operations
+        /// </summary>
+        public IReadOnlyDictionary<string, MethodInfo> MethodDefinitions => _methodDefinitions;
+
         public IReadOnlyCollection<string> GetMethodCalls(string methodId)
         {
             return _callGraph.TryGetValue(methodId, out var calls) ? calls : new HashSet<string>();

@@ -19,11 +19,21 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         private readonly SymbolResolutionEngine _symbolResolver;
         private readonly ILogger<CallGraphBuilderV2> _logger;
         private readonly ILoggerFactory _loggerFactory;
+        private readonly IncrementalCallGraphBuilder? _incrementalBuilder;
 
         public CallGraphBuilderV2(ICompilationManager compilationManager, SymbolResolutionEngine symbolResolver, ILogger<CallGraphBuilderV2> logger, ILoggerFactory loggerFactory)
         {
             _compilationManager = compilationManager ?? throw new ArgumentNullException(nameof(compilationManager));
             _symbolResolver = symbolResolver ?? throw new ArgumentNullException(nameof(symbolResolver));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
+        }
+
+        public CallGraphBuilderV2(ICompilationManager compilationManager, SymbolResolutionEngine symbolResolver, IncrementalCallGraphBuilder incrementalBuilder, ILogger<CallGraphBuilderV2> logger, ILoggerFactory loggerFactory)
+        {
+            _compilationManager = compilationManager ?? throw new ArgumentNullException(nameof(compilationManager));
+            _symbolResolver = symbolResolver ?? throw new ArgumentNullException(nameof(symbolResolver));
+            _incrementalBuilder = incrementalBuilder ?? throw new ArgumentNullException(nameof(incrementalBuilder));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         }
@@ -65,7 +75,15 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         public async Task<MethodCallGraph> BuildCallGraphForMethodAsync(string targetMethodId, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Building focused call graph for method: {MethodId}", targetMethodId);
+            // Use incremental builder if available for much better performance
+            if (_incrementalBuilder != null)
+            {
+                _logger.LogInformation("Using incremental call graph builder for method: {MethodId}", targetMethodId);
+                return await _incrementalBuilder.BuildCallGraphForMethodAsync(targetMethodId, 5, cancellationToken);
+            }
+
+            // Fallback to original implementation (still builds full graph first - not optimal)
+            _logger.LogWarning("Using legacy full-graph approach for method: {MethodId} (consider using IncrementalCallGraphBuilder)", targetMethodId);
 
             var callGraph = new Dictionary<string, HashSet<string>>();
             var methodDefinitions = new Dictionary<string, MethodInfo>();

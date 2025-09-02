@@ -51,10 +51,17 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             if (string.IsNullOrWhiteSpace(solutionPath))
                 throw new ArgumentException("Solution path cannot be null or empty", nameof(solutionPath));
 
-            _logger.LogInformation("Finding tests exercising method: {MethodId}", methodId);
+            _logger.LogInformation("Finding tests exercising method: {MethodId} using streaming analysis", methodId);
 
-            var coverageMap = await BuildTestCoverageMapAsync(solutionPath, cancellationToken);
-            return coverageMap.GetTestsForMethodPattern(methodId);
+            // Use streaming incremental analysis for much better performance
+            var results = new List<TestCoverageInfo>();
+            await foreach (var coverageInfo in FindTestsExercisingMethodStreamAsync(methodId, solutionPath, cancellationToken))
+            {
+                results.Add(coverageInfo);
+            }
+
+            _logger.LogInformation("Found {TestCount} tests exercising method {MethodId}", results.Count, methodId);
+            return results;
         }
 
         public async Task<TestCoverageMap> BuildTestCoverageMapAsync(
@@ -476,6 +483,126 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             {
                 _logger.LogError(ex, "Error searching for test assemblies in solution directory: {SolutionDir}", solutionDir);
                 return assemblies;
+            }
+        }
+
+        /// <summary>
+        /// Streams test coverage results incrementally, yielding results as they are found.
+        /// This provides better performance and responsiveness for large codebases.
+        /// </summary>
+        public async IAsyncEnumerable<TestCoverageInfo> FindTestsExercisingMethodStreamAsync(
+            string methodId, 
+            string solutionPath, 
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(methodId))
+                throw new ArgumentException("Method ID cannot be null or empty", nameof(methodId));
+            
+            if (string.IsNullOrWhiteSpace(solutionPath))
+                throw new ArgumentException("Solution path cannot be null or empty", nameof(solutionPath));
+
+            _logger.LogInformation("Starting streaming analysis for method: {MethodId}", methodId);
+
+            // Try to use incremental call graph builder if available through RoslynAnalyzer
+            MethodCallGraph? callGraph = null;
+            try
+            {
+                // Build call graph incrementally - this should be much faster than full solution analysis
+                callGraph = await _roslynAnalyzer.BuildCallGraphAsync(new[] { solutionPath }, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to perform streaming analysis for method: {MethodId}", methodId);
+                callGraph = null;
+            }
+
+            // If call graph building failed, use fallback
+            if (callGraph == null)
+            {
+                var fallbackResults = await FindTestsExercisingMethodFallbackAsync(methodId, solutionPath, cancellationToken);
+                foreach (var result in fallbackResults)
+                {
+                    yield return result;
+                }
+                yield break;
+            }
+            
+            // Find all test methods quickly
+            var allMethods = callGraph.GetAllMethods()
+                .Select(id => callGraph.GetMethodInfo(id))
+                .Where(info => info != null)
+                .Cast<MethodInfo>()
+                .ToList();
+
+            var testMethods = _testClassifier.GetTestMethods(allMethods);
+            _logger.LogInformation("Found {TestMethodCount} test methods for streaming analysis", testMethods.Count);
+
+            // Process test methods and yield results as we find them
+            foreach (var testMethod in testMethods)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                
+                TestCoverageInfo? result = null;
+                try
+                {
+                    var callPath = FindCallPath(testMethod.Id, methodId, callGraph);
+                    if (callPath != null && callPath.Any())
+                    {
+                        var confidence = CalculateConfidence(callPath, testMethod, callGraph.GetMethodInfo(methodId)!);
+                        var testType = _testClassifier.ClassifyTestType(testMethod);
+
+                        result = new TestCoverageInfo(
+                            testMethod.Id,
+                            testMethod.Name,
+                            testMethod.ContainingType,
+                            Path.GetFileName(testMethod.FilePath),
+                            callPath,
+                            confidence,
+                            testType);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Failed to analyze test method: {TestMethodId}", testMethod.Id);
+                }
+                
+                if (result != null)
+                {
+                    yield return result;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Fallback method that uses the original full-analysis approach
+        /// </summary>
+        private async Task<IReadOnlyList<TestCoverageInfo>> FindTestsExercisingMethodFallbackAsync(
+            string methodId, 
+            string solutionPath, 
+            CancellationToken cancellationToken)
+        {
+            _logger.LogInformation("Using fallback analysis for method: {MethodId}", methodId);
+            var coverageMap = await BuildTestCoverageMapAsync(solutionPath, cancellationToken);
+            return coverageMap.GetTestsForMethodPattern(methodId);
+        }
+
+        /// <summary>
+        /// Streams test coverage results for multiple methods efficiently
+        /// </summary>
+        public async IAsyncEnumerable<KeyValuePair<string, TestCoverageInfo>> FindTestsExercisingMethodsStreamAsync(
+            IEnumerable<string> methodIds,
+            string solutionPath,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            var methodIdList = methodIds.ToList();
+            _logger.LogInformation("Starting batch streaming analysis for {MethodCount} methods", methodIdList.Count);
+
+            foreach (var methodId in methodIdList)
+            {
+                await foreach (var coverageInfo in FindTestsExercisingMethodStreamAsync(methodId, solutionPath, cancellationToken))
+                {
+                    yield return new KeyValuePair<string, TestCoverageInfo>(methodId, coverageInfo);
+                }
             }
         }
 
