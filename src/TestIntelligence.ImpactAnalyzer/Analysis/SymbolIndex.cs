@@ -283,12 +283,13 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                     var solutionContent = File.ReadAllText(solutionPath);
                     
                     // Simple regex to find project references in solution file
-                    var projectPattern = new Regex(@"Project\(.+\)\s*=\s*"".+"",\s*""([^""]+\.(?:cs|vb|fs)proj)""", RegexOptions.Compiled);
+                    var projectPattern = new Regex(@"Project\(.+\)\s*=\s*"".+"",\s*""([^""]+\.(?:csproj|vbproj|fsproj))""", RegexOptions.Compiled);
                     var matches = projectPattern.Matches(solutionContent);
                     
                     foreach (Match match in matches)
                     {
-                        var projectPath = Path.Combine(solutionDir, match.Groups[1].Value);
+                        var relativePath = match.Groups[1].Value.Replace('\\', Path.DirectorySeparatorChar);
+                        var projectPath = Path.Combine(solutionDir, relativePath);
                         if (File.Exists(projectPath))
                         {
                             var projectFiles = await GetSourceFilesFromProjectAsync(projectPath, cancellationToken);

@@ -62,7 +62,9 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                 // Initialize lazy workspace for much better performance
                 await InitializeLazyWorkspaceAsync(solutionFile, cancellationToken).ConfigureAwait(false);
 
-                if (_incrementalCallGraphBuilder != null)
+                // TEMPORARY FIX: Disable incremental call graph builder due to placeholder implementation
+                // The GetMethodIdsFromFile method returns empty lists, causing 0 methods to be analyzed
+                if (false && _incrementalCallGraphBuilder != null)
                 {
                     _logger.LogInformation("Using high-performance incremental call graph builder");
                     // For full solution analysis, we still need to analyze all files, but incrementally
@@ -71,6 +73,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                 }
                 
                 // Fallback to legacy full analysis
+                _logger.LogInformation("Using legacy call graph builder (incremental builder temporarily disabled)");
                 await InitializeWorkspaceAsync(solutionFile, cancellationToken).ConfigureAwait(false);
 
                 if (_callGraphBuilder == null)

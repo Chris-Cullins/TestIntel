@@ -85,13 +85,38 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 // Try to build call graph with MSBuild workspace first, fallback to assembly analysis
                 try 
                 {
+                    // Apply timeout to prevent hanging during call graph building
+                    using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(3)); // 3 minute timeout
+                    using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+                    
                     // Build the complete call graph using the solution path
                     // The Roslyn analyzer will handle finding source files and prefer MSBuild workspace if .sln is provided
-                    callGraph = await _roslynAnalyzer.BuildCallGraphAsync(new[] { solutionPath }, cancellationToken);
+                    callGraph = await _roslynAnalyzer.BuildCallGraphAsync(new[] { solutionPath }, combinedCts.Token);
                     
                     // Cache the result
                     _cachedCallGraph = callGraph;
                     _cachedSolutionPath = solutionPath;
+                }
+                catch (TimeoutException ex)
+                {
+                    _logger.LogWarning(ex, "Call graph building timed out after 3 minutes, falling back to assembly-based analysis");
+                    
+                    // Fallback: Try to analyze compiled assemblies instead
+                    var assemblyPaths = FindTestAssembliesInSolution(solutionPath);
+                    if (assemblyPaths.Any())
+                    {
+                        _logger.LogInformation("Found {AssemblyCount} test assemblies for fallback analysis", assemblyPaths.Count);
+                        callGraph = await _roslynAnalyzer.BuildCallGraphAsync(assemblyPaths.ToArray(), cancellationToken);
+                        
+                        // Cache the result
+                        _cachedCallGraph = callGraph;
+                        _cachedSolutionPath = solutionPath;
+                    }
+                    else
+                    {
+                        _logger.LogWarning("No assemblies found for fallback analysis");
+                        return new TestCoverageMap(new Dictionary<string, List<TestCoverageInfo>>(), DateTime.UtcNow, solutionPath);
+                    }
                 }
                 catch (InvalidOperationException ex) when (ex.Message.Contains("System.CodeDom") || ex.Message.Contains("MSBuild workspace"))
                 {
@@ -536,6 +561,16 @@ namespace TestIntelligence.ImpactAnalyzer.Services
 
             var testMethods = _testClassifier.GetTestMethods(allMethods);
             _logger.LogInformation("Found {TestMethodCount} test methods for streaming analysis", testMethods.Count);
+            
+            // Find actual method IDs that match the user's pattern
+            var targetMethodIds = FindMatchingMethodIds(methodId, allMethods);
+            _logger.LogDebug("Found {Count} target method IDs matching pattern: {Pattern}", targetMethodIds.Count, methodId);
+            
+            if (targetMethodIds.Count == 0)
+            {
+                _logger.LogWarning("No methods found matching pattern: {MethodId}", methodId);
+                yield break;
+            }
 
             // Process test methods and yield results as we find them
             foreach (var testMethod in testMethods)
@@ -545,10 +580,23 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 TestCoverageInfo? result = null;
                 try
                 {
-                    var callPath = FindCallPath(testMethod.Id, methodId, callGraph);
-                    if (callPath != null && callPath.Any())
+                    // Try to find call paths to any of the matching target methods
+                    string[]? callPath = null;
+                    string? matchedTargetMethodId = null;
+                    
+                    foreach (var targetId in targetMethodIds)
                     {
-                        var confidence = CalculateConfidence(callPath, testMethod, callGraph.GetMethodInfo(methodId)!);
+                        callPath = FindCallPath(testMethod.Id, targetId, callGraph);
+                        if (callPath != null && callPath.Any())
+                        {
+                            matchedTargetMethodId = targetId;
+                            break;
+                        }
+                    }
+                    if (callPath != null && callPath.Any() && matchedTargetMethodId != null)
+                    {
+                        var targetMethodInfo = callGraph.GetMethodInfo(matchedTargetMethodId)!;
+                        var confidence = CalculateConfidence(callPath, testMethod, targetMethodInfo);
                         var testType = _testClassifier.ClassifyTestType(testMethod);
 
                         result = new TestCoverageInfo(
@@ -615,6 +663,64 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             _cachedSolutionPath = null;
             _pathCache.Clear();
             _logger.LogDebug("Cleared all caches");
+        }
+
+        /// <summary>
+        /// Find all method IDs in the call graph that match the given pattern.
+        /// Handles global:: prefix and parameter variations.
+        /// </summary>
+        private List<string> FindMatchingMethodIds(string pattern, IReadOnlyList<MethodInfo> allMethods)
+        {
+            var matchingIds = new List<string>();
+            
+            foreach (var method in allMethods)
+            {
+                if (IsMethodPatternMatch(method.Id, pattern))
+                {
+                    matchingIds.Add(method.Id);
+                }
+            }
+            
+            return matchingIds;
+        }
+
+        /// <summary>
+        /// Determines if a method ID matches the given pattern.
+        /// Supports pattern matching like the TestCoverageMap.IsMethodMatch method.
+        /// </summary>
+        private static bool IsMethodPatternMatch(string fullMethodId, string pattern)
+        {
+            if (string.IsNullOrEmpty(fullMethodId) || string.IsNullOrEmpty(pattern))
+                return false;
+
+            // Exact match
+            if (fullMethodId.Equals(pattern, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // Remove global:: prefix if present for comparison
+            var normalizedMethodId = fullMethodId.StartsWith("global::", StringComparison.OrdinalIgnoreCase) 
+                ? fullMethodId.Substring(8) // Remove "global::" prefix
+                : fullMethodId;
+
+            // Extract method name without parameters from normalized ID
+            // Format: Namespace.Class.Method(params)
+            var parenIndex = normalizedMethodId.IndexOf('(');
+            var methodWithoutParams = parenIndex > 0 ? normalizedMethodId.Substring(0, parenIndex) : normalizedMethodId;
+
+            // Check if pattern matches the method without parameters
+            if (methodWithoutParams.Equals(pattern, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // Check if pattern is just the method name (last part after final dot)
+            var lastDotIndex = methodWithoutParams.LastIndexOf('.');
+            if (lastDotIndex >= 0 && lastDotIndex < methodWithoutParams.Length - 1)
+            {
+                var methodNameOnly = methodWithoutParams.Substring(lastDotIndex + 1);
+                if (methodNameOnly.Equals(pattern, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
         }
     }
 }

@@ -138,22 +138,49 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         {
             return await _projectCache.GetOrAdd(projectPath, async path =>
             {
+                CancellationTokenSource? timeoutCts = null;
+                CancellationTokenSource? combinedCts = null;
+                
                 try
                 {
                     _logger.LogDebug("Loading project on-demand: {ProjectPath}", path);
                     var startTime = DateTime.UtcNow;
 
-                    var project = await _workspace.OpenProjectAsync(path);
+                    // Add timeout to prevent hanging on project loading
+                    timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                    combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+                    var projectTask = _workspace.OpenProjectAsync(path);
+                    var timeoutTask = Task.Delay(TimeSpan.FromSeconds(15), combinedCts.Token);
+                    
+                    var completedTask = await Task.WhenAny(projectTask, timeoutTask);
+                    if (completedTask == timeoutTask)
+                    {
+                        _logger.LogWarning("Project loading timed out after 15 seconds: {ProjectPath}", path);
+                        return null;
+                    }
+                    
+                    var project = await projectTask;
                     
                     var elapsed = DateTime.UtcNow - startTime;
                     _logger.LogDebug("Project loaded in {ElapsedMs}ms: {ProjectName}", elapsed.TotalMilliseconds, project.Name);
 
                     return project;
                 }
+                catch (OperationCanceledException) when (timeoutCts?.Token.IsCancellationRequested == true)
+                {
+                    _logger.LogWarning("Project loading timed out after 15 seconds: {ProjectPath}", path);
+                    return null;
+                }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Failed to load project: {ProjectPath}", path);
                     return null;
+                }
+                finally
+                {
+                    timeoutCts?.Dispose();
+                    combinedCts?.Dispose();
                 }
             });
         }
@@ -291,8 +318,32 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         {
             _logger.LogDebug("Loading solution metadata: {SolutionPath}", solutionPath);
             
-            // Load solution directly - we'll manage project loading separately
-            _solution = await _workspace.OpenSolutionAsync(solutionPath);
+            // Load solution directly with timeout to prevent hanging
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+            
+            try
+            {
+                var solutionTask = _workspace.OpenSolutionAsync(solutionPath);
+                var timeoutTask = Task.Delay(TimeSpan.FromSeconds(30), combinedCts.Token);
+                
+                var completedTask = await Task.WhenAny(solutionTask, timeoutTask);
+                if (completedTask == timeoutTask)
+                {
+                    _logger.LogWarning("Solution loading timed out after 30 seconds, falling back to manual solution parsing");
+                    await InitializeFromSolutionManuallyAsync(solutionPath, cancellationToken);
+                    return;
+                }
+                
+                _solution = await solutionTask;
+            }
+            catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
+            {
+                _logger.LogWarning("Solution loading timed out after 30 seconds, falling back to manual solution parsing");
+                await InitializeFromSolutionManuallyAsync(solutionPath, cancellationToken);
+                return;
+            }
+            
             var solutionInfo = _solution;
 
             // Build file-to-project mapping from solution
@@ -333,6 +384,70 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                         _fileToProjectMap[document.FilePath!] = projectPath;
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Manual solution parsing fallback when MSBuild workspace fails
+        /// </summary>
+        private async Task InitializeFromSolutionManuallyAsync(string solutionPath, CancellationToken cancellationToken)
+        {
+            try
+            {
+                _logger.LogInformation("Using manual solution parsing for: {SolutionPath}", solutionPath);
+                
+                // Parse solution file manually to get project paths
+                var solutionDir = Path.GetDirectoryName(solutionPath)!;
+                var solutionLines = await File.ReadAllLinesAsync(solutionPath, cancellationToken);
+                
+                var projectPaths = new List<string>();
+                foreach (var line in solutionLines)
+                {
+                    // Look for project lines: Project("{...}") = "ProjectName", "RelativePath", "{...}"
+                    if (line.StartsWith("Project(") && line.Contains(".csproj"))
+                    {
+                        var parts = line.Split(',');
+                        if (parts.Length >= 2)
+                        {
+                            var relativePath = parts[1].Trim().Trim('"');
+                            var fullPath = Path.GetFullPath(Path.Combine(solutionDir, relativePath));
+                            if (File.Exists(fullPath))
+                            {
+                                projectPaths.Add(fullPath);
+                            }
+                        }
+                    }
+                }
+                
+                _logger.LogInformation("Found {ProjectCount} projects via manual parsing", projectPaths.Count);
+                
+                // Build file-to-project mapping using file system scanning
+                foreach (var projectPath in projectPaths)
+                {
+                    try
+                    {
+                        var projectDir = Path.GetDirectoryName(projectPath)!;
+                        var csFiles = Directory.GetFiles(projectDir, "*.cs", SearchOption.AllDirectories)
+                            .Where(f => !f.Contains("bin") && !f.Contains("obj") && !f.Contains("packages"));
+                        
+                        foreach (var file in csFiles)
+                        {
+                            _fileToProjectMap[file] = projectPath;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Failed to scan project directory: {ProjectPath}", projectPath);
+                    }
+                }
+                
+                _logger.LogInformation("Manual solution parsing completed: {ProjectCount} projects, {FileCount} file mappings", 
+                    projectPaths.Count, _fileToProjectMap.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Manual solution parsing failed for: {SolutionPath}", solutionPath);
+                throw;
             }
         }
 

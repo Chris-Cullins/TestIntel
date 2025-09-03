@@ -192,10 +192,15 @@ namespace TestIntelligence.Core.Models
             if (fullMethodId.Equals(pattern, StringComparison.OrdinalIgnoreCase))
                 return true;
 
-            // Extract method name without parameters from full ID
+            // Remove global:: prefix if present for comparison
+            var normalizedMethodId = fullMethodId.StartsWith("global::", StringComparison.OrdinalIgnoreCase) 
+                ? fullMethodId.Substring(8) // Remove "global::" prefix
+                : fullMethodId;
+
+            // Extract method name without parameters from normalized ID
             // Format: Namespace.Class.Method(params)
-            var parenIndex = fullMethodId.IndexOf('(');
-            var methodWithoutParams = parenIndex > 0 ? fullMethodId.Substring(0, parenIndex) : fullMethodId;
+            var parenIndex = normalizedMethodId.IndexOf('(');
+            var methodWithoutParams = parenIndex > 0 ? normalizedMethodId.Substring(0, parenIndex) : normalizedMethodId;
 
             // Check if pattern matches the method without parameters
             if (methodWithoutParams.Equals(pattern, StringComparison.OrdinalIgnoreCase))

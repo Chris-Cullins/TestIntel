@@ -10,7 +10,7 @@
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <WarningsAsErrors />
-    <WarningsNotAsErrors>NU1605;NU1701</WarningsNotAsErrors>
+    <WarningsNotAsErrors>NU1605;NU1701;MSB3277</WarningsNotAsErrors>
     
     <!-- Common package metadata -->
     <Authors>TestIntelligence Contributors</Authors>

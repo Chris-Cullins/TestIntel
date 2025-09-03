@@ -168,24 +168,37 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             try
             {
                 _logger.LogDebug("Loading solution using MSBuild workspace: {SolutionPath}", solutionPath);
-                var solution = await workspace.OpenSolutionAsync(solutionPath, cancellationToken: cancellationToken);
                 
-                _logger.LogInformation("Solution loaded with {ProjectCount} projects", solution.Projects.Count());
+                // Apply timeout to prevent hanging - MSBuild operations can hang indefinitely
+                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(2)); // 2 minute timeout for solution loading
+                using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
                 
-                // Log any diagnostics
-                foreach (var diagnostic in workspace.Diagnostics)
+                try
                 {
-                    if (diagnostic.Kind == WorkspaceDiagnosticKind.Failure)
+                    var solution = await workspace.OpenSolutionAsync(solutionPath, cancellationToken: combinedCts.Token);
+                    
+                    _logger.LogInformation("Solution loaded with {ProjectCount} projects", solution.Projects.Count());
+                    
+                    // Log any diagnostics
+                    foreach (var diagnostic in workspace.Diagnostics)
                     {
-                        _logger.LogWarning("Workspace diagnostic: {Message}", diagnostic.Message);
+                        if (diagnostic.Kind == WorkspaceDiagnosticKind.Failure)
+                        {
+                            _logger.LogWarning("Workspace diagnostic: {Message}", diagnostic.Message);
+                        }
+                        else
+                        {
+                            _logger.LogDebug("Workspace diagnostic: {Message}", diagnostic.Message);
+                        }
                     }
-                    else
-                    {
-                        _logger.LogDebug("Workspace diagnostic: {Message}", diagnostic.Message);
-                    }
+                    
+                    return solution;
                 }
-                
-                return solution;
+                catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
+                {
+                    _logger.LogError("Solution loading timed out after 2 minutes: {SolutionPath}", solutionPath);
+                    throw new TimeoutException($"Solution loading timed out after 2 minutes. This may indicate MSBuild version conflicts or complex solution structure: {solutionPath}");
+                }
             }
             catch (Exception ex)
             {

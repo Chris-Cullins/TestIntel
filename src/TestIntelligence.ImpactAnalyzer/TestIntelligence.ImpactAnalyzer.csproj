@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>netstandard2.1</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <PackageId>TestIntelligence.ImpactAnalyzer</PackageId>
@@ -28,6 +28,8 @@
     <!-- Other dependencies provided by Directory.Build.props: Microsoft.CodeAnalysis.CSharp, Newtonsoft.Json, System.Collections.Immutable, System.CodeDom -->
     <PackageReference Include="System.Reflection.Metadata" Version="8.0.0" />
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <!-- Add explicit reference to fix MSBuild conflicts -->
+    <PackageReference Include="Microsoft.Build.Framework" Version="17.9.5" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <ItemGroup>
