@@ -1,0 +1,2130 @@
+diff --git a/recent-changes.patch b/recent-changes.patch
+new file mode 100644
+index 0000000..6d0dbc7
+--- /dev/null
++++ b/recent-changes.patch
+@@ -0,0 +1,2102 @@
++diff --git a/.claude/commands/debug-find-tests.md b/.claude/commands/debug-find-tests.md
++new file mode 100644
++index 0000000..10c1e5e
++--- /dev/null
+++++ b/.claude/commands/debug-find-tests.md
++@@ -0,0 +1,454 @@
+++# Debug Find-Tests Command
+++
+++Debug version of find-tests testing with enhanced tracing to troubleshoot issues we've been experiencing with the find-tests command accuracy.
+++
+++## Known Issues to Investigate
+++- Potential false positives in test detection
+++- Missing tests that should be found
+++- Incorrect confidence scoring
+++- Call graph traversal problems
+++- Assembly loading or reflection issues
+++
+++## Debug Testing Protocol
+++
+++### Step 1: Select Target Method with Debug Context
+++1. **Choose a well-known method** with clear test relationships:
+++   ```bash
+++   # Example: Pick a method we know is tested
+++   echo "🔍 Selecting target method for debug analysis..."
+++   grep -r "DiscoverTestsAsync\|AnalyzeAssembly\|ProcessDependencies" src/ --include="*.cs" -n | head -5
+++   ```
+++
+++2. **Document expected behavior**:
+++   ```bash
+++   echo "📝 Documenting what we expect to find..."
+++   # Manually identify tests that should be found
+++   grep -r "TargetMethodName" tests/ --include="*.cs" -l
+++   ```
+++
+++### Step 2: Add Debug Tracing to Source Code
+++
+++Before running the command, temporarily add debug statements to trace execution:
+++
+++```bash
+++# Backup original files
+++cp src/TestIntelligence.CLI/Commands/FindTestsCommand.cs src/TestIntelligence.CLI/Commands/FindTestsCommand.cs.debug-backup
+++cp src/TestIntelligence.Core/Services/TestMethodMapper.cs src/TestIntelligence.Core/Services/TestMethodMapper.cs.debug-backup
+++```
+++
+++#### Add debug statements to key files:
+++
+++**1. FindTestsCommand.cs - Entry point tracing**:
+++```csharp
+++// Add after method signature
+++Console.WriteLine($"🔍 DEBUG: Starting find-tests for method: {methodName}");
+++Console.WriteLine($"🔍 DEBUG: Solution path: {solutionPath}");
+++Console.WriteLine($"🔍 DEBUG: Output format: {format}");
+++```
+++
+++**2. TestMethodMapper.cs - Core logic tracing**:
+++```csharp
+++// Add in FindTestsForMethod
+++Console.WriteLine($"🔍 DEBUG: Loading solution: {solutionPath}");
+++Console.WriteLine($"🔍 DEBUG: Target method: {targetMethod}");
+++Console.WriteLine($"🔍 DEBUG: Found {projects.Count} projects to analyze");
+++
+++// Add in call graph traversal
+++Console.WriteLine($"🔍 DEBUG: Building call graph for method: {method.Name}");
+++Console.WriteLine($"🔍 DEBUG: Found {callers.Count} direct callers");
+++
+++// Add in test discovery
+++Console.WriteLine($"🔍 DEBUG: Discovered {testMethods.Count} total test methods");
+++Console.WriteLine($"🔍 DEBUG: Filtering tests that call target method...");
+++```
+++
+++**3. Assembly loading tracing**:
+++```csharp
+++// Add assembly loading debug info
+++Console.WriteLine($"🔍 DEBUG: Loading assembly: {assemblyPath}");
+++Console.WriteLine($"🔍 DEBUG: Assembly loaded successfully: {assembly.FullName}");
+++Console.WriteLine($"🔍 DEBUG: Found {types.Length} types in assembly");
+++```
+++
+++### Step 3: Run Debug-Enhanced Find-Tests Command
+++
+++```bash
+++# Clear cache to ensure fresh analysis
+++dotnet run --project src/TestIntelligence.CLI cache \
+++  --solution TestIntelligence.sln \
+++  --action clear
+++
+++echo "🚀 Running debug find-tests command..."
+++dotnet run --project src/TestIntelligence.CLI find-tests \
+++  --method "TestIntelligence.Core.Discovery.NUnitTestDiscovery.DiscoverTestsAsync" \
+++  --solution TestIntelligence.sln \
+++  --format json \
+++  --output debug-find-tests-result.json \
+++  --verbose 2>&1 | tee debug-find-tests-trace.log
+++```
+++
+++### Step 4: Enhanced Debug Analysis
+++
+++#### 4.1 Trace Analysis
+++```bash
+++echo "📊 Analyzing debug trace..."
+++
+++# Check if solution loaded correctly
+++grep "Loading solution" debug-find-tests-trace.log
+++grep "Found.*projects" debug-find-tests-trace.log
+++
+++# Check assembly loading
+++grep "Loading assembly" debug-find-tests-trace.log
+++grep "Assembly loaded successfully" debug-find-tests-trace.log
+++
+++# Check call graph construction
+++grep "Building call graph" debug-find-tests-trace.log
+++grep "Found.*callers" debug-find-tests-trace.log
+++
+++# Check test discovery
+++grep "Discovered.*test methods" debug-find-tests-trace.log
+++grep "Filtering tests" debug-find-tests-trace.log
+++```
+++
+++#### 4.2 Validate Each Step
+++```bash
+++echo "🔍 Step-by-step validation..."
+++
+++# 1. Verify target method exists
+++echo "1. Checking if target method exists in codebase:"
+++grep -r "DiscoverTestsAsync" src/ --include="*.cs" -A 2 -B 2
+++
+++# 2. Verify test methods that should be found
+++echo "2. Manual search for tests that should be found:"
+++grep -r "DiscoverTestsAsync\|NUnitTestDiscovery" tests/ --include="*.cs" -n
+++
+++# 3. Check for false positives in results
+++echo "3. Examining found tests for false positives:"
+++jq '.foundTests[].testName' debug-find-tests-result.json
+++
+++# 4. Cross-reference with actual test code
+++echo "4. Cross-referencing with actual test implementations:"
+++for test in $(jq -r '.foundTests[].testName' debug-find-tests-result.json); do
+++  echo "Examining test: $test"
+++  # Find the test file and examine it
+++  grep -r "$test" tests/ --include="*.cs" -A 10 -B 2
+++done
+++```
+++
+++### Step 5: Deep Dive Debugging
+++
+++#### 5.1 Call Graph Debugging
+++```bash
+++echo "🕸️ Deep dive into call graph construction..."
+++
+++# Generate call graph for target method
+++dotnet run --project src/TestIntelligence.CLI callgraph \
+++  --path TestIntelligence.sln \
+++  --format json \
+++  --output debug-callgraph.json \
+++  --verbose
+++
+++# Compare call graph with find-tests results
+++echo "Comparing call graph with find-tests results..."
+++jq '.methods[] | select(.name | contains("DiscoverTestsAsync"))' debug-callgraph.json
+++```
+++
+++#### 5.2 Assembly Reflection Debugging
+++Add deeper assembly inspection:
+++```csharp
+++// Add to assembly loading section
+++Console.WriteLine($"🔍 DEBUG: Assembly types found:");
+++foreach (var type in assembly.GetTypes())
+++{
+++    Console.WriteLine($"  - {type.FullName}");
+++    if (type.Name.Contains("Test"))
+++    {
+++        var methods = type.GetMethods().Where(m => m.GetCustomAttributes().Any());
+++        Console.WriteLine($"    Test methods: {methods.Count()}");
+++        foreach (var method in methods)
+++        {
+++            Console.WriteLine($"      - {method.Name}");
+++        }
+++    }
+++}
+++```
+++
+++### Step 6: Issue Classification and Reporting
+++
+++#### 6.1 Categorize Issues Found
+++```bash
+++echo "📋 Categorizing issues found during debug session..."
+++
+++# False Positives Analysis
+++echo "❌ FALSE POSITIVES:"
+++echo "Tests that were found but don't actually call the target method:"
+++# Manual analysis based on code examination
+++
+++# False Negatives Analysis  
+++echo "❌ FALSE NEGATIVES:"
+++echo "Tests that should have been found but weren't:"
+++# Compare manual grep results with CLI output
+++
+++# Confidence Score Issues
+++echo "⚠️ CONFIDENCE SCORE ISSUES:"
+++echo "Tests with inappropriate confidence scores:"
+++# Analyze if scores match call depth/complexity
+++```
+++
+++#### 6.2 Root Cause Analysis
+++Based on debug output, identify likely causes:
+++
+++**Common Issues to Look For**:
+++- **Assembly Loading**: Are all test assemblies being loaded?
+++- **Reflection Issues**: Are test attributes being detected correctly?
+++- **Call Graph**: Is method call traversal working correctly?
+++- **Name Matching**: Are there namespace or overload resolution issues?
+++- **Caching**: Are cached results stale or incorrect?
+++
+++### Step 7: Debug Report Format
+++
+++```
+++## Debug Find-Tests Analysis Report
+++
+++**Target Method**: TestIntelligence.Core.Discovery.NUnitTestDiscovery.DiscoverTestsAsync
+++**Debug Session Date**: [Current Date]
+++**Known Issues Being Investigated**: False positives, missing integration tests
+++
+++### Debug Trace Summary
+++- ✅ Solution loaded: 15 projects found
+++- ✅ Target method located in: TestIntelligence.Core.dll
+++- ⚠️ Assembly loading: 2 warnings about dependency versions
+++- ✅ Call graph construction: 45 direct callers found
+++- ❌ Test discovery: Only 12 test methods found (expected ~20)
+++
+++### Execution Flow Analysis
+++
+++#### 1. Solution Loading (✅ Working)
+++```
+++🔍 DEBUG: Loading solution: TestIntelligence.sln
+++🔍 DEBUG: Found 15 projects to analyze
+++```
+++
+++#### 2. Target Method Resolution (✅ Working)
+++```
+++🔍 DEBUG: Target method: TestIntelligence.Core.Discovery.NUnitTestDiscovery.DiscoverTestsAsync
+++🔍 DEBUG: Method located in assembly: TestIntelligence.Core
+++```
+++
+++#### 3. Call Graph Construction (⚠️ Partial Issue)
+++```
+++🔍 DEBUG: Building call graph for method: DiscoverTestsAsync
+++🔍 DEBUG: Found 45 direct callers
+++Issue: Missing some integration test callers due to indirect invocation
+++```
+++
+++#### 4. Test Discovery (❌ Major Issue)
+++```
+++🔍 DEBUG: Discovered 89 total test methods
+++🔍 DEBUG: Filtering tests that call target method...
+++Issue: Filter logic excluding valid tests with indirect calls
+++```
+++
+++### Issues Identified
+++
+++#### ❌ Issue #1: Missing Integration Tests
+++**Problem**: Integration tests that call TestAnalyzer.AnalyzeAssembly (which calls DiscoverTestsAsync) are not being found
+++**Root Cause**: Call graph depth limit or indirect call resolution
+++**Evidence**: Manual grep found 8 integration tests, CLI found only 2
+++**Debug Trace**: 
+++```
+++Manual: grep -r "AnalyzeAssembly" tests/ found 8 matches
+++CLI Result: Only 2 tests with confidence scores > 0.5
+++```
+++
+++#### ❌ Issue #2: False Positive Detection
+++**Problem**: Test "SomeUnrelatedTest" was found with 0.3 confidence
+++**Root Cause**: Name collision or incorrect dependency analysis
+++**Evidence**: Test code shows no actual calls to target method
+++**Debug Trace**:
+++```
+++Test code analysis: Only calls DatabaseHelper.Setup() and Assert methods
+++No path to DiscoverTestsAsync found in manual trace
+++```
+++
+++#### ⚠️ Issue #3: Confidence Score Inaccuracy
+++**Problem**: Direct test has confidence 0.7, indirect test has 0.8
+++**Root Cause**: Scoring algorithm may be inverted or considering other factors
+++**Evidence**: NUnitTestDiscoveryTests.DirectTest should have higher confidence than IntegrationTests.IndirectTest
+++
+++### Recommended Fixes
+++
+++1. **Call Graph Depth**: Increase traversal depth for integration tests
+++2. **Filter Logic**: Review test filtering criteria to include indirect callers
+++3. **Name Resolution**: Improve method name matching to avoid false positives
+++4. **Confidence Scoring**: Review algorithm to properly weight direct vs indirect calls
+++
+++### Next Steps
+++1. Apply debug fixes to core components
+++2. Re-run debug session to validate improvements
+++3. Add unit tests for edge cases discovered
+++4. Update documentation with known limitations
+++```
+++
+++### Step 8: Fix Issues Found
+++
+++**CRITICAL**: After identifying issues through debugging, you MUST implement fixes for all problems discovered.
+++
+++#### 8.1 Apply Fixes Based on Root Cause Analysis
+++
+++Based on the issues identified in the debug report, implement the following fixes:
+++
+++**Fix #1: Call Graph Depth Issues**
+++```bash
+++echo "🔧 Fixing call graph traversal depth..."
+++
+++# Edit the call graph construction to increase depth limit
+++# Look for depth limiting code in TestMethodMapper or CallGraphBuilder
+++grep -r "depth\|limit" src/TestIntelligence.Core/ --include="*.cs" -n
+++
+++# Implement fix - example:
+++# Change: const int MAX_DEPTH = 3;
+++# To:     const int MAX_DEPTH = 5;
+++```
+++
+++**Fix #2: Test Filtering Logic**
+++```bash
+++echo "🔧 Fixing test filtering to include indirect callers..."
+++
+++# Find and fix the test filtering logic
+++# Look for filtering criteria that might be too restrictive
+++grep -r "filter\|where.*confidence\|threshold" src/TestIntelligence.Core/ --include="*.cs" -A 3 -B 3
+++```
+++
+++**Fix #3: Confidence Score Algorithm**
+++```bash
+++echo "🔧 Fixing confidence scoring algorithm..."
+++
+++# Locate confidence scoring logic
+++grep -r "confidence.*score\|calculateConfidence" src/TestIntelligence.Core/ --include="*.cs" -n
+++
+++# Review and fix scoring to properly weight:
+++# - Direct calls: Higher confidence (0.8-1.0)
+++# - One-hop indirect: Medium confidence (0.6-0.8)  
+++# - Multi-hop indirect: Lower confidence (0.3-0.6)
+++# - No relation: Very low confidence (0.0-0.2)
+++```
+++
+++**Fix #4: False Positive Prevention**
+++```bash
+++echo "🔧 Implementing false positive detection..."
+++
+++# Add stricter validation for method relationships
+++# Implement additional verification steps before including tests
+++```
+++
+++#### 8.2 Implement Specific Code Changes
+++
+++For each identified issue, make the actual code changes:
+++
+++```bash
+++echo "📝 Implementing code fixes..."
+++
+++# Example fix for call graph depth
+++# Find the relevant file and implement the change
+++# Use Edit tool to modify the source code with the fix
+++```
+++
+++#### 8.3 Validate Fixes
+++
+++After implementing fixes, validate they work:
+++
+++```bash
+++echo "✅ Validating fixes..."
+++
+++# Rebuild the solution
+++dotnet build
+++
+++# Clear cache to ensure fresh analysis
+++dotnet run --project src/TestIntelligence.CLI cache \
+++  --solution TestIntelligence.sln \
+++  --action clear
+++
+++# Re-run the find-tests command to verify improvements
+++dotnet run --project src/TestIntelligence.CLI find-tests \
+++  --method "TestIntelligence.Core.Discovery.NUnitTestDiscovery.DiscoverTestsAsync" \
+++  --solution TestIntelligence.sln \
+++  --format json \
+++  --output fixed-find-tests-result.json \
+++  --verbose
+++
+++echo "🔍 Comparing before/after results..."
+++# Compare original debug results with fixed results
+++echo "Before fix - tests found: $(jq '.foundTests | length' debug-find-tests-result.json)"
+++echo "After fix - tests found: $(jq '.foundTests | length' fixed-find-tests-result.json)"
+++
+++# Verify specific issues were resolved:
+++echo "Checking if missing integration tests are now found..."
+++echo "Checking if false positives were eliminated..."
+++echo "Checking if confidence scores are more accurate..."
+++```
+++
+++#### 8.4 Run Comprehensive Tests
+++
+++Ensure fixes don't break other functionality:
+++
+++```bash
+++echo "🧪 Running comprehensive tests after fixes..."
+++
+++# Run all relevant tests
+++dotnet test tests/TestIntelligence.Core.Tests/ -v normal
+++dotnet test tests/TestIntelligence.ImpactAnalyzer.Tests/ -v normal
+++
+++# Test with different target methods to ensure general improvement
+++dotnet run --project src/TestIntelligence.CLI find-tests \
+++  --method "TestIntelligence.Core.TestAnalyzer.AnalyzeAssembly" \
+++  --solution TestIntelligence.sln \
+++  --output validation-test-2.json
+++
+++dotnet run --project src/TestIntelligence.CLI find-tests \
+++  --method "TestIntelligence.DataTracker.DatabaseAnalyzer.AnalyzeDependencies" \
+++  --solution TestIntelligence.sln \
+++  --output validation-test-3.json
+++```
+++
+++### Step 9: Cleanup and Restoration
+++
+++```bash
+++echo "🧹 Cleaning up debug modifications..."
+++
+++# Restore original files (debug tracing code)
+++mv src/TestIntelligence.CLI/Commands/FindTestsCommand.cs.debug-backup src/TestIntelligence.CLI/Commands/FindTestsCommand.cs
+++mv src/TestIntelligence.Core/Services/TestMethodMapper.cs.debug-backup src/TestIntelligence.Core/Services/TestMethodMapper.cs
+++
+++# Keep debug logs and results for reference
+++mkdir -p debug-logs
+++mv debug-find-tests-trace.log debug-logs/
+++mv debug-find-tests-result.json debug-logs/
+++mv fixed-find-tests-result.json debug-logs/
+++mv debug-callgraph.json debug-logs/
+++mv validation-test-*.json debug-logs/
+++
+++echo "✅ Debug session complete with fixes applied. Logs saved to debug-logs/"
+++```
+++
+++## Usage Instructions for Claude
+++
+++When running this debug command, you MUST:
+++
+++1. **Be systematic** - Follow each debug step to identify the exact failure point
+++2. **Preserve evidence** - Save all debug output and manual verification results
+++3. **Compare exhaustively** - Cross-reference CLI results with manual code analysis
+++4. **Focus on root causes** - Don't just identify symptoms, trace to underlying issues
+++5. **Document thoroughly** - Create detailed reports to help fix the underlying problems
+++6. **IMPLEMENT FIXES** - Actually modify the source code to resolve identified issues
+++7. **Validate fixes** - Re-run debug session and tests after applying fixes
+++8. **Test comprehensively** - Ensure fixes don't break other functionality
+++
+++**CRITICAL REQUIREMENT**: This command is not complete until you have:
+++- ✅ Identified all issues through debugging
+++- ✅ Implemented code fixes for each identified problem
+++- ✅ Validated that fixes resolve the issues
+++- ✅ Confirmed no regressions were introduced
+++- ✅ Updated any relevant tests or documentation
+++
+++This debug-and-fix approach will not only identify where the find-tests command is failing but will also resolve those issues to improve the overall accuracy and reliability of the TestIntelligence library.
++\ No newline at end of file
++diff --git a/.claude/commands/test-analyze-coverage.md b/.claude/commands/test-analyze-coverage.md
++new file mode 100644
++index 0000000..9eb3bdc
++--- /dev/null
+++++ b/.claude/commands/test-analyze-coverage.md
++@@ -0,0 +1,187 @@
+++# Test Analyze Coverage Command
+++
+++Instructions for Claude to test the analyze-coverage command by selecting test methods and verifying how well they cover code changes.
+++
+++## Testing Protocol
+++
+++### Step 1: Create Test Scenario
+++1. **Select Target Tests**: Choose 2-3 test methods from different test projects:
+++   - Pick tests that exercise different parts of the codebase
+++   - Include both unit tests and integration tests
+++   - Choose tests you can manually trace through
+++
+++2. **Create Mock Changes**: Generate a git diff to analyze:
+++   ```bash
+++   # Option A: Create actual changes and diff them
+++   echo "// Test change" >> src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs
+++   git add -A
+++   git diff --cached > test-changes.patch
+++   git reset HEAD
+++   
+++   # Option B: Use existing git history
+++   git diff HEAD~1 > recent-changes.patch
+++   ```
+++
+++### Step 2: Run the Analyze-Coverage Command
+++```bash
+++dotnet run --project src/TestIntelligence.CLI analyze-coverage \
+++  --solution TestIntelligence.sln \
+++  --tests "TestClass1.TestMethod1" "TestClass2.TestMethod2" "TestClass3.TestMethod3" \
+++  --git-command "diff HEAD~1" \
+++  --verbose \
+++  --output coverage-analysis.json
+++```
+++
+++Alternative with diff file:
+++```bash
+++dotnet run --project src/TestIntelligence.CLI analyze-coverage \
+++  --solution TestIntelligence.sln \
+++  --tests "TestClass1.TestMethod1" "TestClass2.TestMethod2" \
+++  --diff-file test-changes.patch \
+++  --verbose \
+++  --output coverage-analysis.json
+++```
+++
+++### Step 3: Manual Verification Process
+++
+++#### 3.1 Analyze the Output
+++1. **Read Coverage Report**: Examine JSON results for:
+++   - Coverage percentage for each test
+++   - List of changed methods/classes covered by each test
+++   - Uncovered changes identified
+++   - Overall coverage metrics
+++
+++2. **Understand Change Set**: Review the git diff to identify:
+++   - Which files were modified
+++   - Which methods/classes were changed
+++   - Nature of changes (new code, modifications, deletions)
+++
+++#### 3.2 Manual Coverage Verification
+++For each test method:
+++
+++1. **Trace Test Execution**:
+++   - Read the test method source code
+++   - Follow all method calls made by the test
+++   - Map the execution path through the codebase
+++
+++2. **Match Against Changes**:
+++   - Compare test execution path with changed code
+++   - Identify which changed methods/classes the test actually exercises
+++   - Note any changed code the test doesn't reach
+++
+++3. **Validate Coverage Calculation**:
+++   - Count changed methods covered vs. total changed methods
+++   - Verify the coverage percentage is mathematically correct
+++   - Check if the analysis missed any coverage or overcounted
+++
+++#### 3.3 Gap Analysis
+++1. **Identify Uncovered Changes**:
+++   - Find changed code not exercised by any of the selected tests
+++   - Verify these are truly uncovered (not false negatives)
+++
+++2. **Find Coverage Gaps**:
+++   - Look for changed code that should be covered but isn't
+++   - Search for additional tests that might cover the gaps
+++
+++### Step 4: Verification Commands
+++
+++```bash
+++# Search for tests that might cover a specific changed class
+++grep -r "ChangedClassName" tests/ --include="*.cs" -l
+++
+++# Look at specific changed file to understand modifications
+++git show HEAD~1:src/path/to/ChangedFile.cs | diff - src/path/to/ChangedFile.cs
+++
+++# Find all tests in a specific test class
+++grep -n "\[Test\]\|\[Fact\]\|\[TestMethod\]" tests/path/to/TestClass.cs
+++
+++# Trace method usage across the codebase
+++grep -r "ChangedMethodName" src/ --include="*.cs"
+++```
+++
+++### Step 5: Sample Verification Report Format
+++
+++```
+++## Analyze-Coverage Verification Report
+++
+++**Test Scenario**:
+++- Selected Tests: 3 tests from Core and DataTracker projects
+++- Change Set: Modified NUnitTestDiscovery.cs and TestAnalyzer.cs (8 methods changed)
+++- Git Command: `diff HEAD~1`
+++
+++**CLI Output Summary**:
+++- Test1 Coverage: 75% (6/8 changed methods)
+++- Test2 Coverage: 25% (2/8 changed methods)  
+++- Test3 Coverage: 0% (0/8 changed methods)
+++- Overall Coverage: 87.5% (7/8 changed methods covered by at least one test)
+++
+++**Manual Verification**:
+++
+++✅ **Test1: NUnitTestDiscoveryTests.DiscoverTestsAsync_ValidAssembly**
+++   - Claimed Coverage: 75% (6/8 methods)
+++   - Manual Trace: Calls NUnitTestDiscovery.DiscoverTestsAsync → LoadAssembly → ProcessTypes → ExtractAttributes
+++   - Actually Covers: NUnitTestDiscovery.DiscoverTestsAsync, LoadAssembly, ProcessTypes, ExtractAttributes, ValidateTest, FormatResults (6/8) ✅
+++   - Coverage calculation: Correct
+++
+++✅ **Test2: TestAnalyzerTests.AnalyzeFullSolution**  
+++   - Claimed Coverage: 25% (2/8 methods)
+++   - Manual Trace: Calls TestAnalyzer.AnalyzeAssembly → NUnitTestDiscovery.DiscoverTestsAsync → LoadAssembly
+++   - Actually Covers: AnalyzeAssembly, DiscoverTestsAsync (2/8) ✅
+++   - Coverage calculation: Correct
+++
+++⚠️ **Test3: DataTrackerTests.SomeUnrelatedTest**
+++   - Claimed Coverage: 0% (0/8 methods)
+++   - Manual Trace: Only exercises database tracking functionality
+++   - Actually Covers: None of the changed methods ✅
+++   - Coverage calculation: Correct (true negative)
+++
+++**Uncovered Changes Verification**:
+++✅ **TestAnalyzer.ValidateConfiguration** - Correctly identified as uncovered
+++   - No selected tests call this method
+++   - Manually confirmed by searching test codebase
+++
+++❌ **Missing Coverage Detection**:
+++   - Found integration test `FullPipelineTests.CompleteAnalysis` that exercises ValidateConfiguration
+++   - This test wasn't in the selected set but would provide coverage
+++   - CLI correctly reported method as uncovered for the selected tests
+++
+++**Overall Accuracy**: 100% - All coverage calculations verified as correct
+++**Coverage Gap Analysis**: 1/8 methods uncovered by selected tests (12.5% gap)
+++
+++**Recommendations**: 
+++- Coverage analysis is mathematically accurate
+++- Consider expanding test selection to include integration tests for better coverage
+++- The uncovered method has tests available but weren't in the analyzed set
+++```
+++
+++### Additional Verification Scenarios
+++
+++#### Scenario A: High Coverage Test Set
+++Select tests known to exercise broad functionality:
+++- Integration tests
+++- End-to-end workflow tests  
+++- Tests that call multiple components
+++
+++#### Scenario B: Low Coverage Test Set
+++Select very focused unit tests:
+++- Tests that only exercise one method
+++- Isolated component tests
+++- Mock-heavy tests with limited real code execution
+++
+++#### Scenario C: Mixed Framework Changes
+++Create changes spanning multiple projects:
+++- Core library changes
+++- CLI command changes
+++- Test framework changes
+++
+++## Usage Instructions for Claude
+++
+++When running this command:
+++1. **Be methodical** - actually trace through test execution paths
+++2. **Verify math** - check that coverage percentages are calculated correctly
+++3. **Look for edge cases** - tests that might have unexpected coverage patterns
+++4. **Consider test types** - unit vs integration tests may have different coverage patterns
+++5. **Cross-reference** - use grep/search to validate coverage claims
+++6. **Report thoroughly** - document both correct results and any discrepancies found
+++
+++This testing ensures the analyze-coverage command accurately maps test execution to code changes, which is critical for intelligent test selection and impact analysis.
++\ No newline at end of file
++diff --git a/.claude/commands/test-and-commit.md b/.claude/commands/test-and-commit.md
++new file mode 100644
++index 0000000..9db3c91
++--- /dev/null
+++++ b/.claude/commands/test-and-commit.md
++@@ -0,0 +1,39 @@
+++# Test and Commit
+++
+++Run all non-E2E tests, fix any issues found, and commit/push if all tests pass.
+++
+++## Command
+++
+++```bash
+++# Run all tests except E2E tests
+++dotnet test --filter "Category!=E2E" --verbosity normal
+++
+++# If tests fail, Claude will analyze and fix the issues
+++# If all tests pass, commit and push changes
+++if [ $? -eq 0 ]; then
+++  echo "All tests passed! Committing and pushing changes..."
+++  git add .
+++  git commit -m "$(cat <<'EOF'
+++Fix test issues and update codebase
+++
+++All non-E2E tests are now passing.
+++
+++🤖 Generated with [Claude Code](https://claude.ai/code)
+++
+++Co-Authored-By: Claude <noreply@anthropic.com>
+++EOF
+++)"
+++  git push
+++else
+++  echo "Tests failed. Claude will analyze and fix the issues."
+++fi
+++```
+++
+++## Usage
+++
+++Run this command when you want to:
+++1. Execute all tests except E2E tests
+++2. Have Claude automatically fix any test failures
+++3. Commit and push changes if all tests pass
+++
+++This command ensures your codebase maintains test quality while automating the commit process for successful test runs.
++\ No newline at end of file
++diff --git a/.claude/commands/test-find-tests.md b/.claude/commands/test-find-tests.md
++new file mode 100644
++index 0000000..89bb827
++--- /dev/null
+++++ b/.claude/commands/test-find-tests.md
++@@ -0,0 +1,103 @@
+++# Test Find-Tests Command
+++
+++Instructions for Claude to test the find-tests command by selecting a random method and verifying the output accuracy.
+++
+++## Testing Protocol
+++
+++### Step 1: Select a Random Method
+++1. Use `find` or `grep` to discover methods in the src/ directory
+++2. Pick a method from a Core, Categorizer, DataTracker, ImpactAnalyzer, or SelectionEngine class
+++3. Choose a method that's likely to be tested (public methods, important functionality)
+++
+++### Step 2: Run the Find-Tests Command
+++```bash
+++dotnet run --project src/TestIntelligence.CLI find-tests \
+++  --method "FullNamespace.ClassName.MethodName" \
+++  --solution TestIntelligence.sln \
+++  --format json \
+++  --output find-tests-result.json \
+++  --verbose
+++```
+++
+++### Step 3: Manual Verification Process
+++1. **Read the Output**: Examine the JSON results for:
+++   - List of test methods that allegedly exercise the target method
+++   - Confidence scores for each test
+++   - Call path depth information
+++
+++2. **Code Analysis**: For each test found:
+++   - Read the test method source code
+++   - Trace through the test execution path
+++   - Verify the test actually calls (directly or indirectly) the target method
+++   - Check if the confidence score seems reasonable based on call depth
+++
+++3. **Completeness Check**: 
+++   - Search the test codebase for the target method name
+++   - Look for any tests that should have been found but weren't
+++   - Verify no false positives (tests that don't actually exercise the method)
+++
+++4. **Report Results**:
+++   - Summarize accuracy: "X out of Y tests correctly identified"
+++   - Note any false positives or missed tests
+++   - Comment on confidence score appropriateness
+++   - Highlight any patterns or issues discovered
+++
+++### Step 4: Sample Commands to Help with Verification
+++
+++```bash
+++# Search for direct method calls in tests
+++grep -r "MethodName" tests/ --include="*.cs"
+++
+++# Search for class usage in tests
+++grep -r "ClassName" tests/ --include="*.cs"
+++
+++# Look at specific test file
+++cat tests/path/to/TestClass.cs
+++```
+++
+++### Example Verification Report Format
+++
+++```
+++## Find-Tests Verification Report
+++
+++**Target Method**: TestIntelligence.Core.Discovery.NUnitTestDiscovery.DiscoverTestsAsync
+++
+++**CLI Output Summary**:
+++- Found: 5 tests
+++- Confidence scores: High(2), Medium(2), Low(1)
+++
+++**Manual Verification**:
+++✅ TestIntelligence.Core.Tests.Discovery.NUnitTestDiscoveryTests.DiscoverTestsAsync_ValidAssembly_ReturnsTests
+++   - Directly calls target method
+++   - Confidence: High (appropriate)
+++
+++✅ TestIntelligence.Core.Tests.TestAnalyzerTests.AnalyzeAssembly_WithNUnitTests_IncludesNUnitTests  
+++   - Calls TestAnalyzer.AnalyzeAssembly which calls target method
+++   - Confidence: Medium (appropriate for 1-hop call)
+++
+++❌ TestIntelligence.SelectionEngine.Tests.SomeUnrelatedTest
+++   - False positive - doesn't actually call target method
+++   - Issue: Possible name collision or incorrect call graph
+++
+++**Missing Tests**:
+++- TestIntelligence.Core.Tests.Integration.FullAnalysisTests.CompleteAnalysis
+++  - This test exercises the full pipeline including the target method
+++  - Should have been found with Low confidence
+++
+++**Overall Accuracy**: 4/5 correct (80%)
+++**Recommendations**: 
+++- Investigate false positive detection
+++- Review call graph completeness for integration tests
+++```
+++
+++## Usage Instructions for Claude
+++
+++When running this command:
+++1. Be thorough in your verification - actually read the test code
+++2. Don't just trust the CLI output - verify by examining source code
+++3. Look for both false positives and false negatives
+++4. Consider the appropriateness of confidence scores
+++5. Report your findings in a clear, structured format
+++6. If you find issues, suggest potential causes or improvements
+++
+++This testing helps ensure the find-tests command is working accurately and can be trusted for real-world usage.
++\ No newline at end of file
++diff --git a/.claude/commands/test-select.md b/.claude/commands/test-select.md
++new file mode 100644
++index 0000000..dcb866c
++--- /dev/null
+++++ b/.claude/commands/test-select.md
++@@ -0,0 +1,278 @@
+++# Test Select Command
+++
+++Instructions for Claude to test the select command by creating code changes and verifying intelligent test selection accuracy across different confidence levels.
+++
+++## Testing Protocol
+++
+++### Step 1: Create Test Scenarios
+++
+++#### Scenario A: Single File Change (Core Component)
+++```bash
+++# Make a targeted change to a core component
+++cp src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs.backup
+++echo "        // Test change for select command validation" >> src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs
+++```
+++
+++#### Scenario B: Multi-File Change (Cross-Component)
+++```bash
+++# Make changes across multiple components
+++echo "        // Cross-component change test" >> src/TestIntelligence.Core/TestAnalyzer.cs
+++echo "        // Related CLI change" >> src/TestIntelligence.CLI/Commands/AnalyzeCommand.cs
+++```
+++
+++#### Scenario C: Interface/Contract Change
+++```bash
+++# Modify an interface or base class that affects multiple implementations
+++echo "        // Interface change affecting multiple implementations" >> src/TestIntelligence.Core/Interfaces/ITestDiscovery.cs
+++```
+++
+++### Step 2: Test Different Confidence Levels
+++
+++#### 2.1 Fast Confidence (30 sec, 70% confidence)
+++```bash
+++dotnet run --project src/TestIntelligence.CLI select \
+++  --path TestIntelligence.sln \
+++  --changes "src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs" \
+++  --confidence Fast \
+++  --max-tests 20 \
+++  --output select-fast.json \
+++  --verbose
+++```
+++
+++#### 2.2 Medium Confidence (5 min, 85% confidence)  
+++```bash
+++dotnet run --project src/TestIntelligence.CLI select \
+++  --path TestIntelligence.sln \
+++  --changes "src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs" \
+++  --confidence Medium \
+++  --max-tests 50 \
+++  --output select-medium.json \
+++  --verbose
+++```
+++
+++#### 2.3 High Confidence (15 min, 95% confidence)
+++```bash
+++dotnet run --project src/TestIntelligence.CLI select \
+++  --path TestIntelligence.sln \
+++  --changes "src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs" \
+++  --confidence High \
+++  --max-tests 100 \
+++  --output select-high.json \
+++  --verbose
+++```
+++
+++#### 2.4 Full Confidence (Complete suite, 100% confidence)
+++```bash
+++dotnet run --project src/TestIntelligence.CLI select \
+++  --path TestIntelligence.sln \
+++  --changes "src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs" \
+++  --confidence Full \
+++  --output select-full.json \
+++  --verbose
+++```
+++
+++### Step 3: Manual Verification Process
+++
+++#### 3.1 Analyze Selection Results
+++For each confidence level, examine:
+++1. **Number of tests selected**
+++2. **Test categories included** (Unit, Integration, Database, API, UI)
+++3. **Confidence scores** for each selected test
+++4. **Execution time estimates**
+++5. **Tests organized by priority/relevance**
+++
+++#### 3.2 Validate Test Selection Logic
+++
+++**Direct Impact Tests (Should be in Fast)**:
+++```bash
+++# Find tests that directly test the changed class
+++grep -r "NUnitTestDiscovery" tests/ --include="*.cs" -l
+++# These should appear in Fast confidence with high scores
+++```
+++
+++**Indirect Impact Tests (Should be in Medium)**:
+++```bash
+++# Find tests that use classes that depend on the changed class
+++grep -r "TestAnalyzer\|Discovery" tests/ --include="*.cs" -l
+++# These should appear in Medium confidence with medium scores
+++```
+++
+++**Integration Tests (Should be in High)**:
+++```bash
+++# Find integration tests that exercise the full pipeline
+++grep -r "Integration\|EndToEnd\|FullPipeline" tests/ --include="*.cs" -l
+++# These should appear in High confidence with lower scores
+++```
+++
+++#### 3.3 Confidence Level Validation
+++
+++Verify that each confidence level follows the expected pattern:
+++- **Fast ⊂ Medium ⊂ High ⊂ Full** (each level includes previous levels)
+++- **Decreasing relevance scores** as confidence level increases
+++- **Appropriate test count limits** respected
+++- **Time estimates** align with confidence level targets
+++
+++### Step 4: Cross-Reference with Other Commands
+++
+++#### 4.1 Verify Against Find-Tests
+++```bash
+++# For each selected test, verify it actually relates to the changed code
+++dotnet run --project src/TestIntelligence.CLI find-tests \
+++  --method "TestIntelligence.Core.Discovery.NUnitTestDiscovery.DiscoverTestsAsync" \
+++  --solution TestIntelligence.sln \
+++  --output find-tests-cross-check.json
+++```
+++
+++#### 4.2 Verify Against Coverage Analysis
+++```bash
+++# Check if selected tests actually provide good coverage of changes
+++dotnet run --project src/TestIntelligence.CLI analyze-coverage \
+++  --solution TestIntelligence.sln \
+++  --tests $(jq -r '.selectedTests[].testName' select-medium.json | tr '\n' ' ') \
+++  --changes "src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs" \
+++  --output coverage-cross-check.json
+++```
+++
+++### Step 5: Sample Verification Report Format
+++
+++```
+++## Select Command Verification Report
+++
+++**Test Scenario**: Modified NUnitTestDiscovery.cs (single method change)
+++**Change Type**: Core component modification affecting test discovery logic
+++
+++### Confidence Level Analysis
+++
+++#### Fast Confidence (Target: 30 sec, 70% confidence)
+++- **Selected**: 8 tests
+++- **Time Estimate**: 25 seconds ✅
+++- **Categories**: Unit (6), Integration (2)
+++- **Top Tests**:
+++  ✅ NUnitTestDiscoveryTests.DiscoverTestsAsync_ValidAssembly (Score: 0.95)
+++  ✅ NUnitTestDiscoveryTests.DiscoverTestsAsync_EmptyAssembly (Score: 0.92)  
+++  ✅ TestAnalyzerTests.AnalyzeAssembly_WithNUnitTests (Score: 0.78)
+++
+++#### Medium Confidence (Target: 5 min, 85% confidence)  
+++- **Selected**: 23 tests (includes all Fast + 15 more) ✅
+++- **Time Estimate**: 4.2 minutes ✅
+++- **Categories**: Unit (15), Integration (6), Database (2)
+++- **Additional Tests**:
+++  ✅ CoreIntegrationTests.FullDiscoveryPipeline (Score: 0.65)
+++  ✅ MultiFrameworkTests.NUnitAndXUnit (Score: 0.58)
+++
+++#### High Confidence (Target: 15 min, 95% confidence)
+++- **Selected**: 47 tests (includes all Medium + 24 more) ✅  
+++- **Time Estimate**: 12.8 minutes ✅
+++- **Categories**: Unit (25), Integration (15), Database (4), API (3)
+++- **Additional Tests**:
+++  ✅ E2ETests.CompleteAnalysisWorkflow (Score: 0.35)
+++  ⚠️ UnrelatedUITests.SomeUITest (Score: 0.12) - Questionable relevance
+++
+++#### Full Confidence
+++- **Selected**: All 215 tests ✅
+++- **Includes**: Every test in the solution
+++
+++### Manual Verification Results
+++
+++#### Direct Impact Validation ✅
+++**Expected**: Tests that directly call NUnitTestDiscovery methods
+++- Found 6 direct tests in TestIntelligence.Core.Tests
+++- All 6 appeared in Fast confidence with scores > 0.8 ✅
+++- Scores appropriately reflect call directness ✅
+++
+++#### Indirect Impact Validation ✅  
+++**Expected**: Tests that call TestAnalyzer which uses NUnitTestDiscovery
+++- Found 8 indirect tests across Core and CLI test projects
+++- 7/8 appeared in Medium confidence ✅
+++- 1 missing test: CLIIntegrationTests.AnalyzeCommand_WithNUnit ❌
+++- Scores appropriately lower (0.5-0.8 range) ✅
+++
+++#### Integration Test Validation ⚠️
+++**Expected**: End-to-end tests that exercise full discovery pipeline  
+++- Found 12 integration tests
+++- 10/12 appeared in High confidence ✅
+++- 2 missing: PerformanceTests.LargeSolutionAnalysis, StressTests.ConcurrentDiscovery ❌
+++- Some questionable inclusions with very low relevance scores
+++
+++### Cross-Reference Validation
+++
+++#### Find-Tests Cross-Check ✅
+++- Selected tests from Fast confidence all verified via find-tests command
+++- No false positives detected in direct impact tests
+++- Confidence scores align between select and find-tests commands
+++
+++#### Coverage Analysis Cross-Check ⚠️
+++- Medium confidence tests provide 78% coverage of changed code
+++- Expected: ~85% based on confidence level target
+++- Gap: Some edge cases in error handling not covered by selected tests
+++- Recommendation: Include additional error handling tests
+++
+++### Selection Logic Assessment
+++
+++**Strengths**:
+++- ✅ Confidence levels properly nested (Fast ⊂ Medium ⊂ High ⊂ Full)
+++- ✅ Time estimates realistic and within targets
+++- ✅ Direct impact tests correctly prioritized
+++- ✅ Test categories appropriately distributed
+++- ✅ Relevance scores generally accurate
+++
+++**Issues Found**:
+++- ❌ 2 high-relevance tests missed in Medium confidence
+++- ❌ Some very low relevance tests included in High confidence  
+++- ❌ Coverage gap vs confidence level expectations
+++
+++**Overall Accuracy**: 85% - Good test selection with minor gaps
+++**Recommendation**: 
+++- Review inclusion threshold for High confidence
+++- Investigate why 2 relevant tests were missed
+++- Consider adjusting relevance scoring for integration tests
+++```
+++
+++### Advanced Test Scenarios
+++
+++#### Scenario D: Configuration Change Impact
+++```bash
+++# Test with configuration/settings changes that might affect many components
+++echo "    // Configuration change" >> src/TestIntelligence.Core/Configuration/AnalysisSettings.cs
+++```
+++
+++#### Scenario E: Multiple File Changes
+++```bash  
+++# Test selection with multiple related changes
+++dotnet run --project src/TestIntelligence.CLI select \
+++  --path TestIntelligence.sln \
+++  --changes "src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs" "src/TestIntelligence.Core/TestAnalyzer.cs" \
+++  --confidence Medium \
+++  --output select-multifile.json
+++```
+++
+++#### Scenario F: Max Tests Constraint
+++```bash
+++# Test that max-tests parameter is respected
+++dotnet run --project src/TestIntelligence.CLI select \
+++  --path TestIntelligence.sln \
+++  --changes "src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs" \
+++  --confidence High \
+++  --max-tests 10 \
+++  --output select-constrained.json
+++```
+++
+++### Cleanup
+++```bash
+++# Restore original files after testing
+++mv src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs.backup src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs
+++git checkout -- src/TestIntelligence.Core/TestAnalyzer.cs src/TestIntelligence.CLI/Commands/AnalyzeCommand.cs
+++```
+++
+++## Usage Instructions for Claude
+++
+++When running this command:
+++1. **Test all confidence levels** - verify the nested relationship and appropriateness
+++2. **Validate time estimates** - check if they align with confidence level targets  
+++3. **Cross-reference results** - use find-tests and analyze-coverage to verify selections
+++4. **Check edge cases** - test with multiple files, constraints, and different change types
+++5. **Assess relevance scoring** - ensure tests are ranked appropriately by impact likelihood
+++6. **Verify completeness** - look for missing tests that should be included
+++7. **Report systematically** - document accuracy, gaps, and recommendations
+++
+++This testing ensures the select command provides intelligent, accurate test selection that balances coverage with execution efficiency across different confidence levels.
++\ No newline at end of file
++diff --git a/Directory.Build.props b/Directory.Build.props
++index 14da534..fe3608c 100644
++--- a/Directory.Build.props
+++++ b/Directory.Build.props
++@@ -10,7 +10,7 @@
++     <LangVersion>latest</LangVersion>
++     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
++     <WarningsAsErrors />
++-    <WarningsNotAsErrors>NU1605;NU1701</WarningsNotAsErrors>
+++    <WarningsNotAsErrors>NU1605;NU1701;MSB3277</WarningsNotAsErrors>
++     
++     <!-- Common package metadata -->
++     <Authors>TestIntelligence Contributors</Authors>
++diff --git a/src/TestIntelligence.CLI/Commands/BaseCommandHandler.cs b/src/TestIntelligence.CLI/Commands/BaseCommandHandler.cs
++index 3118751..5892681 100644
++--- a/src/TestIntelligence.CLI/Commands/BaseCommandHandler.cs
+++++ b/src/TestIntelligence.CLI/Commands/BaseCommandHandler.cs
++@@ -35,28 +35,113 @@ namespace TestIntelligence.CLI.Commands
++             catch (OperationCanceledException)
++             {
++                 Logger.LogInformation("Command execution was cancelled");
++-                return 1;
+++                Console.Error.WriteLine("Operation was cancelled by user.");
+++                return 130; // Standard exit code for cancelled operations
++             }
++             catch (ArgumentException ex)
++             {
++                 Logger.LogError(ex, "Invalid arguments provided to command");
++-                Console.Error.WriteLine($"Error: {ex.Message}");
+++                Console.Error.WriteLine($"❌ Invalid argument: {ex.Message}");
+++                PrintUsageHint(context);
++                 return 1;
++             }
+++            catch (FileNotFoundException ex)
+++            {
+++                Logger.LogError(ex, "Required file not found");
+++                Console.Error.WriteLine($"❌ File not found: {ex.FileName ?? ex.Message}");
+++                Console.Error.WriteLine("Please verify that the file path is correct and accessible.");
+++                return 2;
+++            }
+++            catch (DirectoryNotFoundException ex)
+++            {
+++                Logger.LogError(ex, "Required directory not found");
+++                Console.Error.WriteLine($"❌ Directory not found: {ex.Message}");
+++                Console.Error.WriteLine("Please verify that the directory path is correct and accessible.");
+++                return 2;
+++            }
+++            catch (UnauthorizedAccessException ex)
+++            {
+++                Logger.LogError(ex, "Access denied to file or directory");
+++                Console.Error.WriteLine($"❌ Access denied: {ex.Message}");
+++                Console.Error.WriteLine("Please check file/directory permissions or run with appropriate privileges.");
+++                return 13; // Standard exit code for permission denied
+++            }
+++            catch (TimeoutException ex)
+++            {
+++                Logger.LogError(ex, "Operation timed out");
+++                Console.Error.WriteLine($"❌ Operation timed out: {ex.Message}");
+++                Console.Error.WriteLine("The operation took longer than expected. Try reducing the scope or running again.");
+++                return 124; // Standard exit code for timeout
+++            }
+++            catch (System.IO.FileLoadException ex) when (ex.Message.Contains("Microsoft.Bcl.AsyncInterfaces"))
+++            {
+++                Logger.LogError(ex, "Assembly loading conflict detected");
+++                Console.Error.WriteLine("❌ Assembly conflict detected:");
+++                Console.Error.WriteLine($"   {ex.Message}");
+++                Console.Error.WriteLine();
+++                Console.Error.WriteLine("💡 This is usually caused by conflicting package versions. Try:");
+++                Console.Error.WriteLine("   • Clearing NuGet cache: dotnet nuget locals all --clear");
+++                Console.Error.WriteLine("   • Rebuilding the solution: dotnet clean && dotnet build");
+++                Console.Error.WriteLine("   • Updating packages to consistent versions");
+++                return 125; // Custom exit code for assembly conflicts
+++            }
+++            catch (System.Reflection.ReflectionTypeLoadException ex)
+++            {
+++                Logger.LogError(ex, "Failed to load types from assembly");
+++                Console.Error.WriteLine("❌ Failed to load assembly types:");
+++                if (ex.LoaderExceptions != null)
+++                {
+++                    foreach (var loaderEx in ex.LoaderExceptions.Take(3))
+++                    {
+++                        Console.Error.WriteLine($"   • {loaderEx?.Message}");
+++                    }
+++                    if (ex.LoaderExceptions.Length > 3)
+++                    {
+++                        Console.Error.WriteLine($"   ... and {ex.LoaderExceptions.Length - 3} more errors");
+++                    }
+++                }
+++                Console.Error.WriteLine();
+++                Console.Error.WriteLine("💡 This usually indicates missing dependencies or version mismatches.");
+++                Console.Error.WriteLine("   Check that all required packages are installed and compatible.");
+++                return 126; // Custom exit code for type loading failures
+++            }
+++            catch (OutOfMemoryException ex)
+++            {
+++                Logger.LogError(ex, "Out of memory during command execution");
+++                Console.Error.WriteLine("❌ Insufficient memory to complete the operation.");
+++                Console.Error.WriteLine("💡 Try reducing the scope (e.g., analyze fewer files) or increase available memory.");
+++                return 127; // Custom exit code for memory issues
+++            }
++             catch (Exception ex)
++             {
++                 Logger.LogError(ex, "Unexpected error during command execution");
++-                Console.Error.WriteLine($"Error: {ex.Message}");
+++                Console.Error.WriteLine($"❌ Unexpected error: {ex.Message}");
++                 
++                 if (Logger.IsEnabled(LogLevel.Debug))
++                 {
++                     Console.Error.WriteLine($"Stack trace: {ex.StackTrace}");
++                 }
+++                else
+++                {
+++                    Console.Error.WriteLine("Use --verbose for detailed error information.");
+++                }
+++                
+++                Console.Error.WriteLine();
+++                Console.Error.WriteLine("💡 If this error persists, please report it at:");
+++                Console.Error.WriteLine("   https://github.com/TestIntelligence/TestIntelligence/issues");
++                 
++                 return 1;
++             }
++         }
++ 
+++        /// <summary>
+++        /// Prints usage hint for the current command.
+++        /// </summary>
+++        protected virtual void PrintUsageHint(CommandContext context)
+++        {
+++            Console.Error.WriteLine("💡 Use --help to see available options and usage examples.");
+++        }
+++
++         /// <summary>
++         /// Executes the command-specific logic. Override this in derived classes.
++         /// </summary>
++diff --git a/src/TestIntelligence.CLI/Commands/FindTestsCommandHandler.cs b/src/TestIntelligence.CLI/Commands/FindTestsCommandHandler.cs
++index 615231e..3ba1564 100644
++--- a/src/TestIntelligence.CLI/Commands/FindTestsCommandHandler.cs
+++++ b/src/TestIntelligence.CLI/Commands/FindTestsCommandHandler.cs
++@@ -1,4 +1,5 @@
++ using System;
+++using System.Collections.Generic;
++ using System.IO;
++ using System.Linq;
++ using System.Text;
++@@ -7,6 +8,7 @@ using System.Threading.Tasks;
++ using Microsoft.Extensions.Logging;
++ using TestIntelligence.CLI.Services;
++ using TestIntelligence.Core.Services;
+++using TestIntelligence.Core.Models;
++ 
++ namespace TestIntelligence.CLI.Commands;
++ 
++@@ -32,27 +34,61 @@ public class FindTestsCommandHandler : BaseCommandHandler
++         var format = context.GetParameter<string>("format") ?? "text";
++         var verbose = context.GetParameter<bool>("verbose");
++ 
+++        // Additional validation
+++        ValidateInputs(method!, solution!, output, format);
+++
++         Logger.LogInformation("Finding tests that exercise method: {Method} in solution: {Solution}", method, solution);
++         
++         // Get services from DI
++         var testCoverageAnalyzer = context.GetService<ITestCoverageAnalyzer>();
++         var outputFormatter = context.GetService<IOutputFormatter>();
++         
+++        if (testCoverageAnalyzer == null)
+++        {
+++            throw new InvalidOperationException("Test coverage analyzer service is not available. Please check the application configuration.");
+++        }
+++        
+++        if (outputFormatter == null)
+++        {
+++            throw new InvalidOperationException("Output formatter service is not available. Please check the application configuration.");
+++        }
+++        
++         Console.WriteLine($"Finding tests that exercise method: {method}");
++         Console.WriteLine($"Solution path: {solution}");
++         Console.WriteLine();
++ 
++-        var tests = await testCoverageAnalyzer.FindTestsExercisingMethodAsync(method!, solution!);
++-        
++-        if (!tests.Any())
+++        IReadOnlyList<TestCoverageInfo> tests;
+++        try
++         {
++-            Console.WriteLine("No tests found that exercise this method.");
+++            tests = await testCoverageAnalyzer.FindTestsExercisingMethodAsync(method!, solution!, cancellationToken);
+++            
+++            if (tests == null || !tests.Any())
+++            {
+++                Console.WriteLine("No tests found that exercise this method.");
+++                Console.WriteLine();
+++                Console.WriteLine("💡 This could mean:");
+++                Console.WriteLine("   • The method name/signature is incorrect");
+++                Console.WriteLine("   • No tests actually exercise this method");
+++                Console.WriteLine("   • The method is not public or accessible");
+++                Console.WriteLine("   • There are compilation errors preventing analysis");
+++                return 0;
+++            }
+++
+++            Console.WriteLine($"Found {tests.Count} test(s) exercising this method:");
+++            Console.WriteLine();
+++        }
+++        catch (ArgumentException)
+++        {
+++            // Re-throw argument exceptions to be handled by base class
+++            throw;
+++        }
+++        catch (Exception ex) when (ex.Message.Contains("No test methods found"))
+++        {
+++            Console.WriteLine("No test methods found in the solution.");
+++            Console.WriteLine("💡 Make sure the solution builds successfully and contains test projects.");
++             return 0;
++         }
++ 
++-        Console.WriteLine($"Found {tests.Count} test(s) exercising this method:");
++-        Console.WriteLine();
++-
++         if (format == "json")
++         {
++             var json = outputFormatter.FormatAsJson(tests);
++@@ -100,4 +136,45 @@ public class FindTestsCommandHandler : BaseCommandHandler
++         
++         return 0;
++     }
+++
+++    /// <summary>
+++    /// Validates the input parameters for the find-tests command.
+++    /// </summary>
+++    private void ValidateInputs(string method, string solution, string? output, string format)
+++    {
+++        // Validate solution file exists
+++        if (!File.Exists(solution))
+++        {
+++            throw new FileNotFoundException($"Solution file not found: {solution}");
+++        }
+++
+++        // Validate method format (basic validation)
+++        if (!method.Contains('.'))
+++        {
+++            throw new ArgumentException($"Method parameter should be in format 'Namespace.Class.Method', got: {method}");
+++        }
+++
+++        // Validate output format
+++        if (!string.Equals(format, "json", StringComparison.OrdinalIgnoreCase) && 
+++            !string.Equals(format, "text", StringComparison.OrdinalIgnoreCase))
+++        {
+++            throw new ArgumentException($"Format must be 'json' or 'text', got: {format}");
+++        }
+++
+++        // Validate output path if provided
+++        if (!string.IsNullOrWhiteSpace(output))
+++        {
+++            var outputDir = Path.GetDirectoryName(Path.GetFullPath(output));
+++            if (!string.IsNullOrEmpty(outputDir) && !Directory.Exists(outputDir))
+++            {
+++                throw new DirectoryNotFoundException($"Output directory does not exist: {outputDir}");
+++            }
+++        }
+++    }
+++
+++    protected override void PrintUsageHint(CommandContext context)
+++    {
+++        Console.Error.WriteLine("💡 Usage: find-tests --method \"Namespace.Class.Method\" --solution \"path/to/solution.sln\"");
+++        Console.Error.WriteLine("   Example: find-tests --method \"MyApp.Services.UserService.GetUser\" --solution \"MyApp.sln\"");
+++    }
++ }
++\ No newline at end of file
++diff --git a/src/TestIntelligence.CLI/TestIntelligence.CLI.csproj b/src/TestIntelligence.CLI/TestIntelligence.CLI.csproj
++index c25bbd3..259c88d 100644
++--- a/src/TestIntelligence.CLI/TestIntelligence.CLI.csproj
+++++ b/src/TestIntelligence.CLI/TestIntelligence.CLI.csproj
++@@ -27,6 +27,8 @@
++     <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
++     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
++     <PackageReference Include="Microsoft.Build.Locator" Version="1.6.10" />
+++    <!-- Explicit reference to resolve conflicts -->
+++    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="8.0.0" />
++   </ItemGroup>
++ 
++   <ItemGroup>
++diff --git a/src/TestIntelligence.Core/Models/TestCoverageInfo.cs b/src/TestIntelligence.Core/Models/TestCoverageInfo.cs
++index a7b865a..0f50511 100644
++--- a/src/TestIntelligence.Core/Models/TestCoverageInfo.cs
+++++ b/src/TestIntelligence.Core/Models/TestCoverageInfo.cs
++@@ -192,10 +192,15 @@ namespace TestIntelligence.Core.Models
++             if (fullMethodId.Equals(pattern, StringComparison.OrdinalIgnoreCase))
++                 return true;
++ 
++-            // Extract method name without parameters from full ID
+++            // Remove global:: prefix if present for comparison
+++            var normalizedMethodId = fullMethodId.StartsWith("global::", StringComparison.OrdinalIgnoreCase) 
+++                ? fullMethodId.Substring(8) // Remove "global::" prefix
+++                : fullMethodId;
+++
+++            // Extract method name without parameters from normalized ID
++             // Format: Namespace.Class.Method(params)
++-            var parenIndex = fullMethodId.IndexOf('(');
++-            var methodWithoutParams = parenIndex > 0 ? fullMethodId.Substring(0, parenIndex) : fullMethodId;
+++            var parenIndex = normalizedMethodId.IndexOf('(');
+++            var methodWithoutParams = parenIndex > 0 ? normalizedMethodId.Substring(0, parenIndex) : normalizedMethodId;
++ 
++             // Check if pattern matches the method without parameters
++             if (methodWithoutParams.Equals(pattern, StringComparison.OrdinalIgnoreCase))
++diff --git a/src/TestIntelligence.Core/TestIntelligence.Core.csproj b/src/TestIntelligence.Core/TestIntelligence.Core.csproj
++index 1cbbd22..3c05933 100644
++--- a/src/TestIntelligence.Core/TestIntelligence.Core.csproj
+++++ b/src/TestIntelligence.Core/TestIntelligence.Core.csproj
++@@ -23,7 +23,7 @@
++     <PackageReference Include="System.Reflection.Metadata" Version="8.0.0" />
++     <PackageReference Include="System.Runtime.Loader" Version="4.3.0" />
++     <PackageReference Include="System.Reflection.MetadataLoadContext" Version="8.0.0" />
++-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="6.0.4" />
+++    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
++     <PackageReference Include="System.Text.Json" Version="8.0.5" />
++   </ItemGroup>
++ 
++diff --git a/src/TestIntelligence.DataTracker/TestIntelligence.DataTracker.csproj b/src/TestIntelligence.DataTracker/TestIntelligence.DataTracker.csproj
++index 5440411..dfbdb37 100644
++--- a/src/TestIntelligence.DataTracker/TestIntelligence.DataTracker.csproj
+++++ b/src/TestIntelligence.DataTracker/TestIntelligence.DataTracker.csproj
++@@ -19,7 +19,7 @@
++   </PropertyGroup>
++ 
++   <ItemGroup>
++-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="6.0.4" />
+++    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
++     <!-- Entity Framework packages for database pattern detection -->
++     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="3.1.32" />
++     <PackageReference Include="EntityFramework" Version="6.4.4" />
++diff --git a/src/TestIntelligence.ImpactAnalyzer/Analysis/LazyWorkspaceBuilder.cs b/src/TestIntelligence.ImpactAnalyzer/Analysis/LazyWorkspaceBuilder.cs
++index d91c774..40a3d3c 100644
++--- a/src/TestIntelligence.ImpactAnalyzer/Analysis/LazyWorkspaceBuilder.cs
+++++ b/src/TestIntelligence.ImpactAnalyzer/Analysis/LazyWorkspaceBuilder.cs
++@@ -138,23 +138,50 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
++         {
++             return await _projectCache.GetOrAdd(projectPath, async path =>
++             {
+++                CancellationTokenSource? timeoutCts = null;
+++                CancellationTokenSource? combinedCts = null;
+++                
++                 try
++                 {
++                     _logger.LogDebug("Loading project on-demand: {ProjectPath}", path);
++                     var startTime = DateTime.UtcNow;
++ 
++-                    var project = await _workspace.OpenProjectAsync(path);
+++                    // Add timeout to prevent hanging on project loading
+++                    timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+++                    combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+++
+++                    var projectTask = _workspace.OpenProjectAsync(path);
+++                    var timeoutTask = Task.Delay(TimeSpan.FromSeconds(15), combinedCts.Token);
+++                    
+++                    var completedTask = await Task.WhenAny(projectTask, timeoutTask);
+++                    if (completedTask == timeoutTask)
+++                    {
+++                        _logger.LogWarning("Project loading timed out after 15 seconds: {ProjectPath}", path);
+++                        return null;
+++                    }
+++                    
+++                    var project = await projectTask;
++                     
++                     var elapsed = DateTime.UtcNow - startTime;
++                     _logger.LogDebug("Project loaded in {ElapsedMs}ms: {ProjectName}", elapsed.TotalMilliseconds, project.Name);
++ 
++                     return project;
++                 }
+++                catch (OperationCanceledException) when (timeoutCts?.Token.IsCancellationRequested == true)
+++                {
+++                    _logger.LogWarning("Project loading timed out after 15 seconds: {ProjectPath}", path);
+++                    return null;
+++                }
++                 catch (Exception ex)
++                 {
++                     _logger.LogError(ex, "Failed to load project: {ProjectPath}", path);
++                     return null;
++                 }
+++                finally
+++                {
+++                    timeoutCts?.Dispose();
+++                    combinedCts?.Dispose();
+++                }
++             });
++         }
++ 
++@@ -291,8 +318,32 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
++         {
++             _logger.LogDebug("Loading solution metadata: {SolutionPath}", solutionPath);
++             
++-            // Load solution directly - we'll manage project loading separately
++-            _solution = await _workspace.OpenSolutionAsync(solutionPath);
+++            // Load solution directly with timeout to prevent hanging
+++            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+++            using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+++            
+++            try
+++            {
+++                var solutionTask = _workspace.OpenSolutionAsync(solutionPath);
+++                var timeoutTask = Task.Delay(TimeSpan.FromSeconds(30), combinedCts.Token);
+++                
+++                var completedTask = await Task.WhenAny(solutionTask, timeoutTask);
+++                if (completedTask == timeoutTask)
+++                {
+++                    _logger.LogWarning("Solution loading timed out after 30 seconds, falling back to manual solution parsing");
+++                    await InitializeFromSolutionManuallyAsync(solutionPath, cancellationToken);
+++                    return;
+++                }
+++                
+++                _solution = await solutionTask;
+++            }
+++            catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
+++            {
+++                _logger.LogWarning("Solution loading timed out after 30 seconds, falling back to manual solution parsing");
+++                await InitializeFromSolutionManuallyAsync(solutionPath, cancellationToken);
+++                return;
+++            }
+++            
++             var solutionInfo = _solution;
++ 
++             // Build file-to-project mapping from solution
++@@ -336,6 +387,70 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
++             }
++         }
++ 
+++        /// <summary>
+++        /// Manual solution parsing fallback when MSBuild workspace fails
+++        /// </summary>
+++        private async Task InitializeFromSolutionManuallyAsync(string solutionPath, CancellationToken cancellationToken)
+++        {
+++            try
+++            {
+++                _logger.LogInformation("Using manual solution parsing for: {SolutionPath}", solutionPath);
+++                
+++                // Parse solution file manually to get project paths
+++                var solutionDir = Path.GetDirectoryName(solutionPath)!;
+++                var solutionLines = await File.ReadAllLinesAsync(solutionPath, cancellationToken);
+++                
+++                var projectPaths = new List<string>();
+++                foreach (var line in solutionLines)
+++                {
+++                    // Look for project lines: Project("{...}") = "ProjectName", "RelativePath", "{...}"
+++                    if (line.StartsWith("Project(") && line.Contains(".csproj"))
+++                    {
+++                        var parts = line.Split(',');
+++                        if (parts.Length >= 2)
+++                        {
+++                            var relativePath = parts[1].Trim().Trim('"');
+++                            var fullPath = Path.GetFullPath(Path.Combine(solutionDir, relativePath));
+++                            if (File.Exists(fullPath))
+++                            {
+++                                projectPaths.Add(fullPath);
+++                            }
+++                        }
+++                    }
+++                }
+++                
+++                _logger.LogInformation("Found {ProjectCount} projects via manual parsing", projectPaths.Count);
+++                
+++                // Build file-to-project mapping using file system scanning
+++                foreach (var projectPath in projectPaths)
+++                {
+++                    try
+++                    {
+++                        var projectDir = Path.GetDirectoryName(projectPath)!;
+++                        var csFiles = Directory.GetFiles(projectDir, "*.cs", SearchOption.AllDirectories)
+++                            .Where(f => !f.Contains("bin") && !f.Contains("obj") && !f.Contains("packages"));
+++                        
+++                        foreach (var file in csFiles)
+++                        {
+++                            _fileToProjectMap[file] = projectPath;
+++                        }
+++                    }
+++                    catch (Exception ex)
+++                    {
+++                        _logger.LogDebug(ex, "Failed to scan project directory: {ProjectPath}", projectPath);
+++                    }
+++                }
+++                
+++                _logger.LogInformation("Manual solution parsing completed: {ProjectCount} projects, {FileCount} file mappings", 
+++                    projectPaths.Count, _fileToProjectMap.Count);
+++            }
+++            catch (Exception ex)
+++            {
+++                _logger.LogError(ex, "Manual solution parsing failed for: {SolutionPath}", solutionPath);
+++                throw;
+++            }
+++        }
+++
++         private void OnWorkspaceFailed(object? sender, WorkspaceDiagnosticEventArgs e)
++         {
++             _logger.LogDebug("Workspace diagnostic: {Kind} - {Message}", e.Diagnostic.Kind, e.Diagnostic.Message);
++diff --git a/src/TestIntelligence.ImpactAnalyzer/Analysis/RoslynAnalyzer.cs b/src/TestIntelligence.ImpactAnalyzer/Analysis/RoslynAnalyzer.cs
++index 9648e81..9a182a8 100644
++--- a/src/TestIntelligence.ImpactAnalyzer/Analysis/RoslynAnalyzer.cs
+++++ b/src/TestIntelligence.ImpactAnalyzer/Analysis/RoslynAnalyzer.cs
++@@ -62,7 +62,9 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
++                 // Initialize lazy workspace for much better performance
++                 await InitializeLazyWorkspaceAsync(solutionFile, cancellationToken).ConfigureAwait(false);
++ 
++-                if (_incrementalCallGraphBuilder != null)
+++                // TEMPORARY FIX: Disable incremental call graph builder due to placeholder implementation
+++                // The GetMethodIdsFromFile method returns empty lists, causing 0 methods to be analyzed
+++                if (false && _incrementalCallGraphBuilder != null)
++                 {
++                     _logger.LogInformation("Using high-performance incremental call graph builder");
++                     // For full solution analysis, we still need to analyze all files, but incrementally
++@@ -71,6 +73,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
++                 }
++                 
++                 // Fallback to legacy full analysis
+++                _logger.LogInformation("Using legacy call graph builder (incremental builder temporarily disabled)");
++                 await InitializeWorkspaceAsync(solutionFile, cancellationToken).ConfigureAwait(false);
++ 
++                 if (_callGraphBuilder == null)
++diff --git a/src/TestIntelligence.ImpactAnalyzer/Analysis/SolutionWorkspaceBuilder.cs b/src/TestIntelligence.ImpactAnalyzer/Analysis/SolutionWorkspaceBuilder.cs
++index eb69959..b30e8e6 100644
++--- a/src/TestIntelligence.ImpactAnalyzer/Analysis/SolutionWorkspaceBuilder.cs
+++++ b/src/TestIntelligence.ImpactAnalyzer/Analysis/SolutionWorkspaceBuilder.cs
++@@ -168,24 +168,37 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
++             try
++             {
++                 _logger.LogDebug("Loading solution using MSBuild workspace: {SolutionPath}", solutionPath);
++-                var solution = await workspace.OpenSolutionAsync(solutionPath, cancellationToken: cancellationToken);
++                 
++-                _logger.LogInformation("Solution loaded with {ProjectCount} projects", solution.Projects.Count());
+++                // Apply timeout to prevent hanging - MSBuild operations can hang indefinitely
+++                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(2)); // 2 minute timeout for solution loading
+++                using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
++                 
++-                // Log any diagnostics
++-                foreach (var diagnostic in workspace.Diagnostics)
+++                try
++                 {
++-                    if (diagnostic.Kind == WorkspaceDiagnosticKind.Failure)
++-                    {
++-                        _logger.LogWarning("Workspace diagnostic: {Message}", diagnostic.Message);
++-                    }
++-                    else
+++                    var solution = await workspace.OpenSolutionAsync(solutionPath, cancellationToken: combinedCts.Token);
+++                    
+++                    _logger.LogInformation("Solution loaded with {ProjectCount} projects", solution.Projects.Count());
+++                    
+++                    // Log any diagnostics
+++                    foreach (var diagnostic in workspace.Diagnostics)
++                     {
++-                        _logger.LogDebug("Workspace diagnostic: {Message}", diagnostic.Message);
+++                        if (diagnostic.Kind == WorkspaceDiagnosticKind.Failure)
+++                        {
+++                            _logger.LogWarning("Workspace diagnostic: {Message}", diagnostic.Message);
+++                        }
+++                        else
+++                        {
+++                            _logger.LogDebug("Workspace diagnostic: {Message}", diagnostic.Message);
+++                        }
++                     }
+++                    
+++                    return solution;
+++                }
+++                catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
+++                {
+++                    _logger.LogError("Solution loading timed out after 2 minutes: {SolutionPath}", solutionPath);
+++                    throw new TimeoutException($"Solution loading timed out after 2 minutes. This may indicate MSBuild version conflicts or complex solution structure: {solutionPath}");
++                 }
++-                
++-                return solution;
++             }
++             catch (Exception ex)
++             {
++diff --git a/src/TestIntelligence.ImpactAnalyzer/Analysis/SymbolIndex.cs b/src/TestIntelligence.ImpactAnalyzer/Analysis/SymbolIndex.cs
++index aa9727c..12a61fa 100644
++--- a/src/TestIntelligence.ImpactAnalyzer/Analysis/SymbolIndex.cs
+++++ b/src/TestIntelligence.ImpactAnalyzer/Analysis/SymbolIndex.cs
++@@ -283,12 +283,13 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
++                     var solutionContent = File.ReadAllText(solutionPath);
++                     
++                     // Simple regex to find project references in solution file
++-                    var projectPattern = new Regex(@"Project\(.+\)\s*=\s*"".+"",\s*""([^""]+\.(?:cs|vb|fs)proj)""", RegexOptions.Compiled);
+++                    var projectPattern = new Regex(@"Project\(.+\)\s*=\s*"".+"",\s*""([^""]+\.(?:csproj|vbproj|fsproj))""", RegexOptions.Compiled);
++                     var matches = projectPattern.Matches(solutionContent);
++                     
++                     foreach (Match match in matches)
++                     {
++-                        var projectPath = Path.Combine(solutionDir, match.Groups[1].Value);
+++                        var relativePath = match.Groups[1].Value.Replace('\\', Path.DirectorySeparatorChar);
+++                        var projectPath = Path.Combine(solutionDir, relativePath);
++                         if (File.Exists(projectPath))
++                         {
++                             var projectFiles = await GetSourceFilesFromProjectAsync(projectPath, cancellationToken);
++diff --git a/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs b/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs
++index b96e163..d7f075c 100644
++--- a/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs
+++++ b/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs
++@@ -85,14 +85,39 @@ namespace TestIntelligence.ImpactAnalyzer.Services
++                 // Try to build call graph with MSBuild workspace first, fallback to assembly analysis
++                 try 
++                 {
+++                    // Apply timeout to prevent hanging during call graph building
+++                    using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(3)); // 3 minute timeout
+++                    using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+++                    
++                     // Build the complete call graph using the solution path
++                     // The Roslyn analyzer will handle finding source files and prefer MSBuild workspace if .sln is provided
++-                    callGraph = await _roslynAnalyzer.BuildCallGraphAsync(new[] { solutionPath }, cancellationToken);
+++                    callGraph = await _roslynAnalyzer.BuildCallGraphAsync(new[] { solutionPath }, combinedCts.Token);
++                     
++                     // Cache the result
++                     _cachedCallGraph = callGraph;
++                     _cachedSolutionPath = solutionPath;
++                 }
+++                catch (TimeoutException ex)
+++                {
+++                    _logger.LogWarning(ex, "Call graph building timed out after 3 minutes, falling back to assembly-based analysis");
+++                    
+++                    // Fallback: Try to analyze compiled assemblies instead
+++                    var assemblyPaths = FindTestAssembliesInSolution(solutionPath);
+++                    if (assemblyPaths.Any())
+++                    {
+++                        _logger.LogInformation("Found {AssemblyCount} test assemblies for fallback analysis", assemblyPaths.Count);
+++                        callGraph = await _roslynAnalyzer.BuildCallGraphAsync(assemblyPaths.ToArray(), cancellationToken);
+++                        
+++                        // Cache the result
+++                        _cachedCallGraph = callGraph;
+++                        _cachedSolutionPath = solutionPath;
+++                    }
+++                    else
+++                    {
+++                        _logger.LogWarning("No assemblies found for fallback analysis");
+++                        return new TestCoverageMap(new Dictionary<string, List<TestCoverageInfo>>(), DateTime.UtcNow, solutionPath);
+++                    }
+++                }
++                 catch (InvalidOperationException ex) when (ex.Message.Contains("System.CodeDom") || ex.Message.Contains("MSBuild workspace"))
++                 {
++                     _logger.LogWarning(ex, "MSBuild workspace failed, falling back to assembly-based analysis");
++@@ -536,6 +561,16 @@ namespace TestIntelligence.ImpactAnalyzer.Services
++ 
++             var testMethods = _testClassifier.GetTestMethods(allMethods);
++             _logger.LogInformation("Found {TestMethodCount} test methods for streaming analysis", testMethods.Count);
+++            
+++            // Find actual method IDs that match the user's pattern
+++            var targetMethodIds = FindMatchingMethodIds(methodId, allMethods);
+++            _logger.LogDebug("Found {Count} target method IDs matching pattern: {Pattern}", targetMethodIds.Count, methodId);
+++            
+++            if (targetMethodIds.Count == 0)
+++            {
+++                _logger.LogWarning("No methods found matching pattern: {MethodId}", methodId);
+++                yield break;
+++            }
++ 
++             // Process test methods and yield results as we find them
++             foreach (var testMethod in testMethods)
++@@ -545,10 +580,23 @@ namespace TestIntelligence.ImpactAnalyzer.Services
++                 TestCoverageInfo? result = null;
++                 try
++                 {
++-                    var callPath = FindCallPath(testMethod.Id, methodId, callGraph);
++-                    if (callPath != null && callPath.Any())
+++                    // Try to find call paths to any of the matching target methods
+++                    string[]? callPath = null;
+++                    string? matchedTargetMethodId = null;
+++                    
+++                    foreach (var targetId in targetMethodIds)
++                     {
++-                        var confidence = CalculateConfidence(callPath, testMethod, callGraph.GetMethodInfo(methodId)!);
+++                        callPath = FindCallPath(testMethod.Id, targetId, callGraph);
+++                        if (callPath != null && callPath.Any())
+++                        {
+++                            matchedTargetMethodId = targetId;
+++                            break;
+++                        }
+++                    }
+++                    if (callPath != null && callPath.Any() && matchedTargetMethodId != null)
+++                    {
+++                        var targetMethodInfo = callGraph.GetMethodInfo(matchedTargetMethodId)!;
+++                        var confidence = CalculateConfidence(callPath, testMethod, targetMethodInfo);
++                         var testType = _testClassifier.ClassifyTestType(testMethod);
++ 
++                         result = new TestCoverageInfo(
++@@ -616,5 +664,63 @@ namespace TestIntelligence.ImpactAnalyzer.Services
++             _pathCache.Clear();
++             _logger.LogDebug("Cleared all caches");
++         }
+++
+++        /// <summary>
+++        /// Find all method IDs in the call graph that match the given pattern.
+++        /// Handles global:: prefix and parameter variations.
+++        /// </summary>
+++        private List<string> FindMatchingMethodIds(string pattern, IReadOnlyList<MethodInfo> allMethods)
+++        {
+++            var matchingIds = new List<string>();
+++            
+++            foreach (var method in allMethods)
+++            {
+++                if (IsMethodPatternMatch(method.Id, pattern))
+++                {
+++                    matchingIds.Add(method.Id);
+++                }
+++            }
+++            
+++            return matchingIds;
+++        }
+++
+++        /// <summary>
+++        /// Determines if a method ID matches the given pattern.
+++        /// Supports pattern matching like the TestCoverageMap.IsMethodMatch method.
+++        /// </summary>
+++        private static bool IsMethodPatternMatch(string fullMethodId, string pattern)
+++        {
+++            if (string.IsNullOrEmpty(fullMethodId) || string.IsNullOrEmpty(pattern))
+++                return false;
+++
+++            // Exact match
+++            if (fullMethodId.Equals(pattern, StringComparison.OrdinalIgnoreCase))
+++                return true;
+++
+++            // Remove global:: prefix if present for comparison
+++            var normalizedMethodId = fullMethodId.StartsWith("global::", StringComparison.OrdinalIgnoreCase) 
+++                ? fullMethodId.Substring(8) // Remove "global::" prefix
+++                : fullMethodId;
+++
+++            // Extract method name without parameters from normalized ID
+++            // Format: Namespace.Class.Method(params)
+++            var parenIndex = normalizedMethodId.IndexOf('(');
+++            var methodWithoutParams = parenIndex > 0 ? normalizedMethodId.Substring(0, parenIndex) : normalizedMethodId;
+++
+++            // Check if pattern matches the method without parameters
+++            if (methodWithoutParams.Equals(pattern, StringComparison.OrdinalIgnoreCase))
+++                return true;
+++
+++            // Check if pattern is just the method name (last part after final dot)
+++            var lastDotIndex = methodWithoutParams.LastIndexOf('.');
+++            if (lastDotIndex >= 0 && lastDotIndex < methodWithoutParams.Length - 1)
+++            {
+++                var methodNameOnly = methodWithoutParams.Substring(lastDotIndex + 1);
+++                if (methodNameOnly.Equals(pattern, StringComparison.OrdinalIgnoreCase))
+++                    return true;
+++            }
+++
+++            return false;
+++        }
++     }
++ }
++\ No newline at end of file
++diff --git a/src/TestIntelligence.ImpactAnalyzer/TestIntelligence.ImpactAnalyzer.csproj b/src/TestIntelligence.ImpactAnalyzer/TestIntelligence.ImpactAnalyzer.csproj
++index 66261c7..1cb2408 100644
++--- a/src/TestIntelligence.ImpactAnalyzer/TestIntelligence.ImpactAnalyzer.csproj
+++++ b/src/TestIntelligence.ImpactAnalyzer/TestIntelligence.ImpactAnalyzer.csproj
++@@ -1,7 +1,7 @@
++ <Project Sdk="Microsoft.NET.Sdk">
++ 
++   <PropertyGroup>
++-    <TargetFramework>netstandard2.0</TargetFramework>
+++    <TargetFramework>netstandard2.1</TargetFramework>
++     <LangVersion>latest</LangVersion>
++     <Nullable>enable</Nullable>
++     <PackageId>TestIntelligence.ImpactAnalyzer</PackageId>
++@@ -28,6 +28,8 @@
++     <!-- Other dependencies provided by Directory.Build.props: Microsoft.CodeAnalysis.CSharp, Newtonsoft.Json, System.Collections.Immutable, System.CodeDom -->
++     <PackageReference Include="System.Reflection.Metadata" Version="8.0.0" />
++     <PackageReference Include="System.Text.Json" Version="8.0.5" />
+++    <!-- Add explicit reference to fix MSBuild conflicts -->
+++    <PackageReference Include="Microsoft.Build.Framework" Version="17.9.5" ExcludeAssets="runtime" />
++   </ItemGroup>
++ 
++   <ItemGroup>
++diff --git a/src/TestIntelligence.SelectionEngine/TestIntelligence.SelectionEngine.csproj b/src/TestIntelligence.SelectionEngine/TestIntelligence.SelectionEngine.csproj
++index 41ee1d0..3a1d337 100644
++--- a/src/TestIntelligence.SelectionEngine/TestIntelligence.SelectionEngine.csproj
+++++ b/src/TestIntelligence.SelectionEngine/TestIntelligence.SelectionEngine.csproj
++@@ -1,7 +1,7 @@
++ <Project Sdk="Microsoft.NET.Sdk">
++ 
++   <PropertyGroup>
++-    <TargetFramework>netstandard2.0</TargetFramework>
+++    <TargetFramework>netstandard2.1</TargetFramework>
++     <LangVersion>latest</LangVersion>
++     <Nullable>enable</Nullable>
++     <PackageId>TestIntelligence.SelectionEngine</PackageId>
++diff --git a/tests/TestIntelligence.SelectionEngine.Tests/Engine/TestSelectionEngineTests.cs b/tests/TestIntelligence.SelectionEngine.Tests/Engine/TestSelectionEngineTests.cs
++index d4d4c36..55b8911 100644
++--- a/tests/TestIntelligence.SelectionEngine.Tests/Engine/TestSelectionEngineTests.cs
+++++ b/tests/TestIntelligence.SelectionEngine.Tests/Engine/TestSelectionEngineTests.cs
++@@ -205,5 +205,222 @@ namespace TestIntelligence.SelectionEngine.Tests.Engine
++         {
++             // Sample method for reflection
++         }
+++
+++        #region Integration Tests for ScoreTestsAsync
+++
+++        [Fact]
+++        public async Task ScoreTestsAsync_WithMixedTestTypes_ShouldPrioritizeBasedOnCategory()
+++        {
+++            var tests = new[]
+++            {
+++                CreateTestInfo("FastUnitTest", TestCategory.Unit, TimeSpan.FromMilliseconds(50), 0.0),
+++                CreateTestInfo("SlowIntegrationTest", TestCategory.Integration, TimeSpan.FromSeconds(2), 0.0),
+++                CreateTestInfo("DatabaseTest", TestCategory.Database, TimeSpan.FromSeconds(5), 0.0),
+++                CreateTestInfo("UITest", TestCategory.UI, TimeSpan.FromSeconds(10), 0.0)
+++            };
+++
+++            var engine = new TestSelectionEngine(_mockLogger.Object, new[] { _mockScoringAlgorithm.Object });
+++            
+++            // Configure mock to return different scores based on category
+++            _mockScoringAlgorithm.Setup(x => x.CalculateScoreAsync(It.IsAny<TestInfo>(), It.IsAny<TestScoringContext>(), It.IsAny<CancellationToken>()))
+++                .Returns<TestInfo, TestScoringContext, CancellationToken>((test, context, ct) => test.Category switch
+++                {
+++                    TestCategory.Unit => Task.FromResult(0.9), // Highest priority for unit tests
+++                    TestCategory.Integration => Task.FromResult(0.7),
+++                    TestCategory.Database => Task.FromResult(0.5),
+++                    TestCategory.UI => Task.FromResult(0.3), // Lowest priority for UI tests
+++                    _ => Task.FromResult(0.1)
+++                });
+++
+++            var scoredTests = await engine.ScoreTestsAsync(tests);
+++
+++            scoredTests.Should().HaveCount(4);
+++            scoredTests[0].TestMethod.GetDisplayName().Should().Contain("FastUnitTest");
+++            scoredTests[1].TestMethod.GetDisplayName().Should().Contain("SlowIntegrationTest");
+++            scoredTests[2].TestMethod.GetDisplayName().Should().Contain("DatabaseTest");
+++            scoredTests[3].TestMethod.GetDisplayName().Should().Contain("UITest");
+++        }
+++
+++        [Fact]
+++        public async Task ScoreTestsAsync_WithCodeChanges_ShouldBoostRelatedTests()
+++        {
+++            var changes = CreateCodeChangeSet();
+++            var tests = new[]
+++            {
+++                CreateTestInfo("UnrelatedTest", TestCategory.Unit, TimeSpan.FromMilliseconds(100)),
+++                CreateTestInfo("RelatedTest_MyMethod", TestCategory.Unit, TimeSpan.FromMilliseconds(100)),
+++                CreateTestInfo("RelatedTest_MyClass", TestCategory.Integration, TimeSpan.FromMilliseconds(500))
+++            };
+++
+++            var engine = new TestSelectionEngine(_mockLogger.Object, new[] { _mockScoringAlgorithm.Object });
+++            
+++            // Configure mock to boost scores for related tests
+++            _mockScoringAlgorithm.Setup(x => x.CalculateScoreAsync(It.IsAny<TestInfo>(), It.IsAny<TestScoringContext>(), It.IsAny<CancellationToken>()))
+++                .Returns<TestInfo, TestScoringContext, CancellationToken>((test, context, ct) =>
+++                {
+++                    if (test.TestMethod.GetDisplayName().Contains("Related"))
+++                        return Task.FromResult(0.9); // High score for related tests
+++                    return Task.FromResult(0.3); // Lower score for unrelated tests
+++                });
+++
+++            var scoredTests = await engine.ScoreTestsAsync(tests, changes);
+++
+++            scoredTests.Should().HaveCount(3);
+++            // Related tests should be scored higher and appear first
+++            scoredTests.Take(2).All(t => t.TestMethod.GetDisplayName().Contains("Related")).Should().BeTrue();
+++            scoredTests.Last().TestMethod.GetDisplayName().Should().Contain("UnrelatedTest");
+++        }
+++
+++        [Fact]
+++        public async Task ScoreTestsAsync_WithExecutionHistoryContext_ShouldConsiderReliability()
+++        {
+++            var tests = new[]
+++            {
+++                CreateTestInfo("FlakeyTest", TestCategory.Unit, TimeSpan.FromMilliseconds(100)),
+++                CreateTestInfo("ReliableTest", TestCategory.Unit, TimeSpan.FromMilliseconds(150)),
+++                CreateTestInfo("NewTest", TestCategory.Unit, TimeSpan.FromMilliseconds(80))
+++            };
+++
+++            // Simulate execution history for the tests
+++            var flakeyTest = tests[0];
+++            foreach(var result in new[]
+++            {
+++                new TestExecutionResult(false, TimeSpan.FromMilliseconds(100), DateTimeOffset.UtcNow.AddDays(-1)), // Failed
+++                new TestExecutionResult(true, TimeSpan.FromMilliseconds(95), DateTimeOffset.UtcNow.AddHours(-12)), // Passed
+++                new TestExecutionResult(false, TimeSpan.FromMilliseconds(110), DateTimeOffset.UtcNow.AddHours(-6)) // Failed
+++            }) { flakeyTest.ExecutionHistory.Add(result); }
+++
+++            var reliableTest = tests[1];
+++            foreach(var result in new[]
+++            {
+++                new TestExecutionResult(true, TimeSpan.FromMilliseconds(150), DateTimeOffset.UtcNow.AddDays(-1)), // Passed
+++                new TestExecutionResult(true, TimeSpan.FromMilliseconds(145), DateTimeOffset.UtcNow.AddHours(-12)), // Passed
+++                new TestExecutionResult(true, TimeSpan.FromMilliseconds(155), DateTimeOffset.UtcNow.AddHours(-6)) // Passed
+++            }) { reliableTest.ExecutionHistory.Add(result); }
+++
+++            var engine = new TestSelectionEngine(_mockLogger.Object, new[] { _mockScoringAlgorithm.Object });
+++            
+++            // Configure mock to factor in reliability
+++            _mockScoringAlgorithm.Setup(x => x.CalculateScoreAsync(It.IsAny<TestInfo>(), It.IsAny<TestScoringContext>(), It.IsAny<CancellationToken>()))
+++                .Returns<TestInfo, TestScoringContext, CancellationToken>((test, context, ct) =>
+++                {
+++                    if (test.TestMethod.GetDisplayName().Contains("Reliable"))
+++                        return Task.FromResult(0.9); // High score for reliable tests
+++                    if (test.TestMethod.GetDisplayName().Contains("Flakey"))
+++                        return Task.FromResult(0.4); // Lower score for flakey tests
+++                    return Task.FromResult(0.7); // Medium score for new tests
+++                });
+++
+++            var scoredTests = await engine.ScoreTestsAsync(tests);
+++
+++            scoredTests.Should().HaveCount(3);
+++            scoredTests[0].TestMethod.GetDisplayName().Should().Contain("ReliableTest");
+++            scoredTests[1].TestMethod.GetDisplayName().Should().Contain("NewTest");
+++            scoredTests[2].TestMethod.GetDisplayName().Should().Contain("FlakeyTest");
+++        }
+++
+++        [Fact]
+++        public async Task ScoreTestsAsync_WithLargeTestSuite_ShouldHandlePerformantly()
+++        {
+++            // Create a large number of tests to verify performance
+++            var tests = Enumerable.Range(1, 1000)
+++                .Select(i => CreateTestInfo($"Test_{i:D4}", 
+++                    (TestCategory)(i % 4), // Distribute across categories
+++                    TimeSpan.FromMilliseconds(50 + (i % 200)), // Vary execution times
+++                    0.0))
+++                .ToArray();
+++
+++            var engine = new TestSelectionEngine(_mockLogger.Object, new[] { _mockScoringAlgorithm.Object });
+++            
+++            _mockScoringAlgorithm.Setup(x => x.CalculateScoreAsync(It.IsAny<TestInfo>(), It.IsAny<TestScoringContext>(), It.IsAny<CancellationToken>()))
+++                .Returns<TestInfo, TestScoringContext, CancellationToken>((test, context, ct) =>
+++                {
+++                    // Simulate varying scoring based on test name hash
+++                    var hash = test.TestMethod.GetDisplayName().GetHashCode();
+++                    var score = (Math.Abs(hash) % 100) / 100.0; // Score between 0.0 and 1.0
+++                    return Task.FromResult(score);
+++                });
+++
+++            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+++            var scoredTests = await engine.ScoreTestsAsync(tests);
+++            stopwatch.Stop();
+++
+++            scoredTests.Should().HaveCount(1000);
+++            scoredTests.Should().BeInDescendingOrder(t => t.SelectionScore);
+++            
+++            // Performance assertion - should complete within reasonable time
+++            stopwatch.ElapsedMilliseconds.Should().BeLessThan(5000, "scoring 1000 tests should complete within 5 seconds");
+++            
+++            // Verify all tests have been scored
+++            scoredTests.All(t => t.SelectionScore > 0).Should().BeTrue();
+++        }
+++
+++        [Theory]
+++        [InlineData(ConfidenceLevel.Fast)]
+++        [InlineData(ConfidenceLevel.Medium)]
+++        [InlineData(ConfidenceLevel.High)]
+++        [InlineData(ConfidenceLevel.Full)]
+++        public async Task ScoreTestsAsync_WithDifferentConfidenceLevels_ShouldAdjustScoring(ConfidenceLevel confidence)
+++        {
+++            var tests = new[]
+++            {
+++                CreateTestInfo("UnitTest", TestCategory.Unit, TimeSpan.FromMilliseconds(50)),
+++                CreateTestInfo("IntegrationTest", TestCategory.Integration, TimeSpan.FromSeconds(1)),
+++                CreateTestInfo("E2ETest", TestCategory.UI, TimeSpan.FromSeconds(10))
+++            };
+++
+++            var changes = CreateCodeChangeSet();
+++            var engine = new TestSelectionEngine(_mockLogger.Object, new[] { _mockScoringAlgorithm.Object });
+++            
+++            // Configure scoring based on confidence level
+++            _mockScoringAlgorithm.Setup(x => x.CalculateScoreAsync(It.IsAny<TestInfo>(), It.IsAny<TestScoringContext>(), It.IsAny<CancellationToken>()))
+++                .Returns<TestInfo, TestScoringContext, CancellationToken>((test, context, ct) =>
+++                {
+++                    var baseScore = test.Category switch
+++                    {
+++                        TestCategory.Unit => 0.8,
+++                        TestCategory.Integration => 0.6,
+++                        TestCategory.UI => 0.4,
+++                        _ => 0.2
+++                    };
+++
+++                    // Boost score based on confidence level
+++                    var confidenceMultiplier = context.ConfidenceLevel switch
+++                    {
+++                        ConfidenceLevel.Fast => test.Category == TestCategory.Unit ? 1.2 : 0.8,
+++                        ConfidenceLevel.Medium => test.Category <= TestCategory.Integration ? 1.1 : 0.9,
+++                        ConfidenceLevel.High => 1.0,
+++                        ConfidenceLevel.Full => 1.0,
+++                        _ => 1.0
+++                    };
+++
+++                    return Task.FromResult(baseScore * confidenceMultiplier);
+++                });
+++
+++            var scoredTests = await engine.ScoreTestsAsync(tests, changes);
+++
+++            scoredTests.Should().HaveCount(3);
+++            scoredTests.Should().BeInDescendingOrder(t => t.SelectionScore);
+++            
+++            // Verify confidence-specific behavior
+++            switch (confidence)
+++            {
+++                case ConfidenceLevel.Fast:
+++                    // Should prioritize unit tests
+++                    scoredTests[0].Category.Should().Be(TestCategory.Unit);
+++                    break;
+++                case ConfidenceLevel.Medium:
+++                    // Should include unit and integration tests with good scores
+++                    scoredTests.Take(2).All(t => t.Category <= TestCategory.Integration).Should().BeTrue();
+++                    break;
+++                case ConfidenceLevel.High:
+++                case ConfidenceLevel.Full:
+++                    // Should include all test types
+++                    scoredTests.Should().Contain(t => t.Category == TestCategory.UI);
+++                    break;
+++            }
+++        }
+++
+++        #endregion
++     }
++ }
++\ No newline at end of file
+diff --git a/src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs b/src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs
+index 410eadf..dc9ed54 100644
+--- a/src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs
++++ b/src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs
+@@ -247,4 +247,4 @@ namespace TestIntelligence.Core.Discovery
+             DiscoveryError?.Invoke(this, new TestDiscoveryErrorEventArgs(assemblyPath, exception));
+         }
+     }
+-}
+\ No newline at end of file
++}// Test change for coverage analysis
+diff --git a/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs b/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs
+index d7f075c..7b686cd 100644
+--- a/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs
++++ b/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs
+@@ -723,4 +723,4 @@ namespace TestIntelligence.ImpactAnalyzer.Services
+             return false;
+         }
+     }
+-}
+\ No newline at end of file
++}// Test change for coverage analysis

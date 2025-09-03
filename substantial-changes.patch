@@ -1,0 +1,35 @@
+diff --git a/src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs b/src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs
+index 410eadf..8c033b7 100644
+--- a/src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs
++++ b/src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs
+@@ -141,12 +141,15 @@ namespace TestIntelligence.Core.Discovery
+             if (method == null)
+                 return false;
+ 
++            // Added enhanced attribute checking for test coverage analysis
+             var attributes = method.GetCustomAttributes(inherit: false);
+-            return attributes.Any(attr => 
++            var isTestMethod = attributes.Any(attr => 
+                 TestMethodAttributeNames.Contains(attr.GetType().Name) ||
+                 TestMethodAttributeNames.Contains(attr.GetType().FullName ?? "") ||
+                 SetupAttributeNames.Contains(attr.GetType().Name) ||
+                 SetupAttributeNames.Contains(attr.GetType().FullName ?? ""));
++                
++            return isTestMethod;
+         }
+ 
+         /// <summary>
+diff --git a/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs b/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs
+index d7f075c..615f94d 100644
+--- a/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs
++++ b/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs
+@@ -51,6 +51,9 @@ namespace TestIntelligence.ImpactAnalyzer.Services
+             if (string.IsNullOrWhiteSpace(solutionPath))
+                 throw new ArgumentException("Solution path cannot be null or empty", nameof(solutionPath));
+ 
++            // Enhanced logging for test coverage analysis debugging
++            _logger.LogDebug("Analyzing method coverage for: {MethodId}", methodId);
++
+             _logger.LogInformation("Finding tests exercising method: {MethodId} using streaming analysis", methodId);
+ 
+             // Use streaming incremental analysis for much better performance

@@ -51,6 +51,9 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             if (string.IsNullOrWhiteSpace(solutionPath))
                 throw new ArgumentException("Solution path cannot be null or empty", nameof(solutionPath));
 
+            // Enhanced logging for test coverage analysis debugging
+            _logger.LogDebug("Analyzing method coverage for: {MethodId}", methodId);
+
             _logger.LogInformation("Finding tests exercising method: {MethodId} using streaming analysis", methodId);
 
             // Use streaming incremental analysis for much better performance

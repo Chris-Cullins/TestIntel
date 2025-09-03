@@ -1,0 +1,22 @@
+diff --git a/src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs b/src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs
+index 410eadf..dc9ed54 100644
+--- a/src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs
++++ b/src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs
+@@ -247,4 +247,4 @@ namespace TestIntelligence.Core.Discovery
+             DiscoveryError?.Invoke(this, new TestDiscoveryErrorEventArgs(assemblyPath, exception));
+         }
+     }
+-}
+\ No newline at end of file
++}// Test change for coverage analysis
+diff --git a/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs b/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs
+index d7f075c..7b686cd 100644
+--- a/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs
++++ b/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs
+@@ -723,4 +723,4 @@ namespace TestIntelligence.ImpactAnalyzer.Services
+             return false;
+         }
+     }
+-}
+\ No newline at end of file
++}// Test change for coverage analysis

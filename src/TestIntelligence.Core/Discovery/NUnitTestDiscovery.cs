@@ -141,12 +141,15 @@ namespace TestIntelligence.Core.Discovery
             if (method == null)
                 return false;
 
+            // Added enhanced attribute checking for test coverage analysis
             var attributes = method.GetCustomAttributes(inherit: false);
-            return attributes.Any(attr => 
+            var isTestMethod = attributes.Any(attr => 
                 TestMethodAttributeNames.Contains(attr.GetType().Name) ||
                 TestMethodAttributeNames.Contains(attr.GetType().FullName ?? "") ||
                 SetupAttributeNames.Contains(attr.GetType().Name) ||
                 SetupAttributeNames.Contains(attr.GetType().FullName ?? ""));
+                
+            return isTestMethod;
         }
 
         /// <summary>
