@@ -26,7 +26,8 @@ namespace TestIntelligence.CLI.Commands
             var changes = context.GetParameter<string[]>("changes") ?? Array.Empty<string>();
             var confidence = context.GetParameter<string>("confidence") ?? "Medium";
             var output = context.GetParameter<string>("output");
-            var maxTests = context.GetParameter<int?>("maxTests");
+            var maxTestsParam = context.GetParameter<object>("maxTests");
+            var maxTests = maxTestsParam is int intValue ? intValue : (int?)null;
             var maxTime = context.GetParameter<string>("maxTime");
 
             Logger.LogInformation("Selecting tests for path: {Path}", path);

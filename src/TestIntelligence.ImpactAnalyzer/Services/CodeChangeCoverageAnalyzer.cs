@@ -121,14 +121,79 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             var providedTestCoverage = new List<TestCoverageInfo>();
             var testMethodIdSet = new HashSet<string>(testMethodIdList, StringComparer.OrdinalIgnoreCase);
             
+            // Debug: Log what test IDs we're looking for
+            _logger.LogInformation("Looking for test method IDs: {TestIds}", string.Join(", ", testMethodIdList));
+            
+            // Debug: Sample test method IDs from the coverage map, try to get diverse samples
+            var allTestIds = testCoverageMap.MethodToTests.Values
+                .SelectMany(coverage => coverage.Select(c => c.TestMethodId))
+                .Distinct()
+                .ToList();
+            
+            _logger.LogInformation("Total test methods in coverage map: {TotalCount}", allTestIds.Count);
+            
+            // Group by namespace/project and show samples from each
+            var testsByProject = allTestIds
+                .GroupBy(id => id.Split('.')[1]) // Get project name part
+                .ToDictionary(g => g.Key, g => g.ToList());
+            
+            _logger.LogInformation("Tests discovered by project:");
+            foreach (var project in testsByProject.Take(5)) // Show up to 5 projects
+            {
+                var sampleFromProject = project.Value.Take(3).ToList();
+                _logger.LogInformation("  {ProjectName}: {TestCount} tests, samples: {Samples}", 
+                    project.Key, project.Value.Count, string.Join(", ", sampleFromProject));
+            }
+            
+            // Show overall sample
+            var sampleTestIds = allTestIds.Take(15).ToList();
+            _logger.LogInformation("Sample test method IDs from coverage map: {SampleIds}", string.Join(", ", sampleTestIds));
+            
             // Find all coverage relationships where the test method ID matches our provided tests
+            var exactMatches = new HashSet<string>();
+            var fuzzyMatches = new List<TestCoverageInfo>();
+            
             foreach (var kvp in testCoverageMap.MethodToTests)
             {
                 var coverageInfos = kvp.Value.Where(coverage => testMethodIdSet.Contains(coverage.TestMethodId));
                 providedTestCoverage.AddRange(coverageInfos);
+                
+                foreach (var coverage in coverageInfos)
+                {
+                    exactMatches.Add(coverage.TestMethodId);
+                }
+            }
+            
+            // If no exact matches found, try fuzzy matching
+            if (!exactMatches.Any())
+            {
+                _logger.LogWarning("No exact test method ID matches found, attempting fuzzy matching");
+                
+                foreach (var testId in testMethodIdList)
+                {
+                    var fuzzyMatchesForTest = FindFuzzyTestMatches(testId, testCoverageMap);
+                    fuzzyMatches.AddRange(fuzzyMatchesForTest);
+                    
+                    if (fuzzyMatchesForTest.Any())
+                    {
+                        _logger.LogInformation("Found fuzzy matches for '{TestId}': {FuzzyMatches}", 
+                            testId, string.Join(", ", fuzzyMatchesForTest.Select(p => p.TestMethodId)));
+                    }
+                    else
+                    {
+                        _logger.LogWarning("No matches (exact or fuzzy) found for test: '{TestId}'", testId);
+                    }
+                }
+                
+                // Use fuzzy matches if no exact matches were found
+                providedTestCoverage.AddRange(fuzzyMatches);
+            }
+            else
+            {
+                _logger.LogInformation("Found exact matches for test IDs: {ExactMatches}", string.Join(", ", exactMatches));
             }
 
-            _logger.LogDebug("Found {CoverageCount} coverage relationships for provided tests", providedTestCoverage.Count);
+            _logger.LogInformation("Found {CoverageCount} coverage relationships for provided tests", providedTestCoverage.Count);
 
             // Get all changed methods from the code changes
             var changedMethods = codeChanges.GetChangedMethods().ToList();
@@ -186,6 +251,75 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             }
 
             return matchingTests;
+        }
+
+        /// <summary>
+        /// Attempts to find test methods using fuzzy matching when exact matches fail.
+        /// Tries different matching strategies including method name only, class.method, etc.
+        /// </summary>
+        private IReadOnlyList<TestCoverageInfo> FindFuzzyTestMatches(string testId, TestCoverageMap coverageMap)
+        {
+            var matches = new List<TestCoverageInfo>();
+            
+            // Strategy 1: Match by method name only (last part after final dot)
+            var methodNameOnly = testId.Split('.').LastOrDefault();
+            if (!string.IsNullOrEmpty(methodNameOnly))
+            {
+                var methodNameMatches = coverageMap.MethodToTests.Values
+                    .SelectMany(coverage => coverage)
+                    .Where(c => c.TestMethodName.Equals(methodNameOnly, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                matches.AddRange(methodNameMatches);
+                
+                _logger.LogDebug("Strategy 1 (method name '{MethodName}'): Found {MatchCount} matches", 
+                    methodNameOnly, methodNameMatches.Count);
+            }
+            
+            // Strategy 2: Match by class.method pattern (last two parts)
+            var parts = testId.Split('.');
+            if (parts.Length >= 2)
+            {
+                var classMethod = $"{parts[^2]}.{parts[^1]}";
+                var classMethodMatches = coverageMap.MethodToTests.Values
+                    .SelectMany(coverage => coverage)
+                    .Where(c => c.TestMethodId.EndsWith(classMethod, StringComparison.OrdinalIgnoreCase) ||
+                               $"{c.TestClassName.Split('.').LastOrDefault()}.{c.TestMethodName}".Equals(classMethod, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                matches.AddRange(classMethodMatches);
+                
+                _logger.LogDebug("Strategy 2 (class.method '{ClassMethod}'): Found {MatchCount} matches", 
+                    classMethod, classMethodMatches.Count);
+            }
+            
+            // Strategy 3: Enhanced partial matching - look for test method names that end with the provided pattern
+            var endPatternMatches = coverageMap.MethodToTests.Values
+                .SelectMany(coverage => coverage)
+                .Where(c => c.TestMethodName.EndsWith(testId, StringComparison.OrdinalIgnoreCase) ||
+                           c.TestMethodId.EndsWith(testId + "()", StringComparison.OrdinalIgnoreCase) ||
+                           c.TestMethodId.EndsWith("." + testId + "()", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            matches.AddRange(endPatternMatches);
+            
+            _logger.LogDebug("Strategy 3 (end pattern '{Pattern}'): Found {MatchCount} matches", 
+                testId, endPatternMatches.Count);
+            
+            // Strategy 4: Partial substring matching (more aggressive)
+            var substringMatches = coverageMap.MethodToTests.Values
+                .SelectMany(coverage => coverage)
+                .Where(c => c.TestMethodId.Contains(testId, StringComparison.OrdinalIgnoreCase) ||
+                           testId.Contains(c.TestMethodName, StringComparison.OrdinalIgnoreCase) ||
+                           c.TestClassName.Contains(testId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            matches.AddRange(substringMatches);
+            
+            _logger.LogDebug("Strategy 4 (substring '{Pattern}'): Found {MatchCount} matches", 
+                testId, substringMatches.Count);
+            
+            // Remove duplicates and return
+            var uniqueMatches = matches.GroupBy(m => m.TestMethodId).Select(g => g.First()).ToList();
+            _logger.LogDebug("Total unique fuzzy matches for '{TestId}': {UniqueCount}", testId, uniqueMatches.Count);
+            
+            return uniqueMatches;
         }
     }
 }

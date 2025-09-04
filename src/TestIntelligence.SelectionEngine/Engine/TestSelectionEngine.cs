@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using TestIntelligence.Core.Assembly;
+using TestIntelligence.Core.Discovery;
 using TestIntelligence.ImpactAnalyzer.Models;
 using TestIntelligence.SelectionEngine.Interfaces;
 using TestIntelligence.SelectionEngine.Models;
@@ -20,6 +23,7 @@ namespace TestIntelligence.SelectionEngine.Engine
         private readonly List<ITestScoringAlgorithm> _scoringAlgorithms;
         private readonly ITestCategorizer? _testCategorizer;
         private readonly IImpactAnalyzer? _impactAnalyzer;
+        private readonly string? _solutionPath;
 
         // In-memory storage for demonstration - in production this would be a database
         private readonly Dictionary<string, TestInfo> _testRepository;
@@ -29,11 +33,13 @@ namespace TestIntelligence.SelectionEngine.Engine
             ILogger<TestSelectionEngine> logger,
             IEnumerable<ITestScoringAlgorithm>? scoringAlgorithms = null,
             ITestCategorizer? testCategorizer = null,
-            IImpactAnalyzer? impactAnalyzer = null)
+            IImpactAnalyzer? impactAnalyzer = null,
+            string? solutionPath = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _testCategorizer = testCategorizer;
             _impactAnalyzer = impactAnalyzer;
+            _solutionPath = solutionPath;
             _testRepository = new Dictionary<string, TestInfo>();
             _executionHistory = new List<TestExecutionResult>();
 
@@ -52,12 +58,13 @@ namespace TestIntelligence.SelectionEngine.Engine
         public async Task<TestExecutionPlan> GetOptimalTestPlanAsync(
             CodeChangeSet changes, 
             ConfidenceLevel confidenceLevel, 
+            TestSelectionOptions? options = null,
             CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Creating optimal test plan for {ChangeCount} changes with {ConfidenceLevel} confidence", 
                 changes.Changes.Count, confidenceLevel);
 
-            var options = new TestSelectionOptions();
+            options ??= new TestSelectionOptions();
             return await GetTestPlanInternalAsync(changes, confidenceLevel, options, cancellationToken);
         }
 
@@ -164,18 +171,38 @@ namespace TestIntelligence.SelectionEngine.Engine
                     "No tests available");
             }
 
-            // Score all candidate tests
-            var context = new TestScoringContext(confidenceLevel, changes, options);
-            var scoredTests = new List<TestInfo>();
-
-            foreach (var test in candidateTests)
+            List<TestInfo> selectedTests;
+            
+            // For Full confidence, select ALL tests without scoring
+            if (confidenceLevel == ConfidenceLevel.Full)
             {
-                test.SelectionScore = await CalculateCombinedScore(test, context, cancellationToken);
-                scoredTests.Add(test);
+                _logger.LogInformation("Full confidence selected - including ALL {TestCount} tests", candidateTests.Count);
+                selectedTests = candidateTests;
+                
+                // Apply basic filtering for Full confidence (exclude flaky tests if requested)
+                if (!options.IncludeFlakyTests)
+                {
+                    selectedTests = selectedTests.Where(t => !t.IsFlaky()).ToList();
+                }
+                
+                // Apply category and tag filters if specified
+                selectedTests = ApplyBasicFilters(selectedTests, options);
             }
+            else
+            {
+                // Score all candidate tests for other confidence levels
+                var context = new TestScoringContext(confidenceLevel, changes, options);
+                var scoredTests = new List<TestInfo>();
 
-            // Select tests based on confidence level and constraints
-            var selectedTests = await SelectTestsForPlan(scoredTests, confidenceLevel, options, cancellationToken);
+                foreach (var test in candidateTests)
+                {
+                    test.SelectionScore = await CalculateCombinedScore(test, context, cancellationToken);
+                    scoredTests.Add(test);
+                }
+
+                // Select tests based on confidence level and constraints
+                selectedTests = await SelectTestsForPlan(scoredTests, confidenceLevel, options, cancellationToken);
+            }
 
             // Calculate total estimated duration
             var estimatedDuration = TimeSpan.FromMilliseconds(
@@ -198,12 +225,33 @@ namespace TestIntelligence.SelectionEngine.Engine
             TestSelectionOptions options,
             CancellationToken cancellationToken)
         {
-            // In production, this would query a test repository/database
-            // For now, return mock tests for demonstration
             var candidates = new List<TestInfo>();
 
-            // This is a simplified mock - in production, we'd have a proper test discovery service
-            await Task.CompletedTask;
+            try
+            {
+                // If we have a solution path, discover tests from it
+                if (!string.IsNullOrEmpty(_solutionPath))
+                {
+                    candidates = await DiscoverTestsFromSolution(_solutionPath, cancellationToken);
+                }
+                // If we don't have a solution path but have changes, try to infer from the first change path
+                else if (changes?.Changes.Count > 0)
+                {
+                    var firstChangePath = changes.Changes.First().FilePath;
+                    var solutionPath = FindSolutionFile(firstChangePath);
+                    if (!string.IsNullOrEmpty(solutionPath))
+                    {
+                        _logger.LogInformation("Inferred solution path from changes: {SolutionPath}", solutionPath);
+                        candidates = await DiscoverTestsFromSolution(solutionPath, cancellationToken);
+                    }
+                }
+
+                _logger.LogInformation("Discovered {CandidateCount} candidate tests", candidates.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error discovering candidate tests");
+            }
 
             return candidates;
         }
@@ -244,54 +292,22 @@ namespace TestIntelligence.SelectionEngine.Engine
             var sortedTests = scoredTests.OrderByDescending(t => t.SelectionScore).ToList();
 
             // Apply confidence level limits
-            var maxTests = Math.Min(
-                options.MaxTestCount ?? confidenceLevel.GetMaxTestCount(),
-                confidenceLevel.GetMaxTestCount());
+            var maxTests = options.MaxTestCount ?? confidenceLevel.GetMaxTestCount();
 
             var maxDuration = options.MaxExecutionTime ?? confidenceLevel.GetEstimatedDuration();
             var minScore = options.MinSelectionScore ?? GetMinScoreForConfidenceLevel(confidenceLevel);
 
             var selectedTests = new List<TestInfo>();
-            var currentDuration = TimeSpan.Zero;
-
-            foreach (var test in sortedTests)
+            
+            // For Fast confidence, use strategic category balance
+            if (confidenceLevel == ConfidenceLevel.Fast)
             {
-                // Check constraints
-                if (selectedTests.Count >= maxTests)
-                    break;
-
-                if (test.SelectionScore < minScore)
-                    break;
-
-                if (currentDuration + test.AverageExecutionTime > maxDuration)
-                    continue; // Skip this test, try others
-
-                // Apply category filters
-                if (options.ExcludedCategories?.Contains(test.Category) == true)
-                    continue;
-
-                if (options.IncludedCategories?.Count > 0 && 
-                    !options.IncludedCategories.Contains(test.Category))
-                    continue;
-
-                // Apply tag filters
-                if (options.ExcludedTags?.Count > 0 && 
-                    test.Tags.Any(tag => options.ExcludedTags.Contains(tag)))
-                    continue;
-
-                if (options.RequiredTags?.Count > 0 && 
-                    !options.RequiredTags.Any(tag => test.Tags.Contains(tag)))
-                    continue;
-
-                // Apply flaky test filter
-                if (!options.IncludeFlakyTests && test.IsFlaky())
-                    continue;
-
-                selectedTests.Add(test);
-                currentDuration += test.AverageExecutionTime;
-
-                // Update selection timestamp
-                test.LastSelected = DateTimeOffset.UtcNow;
+                selectedTests = await SelectFastConfidenceTests(sortedTests, maxTests, maxDuration, minScore, options, cancellationToken);
+            }
+            else
+            {
+                // Standard selection for other confidence levels
+                selectedTests = SelectStandardTests(sortedTests, maxTests, maxDuration, minScore, options);
             }
 
             await Task.CompletedTask; // Placeholder for async operations
@@ -313,6 +329,426 @@ namespace TestIntelligence.SelectionEngine.Engine
                 _ => 0.3
             };
         }
+
+        private static List<TestInfo> ApplyBasicFilters(List<TestInfo> tests, TestSelectionOptions options)
+        {
+            var filtered = tests.AsEnumerable();
+
+            // Apply category filters
+            if (options.ExcludedCategories?.Count > 0)
+            {
+                filtered = filtered.Where(t => !options.ExcludedCategories.Contains(t.Category));
+            }
+
+            if (options.IncludedCategories?.Count > 0)
+            {
+                filtered = filtered.Where(t => options.IncludedCategories.Contains(t.Category));
+            }
+
+            // Apply tag filters
+            if (options.ExcludedTags?.Count > 0)
+            {
+                filtered = filtered.Where(t => !t.Tags.Any(tag => options.ExcludedTags.Contains(tag)));
+            }
+
+            if (options.RequiredTags?.Count > 0)
+            {
+                filtered = filtered.Where(t => options.RequiredTags.Any(tag => t.Tags.Contains(tag)));
+            }
+
+            return filtered.ToList();
+        }
+
+        private Task<List<TestInfo>> SelectFastConfidenceTests(
+            List<TestInfo> sortedTests,
+            int maxTests,
+            TimeSpan maxDuration,
+            double minScore,
+            TestSelectionOptions options,
+            CancellationToken cancellationToken)
+        {
+            var selectedTests = new List<TestInfo>();
+            var currentDuration = TimeSpan.Zero;
+
+            // Strategy for Fast confidence: prioritize high-scoring tests with balanced categories
+            // 60% Unit tests (fast feedback), 40% Integration tests (broader coverage)
+            var unitTestLimit = Math.Max(1, (int)(maxTests * 0.6));
+            var integrationTestLimit = maxTests - unitTestLimit;
+            
+            var unitTestsSelected = 0;
+            var integrationTestsSelected = 0;
+
+            // Use a higher score threshold for Fast confidence to ensure quality
+            var fastMinScore = Math.Max(minScore, 0.8);
+
+            _logger.LogDebug("Fast selection: targeting {UnitLimit} unit tests, {IntegrationLimit} integration tests, min score {MinScore}",
+                unitTestLimit, integrationTestLimit, fastMinScore);
+
+            // First pass: select high-scoring tests with category balance
+            foreach (var test in sortedTests)
+            {
+                if (selectedTests.Count >= maxTests)
+                    break;
+
+                if (test.SelectionScore < fastMinScore)
+                    continue;
+
+                if (currentDuration + test.AverageExecutionTime > maxDuration)
+                    continue;
+
+                // Apply basic filters
+                if (!PassesBasicFilters(test, options))
+                    continue;
+
+                // Apply category limits for balanced selection
+                var canSelectTest = test.Category switch
+                {
+                    TestCategory.Unit when unitTestsSelected < unitTestLimit => true,
+                    TestCategory.Integration when integrationTestsSelected < integrationTestLimit => true,
+                    _ => false
+                };
+
+                if (canSelectTest)
+                {
+                    selectedTests.Add(test);
+                    currentDuration += test.AverageExecutionTime;
+                    test.LastSelected = DateTimeOffset.UtcNow;
+
+                    if (test.Category == TestCategory.Unit)
+                        unitTestsSelected++;
+                    else if (test.Category == TestCategory.Integration)
+                        integrationTestsSelected++;
+                }
+            }
+
+            // Second pass: fill remaining slots with highest scoring tests if we have capacity
+            if (selectedTests.Count < maxTests)
+            {
+                foreach (var test in sortedTests)
+                {
+                    if (selectedTests.Count >= maxTests)
+                        break;
+
+                    if (selectedTests.Contains(test))
+                        continue;
+
+                    if (test.SelectionScore < minScore) // Use original threshold for backfill
+                        continue;
+
+                    if (currentDuration + test.AverageExecutionTime > maxDuration)
+                        continue;
+
+                    if (!PassesBasicFilters(test, options))
+                        continue;
+
+                    selectedTests.Add(test);
+                    currentDuration += test.AverageExecutionTime;
+                    test.LastSelected = DateTimeOffset.UtcNow;
+                }
+            }
+
+            _logger.LogInformation("Fast selection: selected {Total} tests ({Unit} unit, {Integration} integration, {Other} other)",
+                selectedTests.Count,
+                selectedTests.Count(t => t.Category == TestCategory.Unit),
+                selectedTests.Count(t => t.Category == TestCategory.Integration),
+                selectedTests.Count(t => t.Category != TestCategory.Unit && t.Category != TestCategory.Integration));
+
+            return Task.FromResult(selectedTests);
+        }
+
+        private List<TestInfo> SelectStandardTests(
+            List<TestInfo> sortedTests,
+            int maxTests,
+            TimeSpan maxDuration,
+            double minScore,
+            TestSelectionOptions options)
+        {
+            var selectedTests = new List<TestInfo>();
+            var currentDuration = TimeSpan.Zero;
+
+            foreach (var test in sortedTests)
+            {
+                // Check constraints
+                if (selectedTests.Count >= maxTests)
+                    break;
+
+                if (test.SelectionScore < minScore)
+                    break;
+
+                if (currentDuration + test.AverageExecutionTime > maxDuration)
+                    continue; // Skip this test, try others
+
+                if (!PassesBasicFilters(test, options))
+                    continue;
+
+                selectedTests.Add(test);
+                currentDuration += test.AverageExecutionTime;
+                test.LastSelected = DateTimeOffset.UtcNow;
+            }
+
+            return selectedTests;
+        }
+
+        private static bool PassesBasicFilters(TestInfo test, TestSelectionOptions options)
+        {
+            // Apply category filters
+            if (options.ExcludedCategories?.Contains(test.Category) == true)
+                return false;
+
+            if (options.IncludedCategories?.Count > 0 && 
+                !options.IncludedCategories.Contains(test.Category))
+                return false;
+
+            // Apply tag filters
+            if (options.ExcludedTags?.Count > 0 && 
+                test.Tags.Any(tag => options.ExcludedTags.Contains(tag)))
+                return false;
+
+            if (options.RequiredTags?.Count > 0 && 
+                !options.RequiredTags.Any(tag => test.Tags.Contains(tag)))
+                return false;
+
+            // Apply flaky test filter
+            if (!options.IncludeFlakyTests && test.IsFlaky())
+                return false;
+
+            return true;
+        }
+
+        private async Task<List<TestInfo>> DiscoverTestsFromSolution(string solutionPath, CancellationToken cancellationToken)
+        {
+            var testInfos = new List<TestInfo>();
+
+            try
+            {
+                // Find test assemblies in the solution
+                var assemblyPaths = await FindTestAssembliesInSolution(solutionPath);
+                
+                _logger.LogInformation("Found {AssemblyCount} test assemblies in solution", assemblyPaths.Count);
+                foreach (var path in assemblyPaths)
+                {
+                    _logger.LogInformation("  Test assembly: {Assembly}", path);
+                }
+
+                // Use shared loader for efficiency
+                using var loader = new CrossFrameworkAssemblyLoader();
+                var discovery = TestDiscoveryFactory.CreateNUnitTestDiscovery();
+
+                foreach (var assemblyPath in assemblyPaths)
+                {
+                    try
+                    {
+                        var loadResult = await loader.LoadAssemblyAsync(assemblyPath);
+                        if (!loadResult.IsSuccess || loadResult.Assembly == null)
+                        {
+                            _logger.LogWarning("Failed to load assembly: {Assembly} - {Errors}", 
+                                assemblyPath, string.Join(", ", loadResult.Errors));
+                            continue;
+                        }
+
+                        var discoveryResult = await discovery.DiscoverTestsAsync(loadResult.Assembly, cancellationToken);
+                        
+                        // Convert discovered tests to TestInfo objects
+                        foreach (var testMethod in discoveryResult.GetAllTestMethods())
+                        {
+                            var testInfo = ConvertToTestInfo(testMethod);
+                            testInfos.Add(testInfo);
+                        }
+
+                        _logger.LogDebug("Discovered {TestCount} tests from {Assembly}", 
+                            discoveryResult.TestMethodCount, Path.GetFileName(assemblyPath));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Error discovering tests from assembly: {Assembly}", assemblyPath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error discovering tests from solution: {Solution}", solutionPath);
+            }
+
+            return testInfos;
+        }
+
+        private async Task<List<string>> FindTestAssembliesInSolution(string solutionPath)
+        {
+            var assemblies = new List<string>();
+
+            try
+            {
+                var solutionDir = Path.GetDirectoryName(solutionPath)!;
+                var projectPaths = await FindTestProjectsInSolution(solutionPath);
+                
+                _logger.LogInformation("Found {ProjectCount} test projects", projectPaths.Count);
+
+                foreach (var projectPath in projectPaths)
+                {
+                    var assemblyPath = GetAssemblyPathFromProject(projectPath);
+                    _logger.LogDebug("Checking assembly path: {Assembly} (exists: {Exists})", assemblyPath, File.Exists(assemblyPath));
+                    if (File.Exists(assemblyPath))
+                    {
+                        assemblies.Add(assemblyPath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error finding test assemblies in solution: {Solution}", solutionPath);
+            }
+
+            return assemblies;
+        }
+
+        private async Task<List<string>> FindTestProjectsInSolution(string solutionPath)
+        {
+            var testProjects = new List<string>();
+
+            try
+            {
+                var solutionContent = await File.ReadAllTextAsync(solutionPath);
+                var solutionDir = Path.GetDirectoryName(solutionPath)!;
+
+                // Parse solution file properly
+                // Format: Project("{GUID}") = "ProjectName", "RelativePath", "{ProjectGUID}"
+                var lines = solutionContent.Split('\n');
+                foreach (var line in lines)
+                {
+                    if (line.StartsWith("Project(") && line.Contains(".csproj"))
+                    {
+                        // Extract project path from solution line
+                        var parts = line.Split(',');
+                        if (parts.Length >= 2)
+                        {
+                            var relativePath = parts[1].Trim().Trim('"');
+                            
+                            // Only include test projects (in tests directory or with "Test" in path/name)
+                            if (relativePath.Contains("test", StringComparison.OrdinalIgnoreCase) || 
+                                relativePath.StartsWith("tests", StringComparison.OrdinalIgnoreCase))
+                            {
+                                var fullPath = Path.Combine(solutionDir, relativePath).Replace('\\', Path.DirectorySeparatorChar);
+                                if (File.Exists(fullPath))
+                                {
+                                    testProjects.Add(fullPath);
+                                    _logger.LogDebug("Found test project: {Project}", fullPath);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error parsing solution file: {Solution}", solutionPath);
+            }
+
+            return testProjects;
+        }
+
+        private string GetAssemblyPathFromProject(string projectPath)
+        {
+            var projectDir = Path.GetDirectoryName(projectPath)!;
+            var projectName = Path.GetFileNameWithoutExtension(projectPath);
+            
+            // Try common output paths
+            var possiblePaths = new[]
+            {
+                Path.Combine(projectDir, "bin", "Debug", "net8.0", $"{projectName}.dll"),
+                Path.Combine(projectDir, "bin", "Release", "net8.0", $"{projectName}.dll"),
+                Path.Combine(projectDir, "bin", "Debug", $"{projectName}.dll"),
+                Path.Combine(projectDir, "bin", "Release", $"{projectName}.dll")
+            };
+
+            foreach (var path in possiblePaths)
+            {
+                if (File.Exists(path))
+                {
+                    return path;
+                }
+            }
+
+            // Default to Debug net8.0 path even if it doesn't exist yet
+            return Path.Combine(projectDir, "bin", "Debug", "net8.0", $"{projectName}.dll");
+        }
+
+        private TestInfo ConvertToTestInfo(Core.Models.TestMethod testMethod)
+        {
+            var category = CategorizeTest(testMethod);
+            var averageTime = TimeSpan.FromMilliseconds(100); // Default estimate
+            
+            var testInfo = new TestInfo(testMethod, category, averageTime);
+
+            // Add tags to the test info
+            var tags = ExtractTestTags(testMethod);
+            foreach (var tag in tags)
+            {
+                testInfo.Tags.Add(tag);
+            }
+
+            return testInfo;
+        }
+
+        private TestCategory CategorizeTest(Core.Models.TestMethod testMethod)
+        {
+            var methodName = testMethod.MethodInfo.Name.ToLower();
+            var className = testMethod.MethodInfo.DeclaringType?.Name.ToLower() ?? "";
+
+            if (methodName.Contains("database") || methodName.Contains("db") || 
+                className.Contains("database") || className.Contains("db"))
+                return TestCategory.Database;
+
+            if (methodName.Contains("api") || methodName.Contains("http") ||
+                className.Contains("api") || className.Contains("http"))
+                return TestCategory.API;
+
+            if (methodName.Contains("integration") || className.Contains("integration"))
+                return TestCategory.Integration;
+
+            if (methodName.Contains("ui") || methodName.Contains("selenium") ||
+                className.Contains("ui") || className.Contains("selenium"))
+                return TestCategory.UI;
+
+            return TestCategory.Unit;
+        }
+
+        private List<string> ExtractTestTags(Core.Models.TestMethod testMethod)
+        {
+            var tags = new List<string>();
+            
+            // Add category as a tag
+            var category = CategorizeTest(testMethod);
+            tags.Add(category.ToString());
+
+            // You could add more sophisticated tag extraction from attributes here
+            
+            return tags;
+        }
+
+        private string? FindSolutionFile(string filePath)
+        {
+            try
+            {
+                var directory = Path.GetDirectoryName(Path.GetFullPath(filePath));
+                
+                while (directory != null)
+                {
+                    var solutionFiles = Directory.GetFiles(directory, "*.sln");
+                    if (solutionFiles.Length > 0)
+                    {
+                        return solutionFiles.First(); // Return the first solution file found
+                    }
+                    
+                    directory = Path.GetDirectoryName(directory);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error finding solution file for path: {FilePath}", filePath);
+            }
+
+            return null;
+        }
     }
 
     /// <summary>
@@ -329,4 +765,4 @@ namespace TestIntelligence.SelectionEngine.Engine
             public void Dispose() { }
         }
     }
-}
+}// Another test change

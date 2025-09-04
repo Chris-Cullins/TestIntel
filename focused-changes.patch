@@ -1,22 +1,97 @@
-diff --git a/src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs b/src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs
-index 410eadf..dc9ed54 100644
---- a/src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs
-+++ b/src/TestIntelligence.Core/Discovery/NUnitTestDiscovery.cs
-@@ -247,4 +247,4 @@ namespace TestIntelligence.Core.Discovery
-             DiscoveryError?.Invoke(this, new TestDiscoveryErrorEventArgs(assemblyPath, exception));
+diff --git a/src/TestIntelligence.ImpactAnalyzer/Analysis/GitDiffParser.cs b/src/TestIntelligence.ImpactAnalyzer/Analysis/GitDiffParser.cs
+index 63f045f..82772e8 100644
+--- a/src/TestIntelligence.ImpactAnalyzer/Analysis/GitDiffParser.cs
++++ b/src/TestIntelligence.ImpactAnalyzer/Analysis/GitDiffParser.cs
+@@ -32,6 +32,15 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
+         private static readonly Regex MethodSignaturePattern = new Regex(
+             @"(?:(?:public|private|protected|internal)\s+)?(?:(?:static|virtual|override|async|abstract)\s+)*(?:Task<?[\w<>,\s]*>?|void|bool|int|string|[\w<>\[\],]+)\s+(\w+)(?:<[^>]*>)?\s*\([^)]*\)(?:\s+where\s+[^{]*)?\s*",
+             RegexOptions.Multiline | RegexOptions.IgnoreCase);
++        
++        // Additional patterns for method-related changes
++        private static readonly Regex SimplerMethodPattern = new Regex(
++            @"(\w+)\s*\([^)]*\)\s*(?:;|{|\s*$)",
++            RegexOptions.Multiline);
++            
++        private static readonly Regex VariableAssignmentPattern = new Regex(
++            @"var\s+(\w+)\s*=|(\w+)\s+(\w+)\s*=",
++            RegexOptions.Multiline);
+ 
+         public GitDiffParser(ILogger<GitDiffParser> logger, IRoslynAnalyzer roslynAnalyzer)
+         {
+@@ -125,6 +134,13 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
+             }
+ 
+             _logger.LogInformation("Parsed {ChangeCount} code changes from diff", changes.Count);
++            foreach (var change in changes)
++            {
++                _logger.LogDebug("Code change: {FilePath} ({ChangeType}) - {MethodCount} methods: [{Methods}]", 
++                    change.FilePath, change.ChangeType, change.ChangedMethods.Count, 
++                    string.Join(", ", change.ChangedMethods));
++            }
++            
+             return Task.FromResult(new CodeChangeSet(changes));
          }
-     }
--}
-\ No newline at end of file
-+}// Test change for coverage analysis
-diff --git a/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs b/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs
-index d7f075c..7b686cd 100644
---- a/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs
-+++ b/src/TestIntelligence.ImpactAnalyzer/Services/TestCoverageAnalyzer.cs
-@@ -723,4 +723,4 @@ namespace TestIntelligence.ImpactAnalyzer.Services
-             return false;
-         }
-     }
--}
-\ No newline at end of file
-+}// Test change for coverage analysis
+ 
+@@ -190,9 +206,14 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
+                 var changedMethods = ExtractMethodNames(changedLines);
+                 var changedTypes = ExtractTypeNames(changedLines);
+ 
+-                if (!changedMethods.Any() && !changedTypes.Any())
++                // If we have any changed lines in a C# file, create a change even if we can't detect specific methods/types
++                // This ensures we don't lose changes due to parsing limitations
++                if (!changedLines.Any())
+                     return null;
+ 
++                _logger.LogDebug("Creating code change for {FilePath}: {MethodCount} methods, {TypeCount} types, {LineCount} changed lines", 
++                    filePath, changedMethods.Count, changedTypes.Count, changedLines.Count);
++
+                 return new CodeChange(filePath, changeType, changedMethods.ToList(), changedTypes.ToList());
+             }
+             catch (Exception ex)
+@@ -216,6 +237,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
+ 
+             foreach (var line in lines)
+             {
++                // Try primary method pattern
+                 var matches = MethodSignaturePattern.Matches(line);
+                 foreach (Match match in matches)
+                 {
+@@ -225,9 +247,38 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
+                         if (!string.IsNullOrEmpty(methodName) && IsValidMethodName(methodName))
+                         {
+                             methodNames.Add(methodName);
++                            _logger.LogDebug("Found method via primary pattern: {MethodName}", methodName);
++                        }
++                    }
++                }
++
++                // Try simpler method pattern for method calls and definitions
++                var simpleMatches = SimplerMethodPattern.Matches(line);
++                foreach (Match match in simpleMatches)
++                {
++                    if (match.Groups.Count > 1)
++                    {
++                        var methodName = match.Groups[1].Value.Trim();
++                        if (!string.IsNullOrEmpty(methodName) && IsValidMethodName(methodName))
++                        {
++                            methodNames.Add(methodName);
++                            _logger.LogDebug("Found method via simple pattern: {MethodName}", methodName);
+                         }
+                     }
+                 }
++
++                // Extract variable names from assignments (related to changed logic)
++                var varMatches = VariableAssignmentPattern.Matches(line);
++                foreach (Match match in varMatches)
++                {
++                    var varName = match.Groups.Count > 2 && !string.IsNullOrEmpty(match.Groups[2].Value) ? 
++                        match.Groups[2].Value.Trim() : match.Groups[1].Value.Trim();
++                    if (!string.IsNullOrEmpty(varName) && IsValidMethodName(varName))
++                    {
++                        methodNames.Add($"Variable_{varName}"); // Prefix to distinguish variables
++                        _logger.LogDebug("Found variable assignment: {VarName}", varName);
++                    }
++                }
+             }
+ 
+             return methodNames;

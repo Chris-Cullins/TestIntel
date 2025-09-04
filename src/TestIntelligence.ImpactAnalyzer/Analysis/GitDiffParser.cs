@@ -267,18 +267,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                     }
                 }
 
-                // Extract variable names from assignments (related to changed logic)
-                var varMatches = VariableAssignmentPattern.Matches(line);
-                foreach (Match match in varMatches)
-                {
-                    var varName = match.Groups.Count > 2 && !string.IsNullOrEmpty(match.Groups[2].Value) ? 
-                        match.Groups[2].Value.Trim() : match.Groups[1].Value.Trim();
-                    if (!string.IsNullOrEmpty(varName) && IsValidMethodName(varName))
-                    {
-                        methodNames.Add($"Variable_{varName}"); // Prefix to distinguish variables
-                        _logger.LogDebug("Found variable assignment: {VarName}", varName);
-                    }
-                }
+                // Skip variable extraction as it creates noise in method detection
+                // Focus on actual method signatures and method calls only
             }
 
             return methodNames;
@@ -310,11 +300,23 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         private static bool IsValidMethodName(string methodName)
         {
+            if (string.IsNullOrWhiteSpace(methodName))
+                return false;
+                
+            // Filter out common non-method patterns
+            if (methodName.StartsWith("Variable_", StringComparison.OrdinalIgnoreCase) ||
+                methodName.Contains("Regex", StringComparison.OrdinalIgnoreCase) ||
+                methodName.Length < 2 ||
+                methodName.All(char.IsDigit))
+                return false;
+                
             // Basic validation to filter out keywords and invalid identifiers
             var csharpKeywords = new HashSet<string>
             {
                 "if", "else", "while", "for", "foreach", "do", "switch", "case", "return", "break", "continue",
-                "try", "catch", "finally", "throw", "using", "namespace", "class", "interface", "struct", "enum"
+                "try", "catch", "finally", "throw", "using", "namespace", "class", "interface", "struct", "enum",
+                "var", "new", "this", "base", "null", "true", "false", "static", "public", "private", "protected",
+                "internal", "override", "virtual", "abstract", "sealed", "readonly", "const", "async", "await"
             };
 
             return !csharpKeywords.Contains(methodName.ToLower()) && 

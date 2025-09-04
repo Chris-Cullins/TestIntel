@@ -67,13 +67,10 @@ namespace TestIntelligence.CLI.Services
                 Console.WriteLine($"Solution: {solutionPath}");
                 Console.WriteLine($"Tests to analyze: {testIds.Count}");
                 
-                if (verbose)
+                Console.WriteLine("Test methods:");
+                foreach (var testId in testIds)
                 {
-                    Console.WriteLine("Test methods:");
-                    foreach (var testId in testIds)
-                    {
-                        Console.WriteLine($"  • {testId}");
-                    }
+                    Console.WriteLine($"  • {testId}");
                 }
                 
                 Console.WriteLine();

@@ -17,6 +17,7 @@ namespace TestIntelligence.SelectionEngine.Interfaces
         Task<TestExecutionPlan> GetOptimalTestPlanAsync(
             CodeChangeSet changes,
             ConfidenceLevel confidenceLevel,
+            TestSelectionOptions? options = null,
             CancellationToken cancellationToken = default);
 
         /// <summary>

@@ -353,3 +353,11 @@ coverage/
 reports/
 CallGraphReports*/
 [cC]overage*/
+
+# Test output and analysis files
+*.json
+*.patch
+*.md
+focused-changes.patch
+recent-changes.patch
+test-changes.patch

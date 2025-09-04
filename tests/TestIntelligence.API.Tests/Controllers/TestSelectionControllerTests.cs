@@ -90,7 +90,7 @@ public class TestSelectionControllerTests
             "High confidence plan");
 
         _mockSelectionEngine
-            .GetOptimalTestPlanAsync(codeChanges, ConfidenceLevel.High, Arg.Any<CancellationToken>())
+            .GetOptimalTestPlanAsync(codeChanges, ConfidenceLevel.High, Arg.Any<TestSelectionOptions>(), Arg.Any<CancellationToken>())
             .Returns(expectedPlan);
 
         // Act
@@ -100,6 +100,7 @@ public class TestSelectionControllerTests
         await _mockSelectionEngine.Received(1).GetOptimalTestPlanAsync(
             codeChanges, 
             ConfidenceLevel.High, 
+            Arg.Any<TestSelectionOptions>(),
             Arg.Any<CancellationToken>());
     }
 
@@ -137,7 +138,7 @@ public class TestSelectionControllerTests
             .Returns(Task.FromResult(impactResult));
 
         _mockSelectionEngine
-            .GetOptimalTestPlanAsync(impactResult.CodeChanges, request.ConfidenceLevel, Arg.Any<CancellationToken>())
+            .GetOptimalTestPlanAsync(impactResult.CodeChanges, request.ConfidenceLevel, Arg.Any<TestSelectionOptions>(), Arg.Any<CancellationToken>())
             .Returns(testPlan);
 
         // Act

@@ -50,23 +50,24 @@ public class TestSelectionController : ControllerBase
 
             TestExecutionPlan plan;
             
+            var options = new TestSelectionOptions
+            {
+                MaxTestCount = request.MaxTests,
+                MaxExecutionTime = request.MaxExecutionTime,
+                ExcludedCategories = request.ExcludedCategories?.ToHashSet(),
+                IncludedCategories = request.IncludedCategories?.ToHashSet()
+            };
+
             if (request.CodeChanges != null && request.CodeChanges.Changes.Any())
             {
                 plan = await _selectionEngine.GetOptimalTestPlanAsync(
                     request.CodeChanges, 
                     request.ConfidenceLevel, 
+                    options,
                     cancellationToken).ConfigureAwait(false);
             }
             else
             {
-                var options = new TestSelectionOptions
-                {
-                    MaxTestCount = request.MaxTests,
-                    MaxExecutionTime = request.MaxExecutionTime,
-                    ExcludedCategories = request.ExcludedCategories?.ToHashSet(),
-                    IncludedCategories = request.IncludedCategories?.ToHashSet()
-                };
-                
                 plan = await _selectionEngine.GetTestPlanAsync(
                     request.ConfidenceLevel, 
                     options, 
@@ -102,6 +103,7 @@ public class TestSelectionController : ControllerBase
             var testPlan = await _selectionEngine.GetOptimalTestPlanAsync(
                 impactResult.CodeChanges,
                 request.ConfidenceLevel,
+                null,
                 cancellationToken).ConfigureAwait(false);
 
             var result = new DiffAnalysisResult

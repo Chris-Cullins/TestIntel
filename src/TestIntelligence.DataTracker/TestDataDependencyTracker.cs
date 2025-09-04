@@ -412,5 +412,10 @@ namespace TestIntelligence.DataTracker
 
         public int TotalTestPairs => CanRunInParallel.Count + MustRunSequentially.Count;
         public double ParallelExecutionRatio => TotalTestPairs > 0 ? (double)CanRunInParallel.Count / TotalTestPairs : 0;
+        
+        /// <summary>
+        /// Test method to validate coverage analysis functionality.
+        /// </summary>
+        public bool HasConflicts() => MustRunSequentially.Count > 0;
     }
-}
+}// Coverage test modification

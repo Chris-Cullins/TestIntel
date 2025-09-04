@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using TestIntelligence.CLI.Models;
 using TestIntelligence.ImpactAnalyzer.Models;
+using TestIntelligence.SelectionEngine.Engine;
 using TestIntelligence.SelectionEngine.Interfaces;
 using TestIntelligence.SelectionEngine.Models;
 
@@ -12,16 +14,13 @@ namespace TestIntelligence.CLI.Services;
 public class SelectionService : ISelectionService
 {
     private readonly ILogger<SelectionService> _logger;
-    private readonly ITestSelectionEngine _selectionEngine;
     private readonly IOutputFormatter _outputFormatter;
 
     public SelectionService(
         ILogger<SelectionService> logger,
-        ITestSelectionEngine selectionEngine,
         IOutputFormatter outputFormatter)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _selectionEngine = selectionEngine ?? throw new ArgumentNullException(nameof(selectionEngine));
         _outputFormatter = outputFormatter ?? throw new ArgumentNullException(nameof(outputFormatter));
     }
 
@@ -35,17 +34,20 @@ public class SelectionService : ISelectionService
 
             var confidenceLevel = ParseConfidenceLevel(confidence);
             var options = CreateSelectionOptions(maxTests, maxTime);
+
+            // Create a TestSelectionEngine instance with the solution path
+            var selectionEngine = new TestSelectionEngine(_logger as ILogger<TestSelectionEngine> ?? NullLogger<TestSelectionEngine>.Instance, solutionPath: path);
             
             TestExecutionPlan executionPlan;
 
             if (changes.Length > 0)
             {
                 var codeChangeSet = CreateCodeChangeSet(changes);
-                executionPlan = await _selectionEngine.GetOptimalTestPlanAsync(codeChangeSet, confidenceLevel);
+                executionPlan = await selectionEngine.GetOptimalTestPlanAsync(codeChangeSet, confidenceLevel, options);
             }
             else
             {
-                executionPlan = await _selectionEngine.GetTestPlanAsync(confidenceLevel, options);
+                executionPlan = await selectionEngine.GetTestPlanAsync(confidenceLevel, options);
             }
 
             var selectionResult = ConvertToSelectionResult(executionPlan, path, changes, confidence);
@@ -80,12 +82,43 @@ public class SelectionService : ISelectionService
 
         if (maxTests.HasValue)
         {
+            if (maxTests.Value <= 0)
+            {
+                throw new ArgumentException($"Max tests must be a positive number, but got: {maxTests.Value}", nameof(maxTests));
+            }
+            
+            if (maxTests.Value > 50000)
+            {
+                _logger.LogWarning("Very large max-tests value ({MaxTests}) specified, this may impact performance", maxTests.Value);
+            }
+            
             options.MaxTestCount = maxTests.Value;
+            _logger.LogInformation("Limiting selection to {MaxTests} tests", maxTests.Value);
         }
 
         if (!string.IsNullOrEmpty(maxTime))
         {
-            options.MaxExecutionTime = ParseTimeSpan(maxTime);
+            try
+            {
+                var timeSpan = ParseTimeSpan(maxTime);
+                
+                if (timeSpan <= TimeSpan.Zero)
+                {
+                    throw new ArgumentException($"Max time must be positive, but got: {maxTime}", nameof(maxTime));
+                }
+                
+                if (timeSpan > TimeSpan.FromHours(24))
+                {
+                    _logger.LogWarning("Very large max-time value ({MaxTime}) specified", maxTime);
+                }
+                
+                options.MaxExecutionTime = timeSpan;
+                _logger.LogInformation("Limiting execution time to {MaxTime}", timeSpan);
+            }
+            catch (Exception ex) when (!(ex is ArgumentException))
+            {
+                throw new ArgumentException($"Invalid time format: {maxTime}. Use formats like '30s', '5m', '1h'", nameof(maxTime), ex);
+            }
         }
 
         return options;
@@ -93,33 +126,50 @@ public class SelectionService : ISelectionService
 
     private TimeSpan ParseTimeSpan(string timeString)
     {
+        if (string.IsNullOrWhiteSpace(timeString))
+        {
+            throw new ArgumentException("Time string cannot be null or empty", nameof(timeString));
+        }
+
         var time = timeString.ToLower().Trim();
         
         if (time.EndsWith("s"))
         {
-            var seconds = int.Parse(time.Substring(0, time.Length - 1));
+            var valueString = time.Substring(0, time.Length - 1);
+            if (!int.TryParse(valueString, out var seconds) || seconds < 0)
+            {
+                throw new ArgumentException($"Invalid seconds value: '{valueString}'. Must be a non-negative integer");
+            }
             return TimeSpan.FromSeconds(seconds);
         }
         
         if (time.EndsWith("m"))
         {
-            var minutes = int.Parse(time.Substring(0, time.Length - 1));
+            var valueString = time.Substring(0, time.Length - 1);
+            if (!int.TryParse(valueString, out var minutes) || minutes < 0)
+            {
+                throw new ArgumentException($"Invalid minutes value: '{valueString}'. Must be a non-negative integer");
+            }
             return TimeSpan.FromMinutes(minutes);
         }
         
         if (time.EndsWith("h"))
         {
-            var hours = int.Parse(time.Substring(0, time.Length - 1));
+            var valueString = time.Substring(0, time.Length - 1);
+            if (!int.TryParse(valueString, out var hours) || hours < 0)
+            {
+                throw new ArgumentException($"Invalid hours value: '{valueString}'. Must be a non-negative integer");
+            }
             return TimeSpan.FromHours(hours);
         }
 
         // Try to parse as seconds if no suffix
-        if (int.TryParse(time, out var totalSeconds))
+        if (int.TryParse(time, out var totalSeconds) && totalSeconds >= 0)
         {
             return TimeSpan.FromSeconds(totalSeconds);
         }
 
-        throw new ArgumentException($"Invalid time format: {timeString}. Use formats like '30s', '5m', '1h'");
+        throw new ArgumentException($"Invalid time format: '{timeString}'. Use formats like '30s', '5m', '1h', or plain seconds");
     }
 
     private CodeChangeSet CreateCodeChangeSet(string[] changes)

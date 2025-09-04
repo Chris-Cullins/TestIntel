@@ -122,7 +122,7 @@ namespace TestIntelligence.CLI.Commands
                 context.SetParameter("changes", changes);
                 context.SetParameter("confidence", confidence);
                 context.SetParameter("output", output);
-                context.SetParameter("maxTests", maxTests.HasValue ? (object)maxTests.Value : 0);
+                context.SetParameter("maxTests", maxTests.HasValue ? (object)maxTests.Value : (object)DBNull.Value);
                 context.SetParameter("maxTime", maxTime ?? string.Empty);
                 
                 var exitCode = await handler.ExecuteAsync(context);
