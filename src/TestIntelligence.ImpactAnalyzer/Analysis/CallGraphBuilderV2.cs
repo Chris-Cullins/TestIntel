@@ -48,13 +48,29 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             var callGraph = new ConcurrentDictionary<string, HashSet<string>>();
             var methodDefinitions = new ConcurrentDictionary<string, MethodInfo>();
 
-            // Process files in parallel for better performance
+            // Process files with enhanced error handling and optional parallelism
+            var concurrencyLevel = Environment.ProcessorCount; // Limit concurrency to avoid race conditions
+            var semaphore = new SemaphoreSlim(concurrencyLevel, concurrencyLevel);
+            
             var tasks = allSourceFiles.Select(async filePath =>
             {
-                await ProcessFileAsync(filePath, callGraph, methodDefinitions, cancellationToken);
+                await semaphore.WaitAsync(cancellationToken);
+                try
+                {
+                    await ProcessFileAsync(filePath, callGraph, methodDefinitions, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to process file {FilePath} during call graph building", filePath);
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
             });
 
             await Task.WhenAll(tasks);
+            semaphore.Dispose();
 
             // Convert concurrent collections to regular collections
             var finalCallGraph = callGraph.ToDictionary(
@@ -69,6 +85,17 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
             _logger.LogInformation("Call graph built successfully: {MethodCount} methods, {CallCount} total calls", 
                 finalMethodDefinitions.Count, finalCallGraph.Values.Sum(calls => calls.Count));
+
+            // Debug logging for specific methods we're interested in
+            foreach (var method in finalCallGraph.Keys.Where(k => k.Contains("ScoreTestsAsync")))
+            {
+                var calls = finalCallGraph[method];
+                var scoreTestsAsyncCalls = calls.Where(c => c.Contains("ScoreTestsAsync")).ToList();
+                if (scoreTestsAsyncCalls.Any())
+                {
+                    _logger.LogDebug("Method {Method} calls ScoreTestsAsync methods: {Calls}", method, string.Join(", ", scoreTestsAsyncCalls));
+                }
+            }
 
             return new MethodCallGraph(finalCallGraph, finalMethodDefinitions);
         }
@@ -154,6 +181,20 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             var methodId = _symbolResolver.GetFullyQualifiedMethodName(methodSymbol);
             var isTest = IsTestMethod(methodSymbol, method);
             
+            // Debug logging for specific methods we're tracking
+            if (methodSymbol.Name.Contains("ScoreTestsAsync"))
+            {
+                _logger.LogDebug("Processing method: {MethodId} (isTest: {IsTest}) in {FilePath}", 
+                    methodId, isTest, filePath);
+                
+                // Additional console debug output for better visibility
+                if (isTest)
+                {
+                    System.Console.WriteLine($"DEBUG: Identified test method: {methodSymbol.Name}");
+                    System.Console.WriteLine($"  - Full ID: {methodId}");
+                }
+            }
+            
             var methodInfo = new MethodInfo(
                 methodId,
                 methodSymbol.Name,
@@ -183,7 +224,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                 callGraph[methodId].Add(methodCall.CalledMethodId);
 
                 // Debug logging for specific methods we're interested in tracking
-                if (methodSymbol.Name == "ToString" || methodCall.CalledMethodId.Contains("ToString"))
+                if (methodSymbol.Name.Contains("ScoreTestsAsync") || methodCall.CalledMethodId.Contains("ScoreTestsAsync"))
                 {
                     _logger.LogDebug("Method {CallerMethod} calls {CalledMethod} via {CallType} at line {LineNumber}", 
                         methodId, methodCall.CalledMethodId, methodCall.CallType, methodCall.LineNumber);

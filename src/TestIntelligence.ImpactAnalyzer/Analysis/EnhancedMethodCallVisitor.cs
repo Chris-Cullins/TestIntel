@@ -83,6 +83,29 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
                     _logger.LogTrace("Found method call: {MethodId} at line {LineNumber}", methodId, lineNumber);
                 }
+                else
+                {
+                    // Enhanced fallback: try direct semantic model resolution
+                    var fallbackSymbol = TryFallbackSymbolResolution(node);
+                    if (fallbackSymbol != null)
+                    {
+                        var methodId = _symbolResolver.GetFullyQualifiedMethodName(fallbackSymbol);
+                        var callType = DetermineCallType(node, fallbackSymbol);
+                        var lineNumber = node.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                        var callExpression = node.ToString();
+
+                        var callInfo = new MethodCallInfo(methodId, callExpression, lineNumber, callType);
+                        _methodCalls.Add(callInfo);
+
+                        _logger.LogTrace("Found method call via fallback: {MethodId} at line {LineNumber}", methodId, lineNumber);
+                    }
+                    else
+                    {
+                        var lineNumber = node.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                        _logger.LogDebug("Could not resolve method call '{CallExpression}' at line {LineNumber} in {FilePath}", 
+                            node.ToString(), lineNumber, _filePath);
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -324,6 +347,59 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         {
             return memberAccess.Parent is InvocationExpressionSyntax invocation && 
                    invocation.Expression == memberAccess;
+        }
+
+        private IMethodSymbol? TryFallbackSymbolResolution(InvocationExpressionSyntax invocation)
+        {
+            try
+            {
+                // Direct semantic model approach as fallback
+                var symbolInfo = _semanticModel.GetSymbolInfo(invocation);
+                
+                // Try direct symbol first
+                if (symbolInfo.Symbol is IMethodSymbol directMethod)
+                {
+                    return directMethod;
+                }
+                
+                // Try all candidate symbols
+                foreach (var candidate in symbolInfo.CandidateSymbols.OfType<IMethodSymbol>())
+                {
+                    return candidate; // Take the first viable candidate
+                }
+                
+                // Try resolving through type information
+                if (invocation.Expression is MemberAccessExpressionSyntax memberAccess)
+                {
+                    var typeInfo = _semanticModel.GetTypeInfo(memberAccess.Expression);
+                    if (typeInfo.Type != null)
+                    {
+                        var methodName = memberAccess.Name.Identifier.ValueText;
+                        var methods = typeInfo.Type.GetMembers(methodName).OfType<IMethodSymbol>();
+                        
+                        // Try to find a matching method by parameter count
+                        var argCount = invocation.ArgumentList?.Arguments.Count ?? 0;
+                        foreach (var method in methods)
+                        {
+                            if (method.Parameters.Length == argCount || method.Parameters.Any(p => p.IsOptional))
+                            {
+                                return method;
+                            }
+                        }
+                        
+                        // If no exact match, return the first method with the same name
+                        return methods.FirstOrDefault();
+                    }
+                }
+                
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Fallback symbol resolution failed for invocation at line {LineNumber}",
+                    invocation.GetLocation().GetLineSpan().StartLinePosition.Line + 1);
+                return null;
+            }
         }
     }
 }

@@ -569,6 +569,16 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             var targetMethodIds = FindMatchingMethodIds(methodId, allMethods);
             _logger.LogDebug("Found {Count} target method IDs matching pattern: {Pattern}", targetMethodIds.Count, methodId);
             
+            // Additional console debug output for ScoreTestsAsync
+            if (methodId.Contains("ScoreTestsAsync"))
+            {
+                System.Console.WriteLine($"DEBUG STREAMING: Found {targetMethodIds.Count} target method IDs:");
+                foreach (var id in targetMethodIds)
+                {
+                    System.Console.WriteLine($"  - {id}");
+                }
+            }
+            
             if (targetMethodIds.Count == 0)
             {
                 _logger.LogWarning("No methods found matching pattern: {MethodId}", methodId);
