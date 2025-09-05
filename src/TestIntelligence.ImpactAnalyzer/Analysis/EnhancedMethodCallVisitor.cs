@@ -48,13 +48,13 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
     {
         private readonly SemanticModel _semanticModel;
         private readonly ICompilationManager _compilationManager;
-        private readonly SymbolResolutionEngine _symbolResolver;
+        private readonly ISymbolResolutionEngine _symbolResolver;
         private readonly ILogger<EnhancedMethodCallVisitor> _logger;
         private readonly List<MethodCallInfo> _methodCalls;
         private readonly string _filePath;
 
         public EnhancedMethodCallVisitor(SemanticModel semanticModel, ICompilationManager compilationManager, 
-            SymbolResolutionEngine symbolResolver, ILogger<EnhancedMethodCallVisitor> logger, string filePath)
+            ISymbolResolutionEngine symbolResolver, ILogger<EnhancedMethodCallVisitor> logger, string filePath)
         {
             _semanticModel = semanticModel ?? throw new ArgumentNullException(nameof(semanticModel));
             _compilationManager = compilationManager ?? throw new ArgumentNullException(nameof(compilationManager));

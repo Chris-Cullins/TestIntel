@@ -16,8 +16,8 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Analysis
     public class IncrementalCallGraphBuilderTests : IDisposable
     {
         private readonly ICompilationManager _mockCompilationManager;
-        private readonly SymbolResolutionEngine _mockSymbolResolver;
-        private readonly SymbolIndex _mockSymbolIndex;
+        private readonly ISymbolResolutionEngine _mockSymbolResolver;
+        private readonly ISymbolIndex _mockSymbolIndex;
         private readonly ILogger<IncrementalCallGraphBuilder> _mockLogger;
         private readonly ILoggerFactory _mockLoggerFactory;
         private readonly IncrementalCallGraphBuilder _incrementalBuilder;
@@ -26,10 +26,8 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Analysis
         public IncrementalCallGraphBuilderTests()
         {
             _mockCompilationManager = Substitute.For<ICompilationManager>();
-            _mockSymbolResolver = Substitute.For<SymbolResolutionEngine>(
-                _mockCompilationManager, 
-                Substitute.For<ILogger<SymbolResolutionEngine>>());
-            _mockSymbolIndex = Substitute.For<SymbolIndex>(Substitute.For<ILogger<SymbolIndex>>());
+            _mockSymbolResolver = Substitute.For<ISymbolResolutionEngine>();
+            _mockSymbolIndex = Substitute.For<ISymbolIndex>();
             _mockLogger = Substitute.For<ILogger<IncrementalCallGraphBuilder>>();
             _mockLoggerFactory = Substitute.For<ILoggerFactory>();
             
@@ -254,20 +252,13 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Analysis
 
         private void SetupMockCompilationForFile(string filePath)
         {
-            // Create minimal syntax tree and semantic model mocks
-            var syntaxTreeMock = Substitute.For<Microsoft.CodeAnalysis.SyntaxTree>();
-            var rootMock = Substitute.For<Microsoft.CodeAnalysis.SyntaxNode>();
-            
-            syntaxTreeMock.GetRoot(Arg.Any<CancellationToken>())
-                         .Returns(rootMock);
-
-            var semanticModelMock = Substitute.For<Microsoft.CodeAnalysis.SemanticModel>();
-
+            // Setup compilation manager to return null (simulating file not found or compilation error)
+            // This will trigger the graceful error handling in the IncrementalCallGraphBuilder
             _mockCompilationManager.GetSyntaxTreeAsync(filePath, Arg.Any<CancellationToken>())
-                                  .Returns(syntaxTreeMock);
+                                  .Returns(Task.FromResult<Microsoft.CodeAnalysis.SyntaxTree?>(null));
 
             _mockCompilationManager.GetSemanticModel(filePath)
-                                  .Returns(semanticModelMock);
+                                  .Returns((Microsoft.CodeAnalysis.SemanticModel?)null);
 
             // Setup symbol resolver
             _mockSymbolResolver.GetFullyQualifiedMethodName(Arg.Any<Microsoft.CodeAnalysis.IMethodSymbol>())

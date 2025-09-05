@@ -21,8 +21,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
     public class IncrementalCallGraphBuilder
     {
         private readonly ICompilationManager _compilationManager;
-        private readonly SymbolResolutionEngine _symbolResolver;
-        private readonly SymbolIndex _symbolIndex;
+        private readonly ISymbolResolutionEngine _symbolResolver;
+        private readonly ISymbolIndex _symbolIndex;
         private readonly ILogger<IncrementalCallGraphBuilder> _logger;
         private readonly ILoggerFactory _loggerFactory;
         
@@ -34,8 +34,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         public IncrementalCallGraphBuilder(
             ICompilationManager compilationManager, 
-            SymbolResolutionEngine symbolResolver,
-            SymbolIndex symbolIndex,
+            ISymbolResolutionEngine symbolResolver,
+            ISymbolIndex symbolIndex,
             ILogger<IncrementalCallGraphBuilder> logger,
             ILoggerFactory loggerFactory)
         {

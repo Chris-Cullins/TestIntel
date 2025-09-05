@@ -28,7 +28,7 @@ namespace TestIntelligence.SelectionEngine.Tests.Engine
             _mockScoringAlgorithm.Setup(x => x.Name).Returns("Mock Algorithm");
             _mockScoringAlgorithm.Setup(x => x.Weight).Returns(1.0);
             _mockScoringAlgorithm
-                .Setup(x => x.CalculateScoreAsync(It.IsAny<TestInfo>(), It.IsAny<TestScoringContext>(), default))
+                .Setup(x => x.CalculateScoreAsync(It.IsAny<TestInfo>(), It.IsAny<TestScoringContext>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(0.75);
         }
 
@@ -180,8 +180,11 @@ namespace TestIntelligence.SelectionEngine.Tests.Engine
         private TestInfo CreateTestInfo(string methodName, TestCategory category, TimeSpan executionTime, double score = 0.5)
         {
             var type = typeof(TestSelectionEngineTests);
-            var method = type.GetMethod(nameof(SampleTestMethod), BindingFlags.NonPublic | BindingFlags.Instance)
-                ?? throw new InvalidOperationException("Sample method not found");
+            
+            // Try to find a method that matches the methodName, fallback to SampleTestMethod
+            var method = type.GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Instance) ??
+                        type.GetMethod(nameof(SampleTestMethod), BindingFlags.NonPublic | BindingFlags.Instance) ??
+                        throw new InvalidOperationException("Sample method not found");
 
             var testMethod = new TestMethod(method, type, "/test/assembly.dll", FrameworkVersion.Net5Plus);
             return new TestInfo(testMethod, category, executionTime, score);
@@ -422,5 +425,22 @@ namespace TestIntelligence.SelectionEngine.Tests.Engine
         }
 
         #endregion
+
+        // Sample test methods for CreateTestInfo to use
+        private void UnrelatedTest() { }
+        private void RelatedTest_MyMethod() { }
+        private void RelatedTest_MyClass() { }
+        private void FlakeyTest() { }
+        private void ReliableTest() { }
+        private void NewTest() { }
+        private void Test1() { }
+        private void Test2() { }
+        private void FastUnitTest() { }
+        private void SlowIntegrationTest() { }
+        private void DatabaseTest() { }
+        private void UITest() { }
+        private void UnitTest() { }
+        private void IntegrationTest() { }
+        private void E2ETest() { }
     }
 }

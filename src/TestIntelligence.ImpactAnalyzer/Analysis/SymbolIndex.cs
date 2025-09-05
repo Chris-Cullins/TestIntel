@@ -17,7 +17,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
     /// Fast symbol index for looking up methods and types without full semantic analysis.
     /// Provides O(1) lookups for method and type locations across large solutions.
     /// </summary>
-    public class SymbolIndex
+    public class SymbolIndex : ISymbolIndex
     {
         private readonly ILogger<SymbolIndex> _logger;
         

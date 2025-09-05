@@ -206,9 +206,9 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                 var changedMethods = ExtractMethodNames(changedLines);
                 var changedTypes = ExtractTypeNames(changedLines);
 
-                // If we have any changed lines in a C# file, create a change even if we can't detect specific methods/types
-                // This ensures we don't lose changes due to parsing limitations
-                if (!changedLines.Any())
+                // Only create a change if we detected specific methods or types
+                // Comment-only changes should not trigger test runs
+                if (!changedLines.Any() || (changedMethods.Count == 0 && changedTypes.Count == 0))
                     return null;
 
                 _logger.LogDebug("Creating code change for {FilePath}: {MethodCount} methods, {TypeCount} types, {LineCount} changed lines", 

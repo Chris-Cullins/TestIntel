@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace TestIntelligence.ImpactAnalyzer.Analysis
 {
-    public class SymbolResolutionEngine
+    public class SymbolResolutionEngine : ISymbolResolutionEngine
     {
         private readonly ICompilationManager _compilationManager;
         private readonly ILogger<SymbolResolutionEngine> _logger;
