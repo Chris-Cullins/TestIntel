@@ -361,7 +361,7 @@ CallGraphReports*/
 focused-changes.patch
 recent-changes.patch
 test-changes.patch
-perf-results/results-20250904-185503.txt
+perf-results/**
 perf-results/results-20250904-184015.txt
 perf-results/results-20250904-185131.txt
 perf-results/results-20250904-185147.txt

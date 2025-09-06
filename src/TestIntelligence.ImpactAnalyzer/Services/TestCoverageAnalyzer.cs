@@ -590,6 +590,13 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 
+                // Skip if this test method is actually one of our target methods
+                // This prevents method signatures from being included as "test coverage"
+                if (targetMethodIds.Contains(testMethod.Id))
+                {
+                    continue;
+                }
+                
                 TestCoverageInfo? result = null;
                 try
                 {
