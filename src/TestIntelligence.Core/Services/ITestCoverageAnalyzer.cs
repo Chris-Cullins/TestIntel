@@ -7,62 +7,19 @@ using TestIntelligence.Core.Models;
 namespace TestIntelligence.Core.Services
 {
     /// <summary>
-    /// Service for analyzing test coverage relationships between production methods and test methods.
-    /// Provides reverse lookup functionality to find which tests exercise a given production method.
+    /// Comprehensive service for analyzing test coverage relationships between production methods and test methods.
+    /// Combines query, mapping, statistics, and cache management capabilities.
+    /// For focused usage, prefer the individual interfaces: ITestCoverageQuery, ITestCoverageMapBuilder, 
+    /// ITestCoverageStatistics, or ITestCoverageCacheManager.
     /// </summary>
-    public interface ITestCoverageAnalyzer
+    public interface ITestCoverageAnalyzer : 
+        ITestCoverageQuery, 
+        ITestCoverageMapBuilder, 
+        ITestCoverageStatistics, 
+        ITestCoverageCacheManager
     {
-        /// <summary>
-        /// Finds all test methods that exercise (directly or indirectly call) the specified production method.
-        /// </summary>
-        /// <param name="methodId">Unique identifier for the production method to analyze</param>
-        /// <param name="solutionPath">Path to the solution file</param>
-        /// <param name="cancellationToken">Cancellation token for async operation</param>
-        /// <returns>List of test coverage information showing which tests exercise the method</returns>
-        Task<IReadOnlyList<TestCoverageInfo>> FindTestsExercisingMethodAsync(
-            string methodId, 
-            string solutionPath, 
-            CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// Builds a complete test coverage map for all production methods in the solution.
-        /// This map can be cached and reused for multiple lookup operations.
-        /// </summary>
-        /// <param name="solutionPath">Path to the solution file</param>
-        /// <param name="cancellationToken">Cancellation token for async operation</param>
-        /// <returns>Complete mapping from production methods to tests that exercise them</returns>
-        Task<TestCoverageMap> BuildTestCoverageMapAsync(
-            string solutionPath, 
-            CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// Finds tests that exercise any of the specified production methods.
-        /// More efficient than calling FindTestsExercisingMethodAsync multiple times.
-        /// </summary>
-        /// <param name="methodIds">Collection of method identifiers to analyze</param>
-        /// <param name="solutionPath">Path to the solution file</param>
-        /// <param name="cancellationToken">Cancellation token for async operation</param>
-        /// <returns>Dictionary mapping each method ID to its test coverage information</returns>
-        Task<IReadOnlyDictionary<string, IReadOnlyList<TestCoverageInfo>>> FindTestsExercisingMethodsAsync(
-            IEnumerable<string> methodIds,
-            string solutionPath,
-            CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// Gets statistics about test coverage for the solution.
-        /// </summary>
-        /// <param name="solutionPath">Path to the solution file</param>
-        /// <param name="cancellationToken">Cancellation token for async operation</param>
-        /// <returns>Coverage statistics including total methods, covered methods, and coverage percentages</returns>
-        Task<TestCoverageStatistics> GetCoverageStatisticsAsync(
-            string solutionPath,
-            CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// Clears all cached data (call graphs and path calculations).
-        /// Call this when source files or solution structure changes.
-        /// </summary>
-        void ClearCaches();
+        // This interface now aggregates all focused interfaces for backward compatibility
+        // New code should prefer using the focused interfaces directly
     }
 
     /// <summary>

@@ -61,10 +61,44 @@ namespace TestIntelligence.Core.Caching
 
             var filePath = GetCacheFilePath(key);
             
-            if (!File.Exists(filePath) || !_metadata.TryGetValue(key, out var metadata))
+            if (!File.Exists(filePath))
             {
+                // Clean up metadata if file doesn't exist
+                _metadata.TryRemove(key, out _);
                 IncrementMiss();
                 return null;
+            }
+
+            if (!_metadata.TryGetValue(key, out var metadata))
+            {
+                // If we don't have metadata, try to detect if file is corrupted
+                try
+                {
+                    var fileInfo = new FileInfo(filePath);
+                    if (fileInfo.Length < 10) // Too small to be valid compressed data
+                    {
+                        _logger?.LogWarning("Cache file too small, treating as corrupted: {FilePath}", filePath);
+                        await RemoveCorruptedFileAsync(filePath, key);
+                        IncrementMiss();
+                        return null;
+                    }
+                    
+                    // Create basic metadata from file
+                    metadata = new CacheEntryMetadata
+                    {
+                        Key = key,
+                        CreatedAt = fileInfo.CreationTimeUtc,
+                        LastAccessedAt = fileInfo.LastAccessTimeUtc,
+                        CompressedSize = (int)fileInfo.Length
+                    };
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "Failed to access cache file, treating as corrupted: {FilePath}", filePath);
+                    await RemoveCorruptedFileAsync(filePath, key);
+                    IncrementMiss();
+                    return null;
+                }
             }
 
             // Check if expired
@@ -78,6 +112,27 @@ namespace TestIntelligence.Core.Caching
             await _ioSemaphore.WaitAsync(cancellationToken);
             try
             {
+                // Additional corruption check - verify file size matches expected
+                var actualFileSize = new FileInfo(filePath).Length;
+                if (metadata.CompressedSize > 0 && actualFileSize != metadata.CompressedSize)
+                {
+                    _logger?.LogWarning("Cache file size mismatch (expected: {Expected}, actual: {Actual}), treating as corrupted: {FilePath}", 
+                        metadata.CompressedSize, actualFileSize, filePath);
+                    await RemoveCorruptedFileAsync(filePath, key);
+                    IncrementMiss();
+                    return null;
+                }
+                
+                // Check for obviously truncated files
+                if (actualFileSize < 10) // Too small to be valid compressed data
+                {
+                    _logger?.LogWarning("Cache file appears truncated (size: {Size}), treating as corrupted: {FilePath}", 
+                        actualFileSize, filePath);
+                    await RemoveCorruptedFileAsync(filePath, key);
+                    IncrementMiss();
+                    return null;
+                }
+                
                 using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
                 var compressedData = new CompressedData
                 {
@@ -86,17 +141,30 @@ namespace TestIntelligence.Core.Caching
                 
                 await fileStream.ReadAsync(compressedData.Data, 0, compressedData.Data.Length, cancellationToken);
                 
+                // Try to validate the data is actually GZip compressed data
+                if (!IsValidGZipData(compressedData.Data))
+                {
+                    _logger?.LogWarning("Cache file does not contain valid GZip data, treating as corrupted: {FilePath}", filePath);
+                    await RemoveCorruptedFileAsync(filePath, key);
+                    IncrementMiss();
+                    return null;
+                }
+                
                 var result = await CacheCompressionUtilities.DecompressAsync<T>(compressedData, cancellationToken);
                 
                 if (result != null)
                 {
                     // Update access time for LRU
                     metadata.LastAccessedAt = DateTime.UtcNow;
+                    _metadata[key] = metadata; // Ensure metadata is stored
                     IncrementHit();
                     _logger?.LogDebug("Cache hit for key: {Key}", key);
                 }
                 else
                 {
+                    // Null result indicates corruption
+                    _logger?.LogWarning("Cache decompression returned null, treating as corrupted: {FilePath}", filePath);
+                    await RemoveCorruptedFileAsync(filePath, key);
                     IncrementMiss();
                 }
 
@@ -105,19 +173,7 @@ namespace TestIntelligence.Core.Caching
             catch (Exception ex)
             {
                 _logger?.LogWarning(ex, "Failed to read compressed cache entry for key: {Key}, removing corrupted entry", key);
-                
-                // Remove corrupted cache entry
-                try
-                {
-                    if (File.Exists(filePath))
-                        File.Delete(filePath);
-                    _metadata.TryRemove(key, out _);
-                }
-                catch (Exception deleteEx)
-                {
-                    _logger?.LogDebug(deleteEx, "Failed to delete corrupted cache file: {FilePath}", filePath);
-                }
-                
+                await RemoveCorruptedFileAsync(filePath, key);
                 IncrementMiss();
                 return null;
             }
@@ -125,6 +181,31 @@ namespace TestIntelligence.Core.Caching
             {
                 _ioSemaphore.Release();
             }
+        }
+        
+        private Task RemoveCorruptedFileAsync(string filePath, string key)
+        {
+            try
+            {
+                if (File.Exists(filePath))
+                    File.Delete(filePath);
+                _metadata.TryRemove(key, out _);
+            }
+            catch (Exception deleteEx)
+            {
+                _logger?.LogDebug(deleteEx, "Failed to delete corrupted cache file: {FilePath}", filePath);
+            }
+            
+            return Task.CompletedTask;
+        }
+        
+        private static bool IsValidGZipData(byte[] data)
+        {
+            if (data == null || data.Length < 3)
+                return false;
+                
+            // Check GZip magic header (0x1f, 0x8b)
+            return data[0] == 0x1f && data[1] == 0x8b;
         }
 
         public async Task SetAsync(string key, T value, TimeSpan? expiration = null, CancellationToken cancellationToken = default)

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using TestIntelligence.Core.Models;
+using TestIntelligence.Core.Services;
 using TestIntelligence.DataTracker.Models;
 using TestIntelligence.ImpactAnalyzer.Analysis;
 using TestIntelligence.ImpactAnalyzer.Models;
@@ -18,6 +19,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
     public class StreamingTestCoverageAnalyzerTests
     {
         private readonly IRoslynAnalyzer _mockRoslynAnalyzer;
+        private readonly IAssemblyPathResolver _mockAssemblyPathResolver;
         private readonly ITestClassifier _mockTestClassifier;
         private readonly ILogger<TestCoverageAnalyzer> _mockLogger;
         private readonly TestCoverageAnalyzer _analyzer;
@@ -25,11 +27,13 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
         public StreamingTestCoverageAnalyzerTests()
         {
             _mockRoslynAnalyzer = Substitute.For<IRoslynAnalyzer>();
+            _mockAssemblyPathResolver = Substitute.For<IAssemblyPathResolver>();
             _mockTestClassifier = Substitute.For<ITestClassifier>();
             _mockLogger = Substitute.For<ILogger<TestCoverageAnalyzer>>();
 
             _analyzer = new TestCoverageAnalyzer(
                 _mockRoslynAnalyzer,
+                _mockAssemblyPathResolver,
                 _mockLogger);
         }
 

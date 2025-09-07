@@ -386,10 +386,20 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Caching
 
         private void CorruptCacheFiles(string baseDirectory, CorruptionType corruptionType)
         {
-            var cacheDirectory = Path.Combine(baseDirectory, ".testintel-cache");
+            // The cache is created directly in the base directory for our tests
+            var cacheDirectory = baseDirectory;
             if (!Directory.Exists(cacheDirectory)) return;
 
-            var cacheFiles = Directory.GetFiles(cacheDirectory, "*", SearchOption.AllDirectories);
+            var cacheFiles = Directory.GetFiles(cacheDirectory, "*.cache", SearchOption.AllDirectories);
+            
+            if (cacheFiles.Length == 0)
+            {
+                // Fallback: look for any cache files in subdirectories
+                cacheFiles = Directory.GetFiles(cacheDirectory, "*", SearchOption.AllDirectories)
+                    .Where(f => Path.GetExtension(f).Equals(".cache", StringComparison.OrdinalIgnoreCase) ||
+                               f.Contains("cache", StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+            }
             
             foreach (var file in cacheFiles.Take(Math.Max(1, cacheFiles.Length / 2))) // Corrupt half the files
             {

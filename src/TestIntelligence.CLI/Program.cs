@@ -70,26 +70,44 @@ public class Program
                     builder.AddConsole();
                     builder.SetMinimumLevel(LogLevel.Debug);
                 });
-                services.AddTransient<ITestSelectionEngine, TestSelectionEngine>();
-                services.AddTransient<IAnalysisService, AnalysisService>();
+                // CLI Command services - Transient for command isolation
+                services.AddTransient<IAnalysisService, RefactoredAnalysisService>();
                 services.AddTransient<ICategorizationService, CategorizationService>();
                 services.AddTransient<ISelectionService, SelectionService>();
                 services.AddTransient<IDiffAnalysisService, DiffAnalysisService>();
                 services.AddTransient<IOutputFormatter, JsonOutputFormatter>();
-                services.AddTransient<IConfigurationService, ConfigurationService>();
                 
-                // Impact Analyzer services
-                services.AddTransient<IRoslynAnalyzer, RoslynAnalyzer>();
+                // Analysis service components - Transient for focused operations
+                services.AddTransient<IAnalysisCoordinatorService, AnalysisCoordinatorService>();
+                services.AddTransient<IAssemblyDiscoveryService, AssemblyDiscoveryService>();
+                services.AddTransient<ITestAnalysisService, TestAnalysisService>();
+                services.AddTransient<IProjectAnalysisService, ProjectAnalysisService>();
+                
+                // Configuration - Singleton for shared app config
+                services.AddSingleton<IConfigurationService, ConfigurationService>();
+                
+                // Analyzers and engines - Scoped for caching during operations
+                services.AddScoped<IRoslynAnalyzer, RoslynAnalyzer>();
+                services.AddScoped<ITestSelectionEngine, TestSelectionEngine>();
+                services.AddScoped<ITestCoverageAnalyzer, TestCoverageAnalyzer>();
+                services.AddScoped<ITestExecutionTracer, TestExecutionTracer>();
+                services.AddScoped<ICallGraphService, CallGraphService>();
+                services.AddScoped<ICoverageAnalysisService, CoverageAnalysisService>();
+                services.AddScoped<ICodeChangeCoverageAnalyzer, CodeChangeCoverageAnalyzer>();
+                
+                // Register focused interfaces using the same scoped implementation
+                services.AddScoped<ITestCoverageQuery>(provider => provider.GetRequiredService<ITestCoverageAnalyzer>());
+                services.AddScoped<ITestCoverageMapBuilder>(provider => provider.GetRequiredService<ITestCoverageAnalyzer>());
+                services.AddScoped<ITestCoverageStatistics>(provider => provider.GetRequiredService<ITestCoverageAnalyzer>());
+                services.AddScoped<ITestCoverageCacheManager>(provider => provider.GetRequiredService<ITestCoverageAnalyzer>());
+                
+                // Utilities - Transient for lightweight operations
                 services.AddTransient<IGitDiffParser, GitDiffParser>();
                 services.AddTransient<ISimplifiedDiffImpactAnalyzer, SimplifiedDiffImpactAnalyzer>();
                 services.AddTransient<ITestDiscovery, NUnitTestDiscovery>();
-                services.AddTransient<ICallGraphService, CallGraphService>();
-                services.AddTransient<ITestCoverageAnalyzer, TestCoverageAnalyzer>();
-                services.AddTransient<ITestExecutionTracer, TestExecutionTracer>();
-                services.AddTransient<ICodeChangeCoverageAnalyzer, CodeChangeCoverageAnalyzer>();
-                services.AddTransient<ICoverageAnalysisService, CoverageAnalysisService>();
                 
-                // Assembly and Cache services
+                // Assembly and Path services - Singleton for pure utilities
+                services.AddSingleton<IAssemblyPathResolver, AssemblyPathResolver>();
                 services.AddTransient<CrossFrameworkAssemblyLoader>();
                 services.AddTransient<CacheManagementService>();
                 

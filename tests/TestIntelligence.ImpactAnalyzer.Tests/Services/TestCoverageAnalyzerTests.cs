@@ -16,14 +16,16 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
     public class TestCoverageAnalyzerTests
     {
         private readonly IRoslynAnalyzer _mockRoslynAnalyzer;
+        private readonly IAssemblyPathResolver _mockAssemblyPathResolver;
         private readonly ILogger<TestCoverageAnalyzer> _mockLogger;
         private readonly TestCoverageAnalyzer _analyzer;
 
         public TestCoverageAnalyzerTests()
         {
             _mockRoslynAnalyzer = Substitute.For<IRoslynAnalyzer>();
+            _mockAssemblyPathResolver = Substitute.For<IAssemblyPathResolver>();
             _mockLogger = Substitute.For<ILogger<TestCoverageAnalyzer>>();
-            _analyzer = new TestCoverageAnalyzer(_mockRoslynAnalyzer, _mockLogger);
+            _analyzer = new TestCoverageAnalyzer(_mockRoslynAnalyzer, _mockAssemblyPathResolver, _mockLogger);
         }
 
         [Fact]
@@ -162,7 +164,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
         {
             // Act & Assert
             Assert.Throws<ArgumentNullException>(() => 
-                new TestCoverageAnalyzer(null!, _mockLogger));
+                new TestCoverageAnalyzer(null!, _mockAssemblyPathResolver, _mockLogger));
         }
 
         [Fact]
@@ -170,7 +172,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
         {
             // Act & Assert
             Assert.Throws<ArgumentNullException>(() => 
-                new TestCoverageAnalyzer(_mockRoslynAnalyzer, null!));
+                new TestCoverageAnalyzer(_mockRoslynAnalyzer, _mockAssemblyPathResolver, null!));
         }
 
         private MethodCallGraph CreateMockCallGraph()

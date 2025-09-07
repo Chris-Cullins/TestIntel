@@ -188,11 +188,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                     methodId, isTest, filePath);
                 
                 // Additional console debug output for better visibility
-                if (isTest)
-                {
-                    System.Console.WriteLine($"DEBUG: Identified test method: {methodSymbol.Name}");
-                    System.Console.WriteLine($"  - Full ID: {methodId}");
-                }
+
             }
             
             var methodInfo = new MethodInfo(

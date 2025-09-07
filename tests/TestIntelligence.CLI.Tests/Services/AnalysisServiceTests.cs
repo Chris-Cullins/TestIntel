@@ -7,6 +7,7 @@ using NSubstitute;
 using Xunit;
 using TestIntelligence.CLI.Services;
 using TestIntelligence.CLI.Models;
+using TestIntelligence.Core.Services;
 using FluentAssertions;
 using System.Linq;
 
@@ -18,18 +19,20 @@ namespace TestIntelligence.CLI.Tests.Services
     /// </summary>
     public class AnalysisServiceTests : IDisposable
     {
-        private readonly ILogger<AnalysisService> _logger;
-        private readonly IOutputFormatter _outputFormatter;
-        private readonly IConfigurationService _configurationService;
-        private readonly AnalysisService _service;
-        private readonly string _tempDirectory;
+    private readonly ILogger<AnalysisService> _logger;
+    private readonly IOutputFormatter _outputFormatter;
+    private readonly IConfigurationService _configurationService;
+    private readonly IAssemblyPathResolver _assemblyPathResolver;
+    private readonly AnalysisService _service;
+    private readonly string _tempDirectory;
 
-        public AnalysisServiceTests()
-        {
-            _logger = Substitute.For<ILogger<AnalysisService>>();
-            _outputFormatter = Substitute.For<IOutputFormatter>();
-            _configurationService = Substitute.For<IConfigurationService>();
-            _service = new AnalysisService(_logger, _outputFormatter, _configurationService);
+    public AnalysisServiceTests()
+    {
+        _logger = Substitute.For<ILogger<AnalysisService>>();
+        _outputFormatter = Substitute.For<IOutputFormatter>();
+        _configurationService = Substitute.For<IConfigurationService>();
+        _assemblyPathResolver = Substitute.For<IAssemblyPathResolver>();
+        _service = new AnalysisService(_logger, _outputFormatter, _configurationService, _assemblyPathResolver);
             
             _tempDirectory = Path.Combine(Path.GetTempPath(), $"AnalysisServiceTests_{Guid.NewGuid()}");
             Directory.CreateDirectory(_tempDirectory);
@@ -47,8 +50,8 @@ namespace TestIntelligence.CLI.Tests.Services
         public void Constructor_WithNullLogger_ThrowsArgumentNullException()
         {
             // Act & Assert
-            var exception = Assert.Throws<ArgumentNullException>(
-                () => new AnalysisService(null!, _outputFormatter, _configurationService));
+        var exception = Assert.Throws<ArgumentNullException>(
+            () => new AnalysisService(null!, _outputFormatter, _configurationService, _assemblyPathResolver));
             exception.ParamName.Should().Be("logger");
         }
 
@@ -56,8 +59,8 @@ namespace TestIntelligence.CLI.Tests.Services
         public void Constructor_WithNullOutputFormatter_ThrowsArgumentNullException()
         {
             // Act & Assert
-            var exception = Assert.Throws<ArgumentNullException>(
-                () => new AnalysisService(_logger, null!, _configurationService));
+        var exception = Assert.Throws<ArgumentNullException>(
+            () => new AnalysisService(_logger, null!, _configurationService, _assemblyPathResolver));
             exception.ParamName.Should().Be("outputFormatter");
         }
 
@@ -65,8 +68,8 @@ namespace TestIntelligence.CLI.Tests.Services
         public void Constructor_WithNullConfigurationService_ThrowsArgumentNullException()
         {
             // Act & Assert
-            var exception = Assert.Throws<ArgumentNullException>(
-                () => new AnalysisService(_logger, _outputFormatter, null!));
+        var exception = Assert.Throws<ArgumentNullException>(
+            () => new AnalysisService(_logger, _outputFormatter, null!, _assemblyPathResolver));
             exception.ParamName.Should().Be("configurationService");
         }
 

@@ -14,11 +14,18 @@ namespace TestIntelligence.ImpactAnalyzer.Services
 {
     /// <summary>
     /// Implementation of test coverage analysis that finds which tests exercise specific production methods.
+    /// Implements all focused test coverage interfaces for comprehensive functionality.
     /// </summary>
-    public class TestCoverageAnalyzer : ITestCoverageAnalyzer
+    public class TestCoverageAnalyzer : 
+        ITestCoverageAnalyzer,
+        ITestCoverageQuery,
+        ITestCoverageMapBuilder,
+        ITestCoverageStatistics,
+        ITestCoverageCacheManager
     {
         private readonly IRoslynAnalyzer _roslynAnalyzer;
         private readonly TestMethodClassifier _testClassifier;
+        private readonly IAssemblyPathResolver _assemblyPathResolver;
         private readonly ILogger<TestCoverageAnalyzer> _logger;
         
         // Cache to avoid rebuilding call graphs for the same solution
@@ -33,9 +40,11 @@ namespace TestIntelligence.ImpactAnalyzer.Services
 
         public TestCoverageAnalyzer(
             IRoslynAnalyzer roslynAnalyzer,
+            IAssemblyPathResolver assemblyPathResolver,
             ILogger<TestCoverageAnalyzer> logger)
         {
             _roslynAnalyzer = roslynAnalyzer ?? throw new ArgumentNullException(nameof(roslynAnalyzer));
+            _assemblyPathResolver = assemblyPathResolver ?? throw new ArgumentNullException(nameof(assemblyPathResolver));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _testClassifier = new TestMethodClassifier();
         }
@@ -105,7 +114,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                     _logger.LogWarning(ex, "Call graph building timed out after 3 minutes, falling back to assembly-based analysis");
                     
                     // Fallback: Try to analyze compiled assemblies instead
-                    var assemblyPaths = FindTestAssembliesInSolution(solutionPath);
+                    var assemblyPaths = await _assemblyPathResolver.FindTestAssembliesInSolutionAsync(solutionPath);
                     if (assemblyPaths.Any())
                     {
                         _logger.LogInformation("Found {AssemblyCount} test assemblies for fallback analysis", assemblyPaths.Count);
@@ -126,7 +135,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                     _logger.LogWarning(ex, "MSBuild workspace failed, falling back to assembly-based analysis");
                     
                     // Fallback: Try to analyze compiled assemblies instead
-                    var assemblyPaths = FindTestAssembliesInSolution(solutionPath);
+                    var assemblyPaths = await _assemblyPathResolver.FindTestAssembliesInSolutionAsync(solutionPath);
                     if (assemblyPaths.Any())
                     {
                         _logger.LogInformation("Found {AssemblyCount} test assemblies for fallback analysis", assemblyPaths.Count);
@@ -467,52 +476,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             return Math.Max(0.0, Math.Min(1.0, confidence));
         }
 
-        private IReadOnlyList<string> FindTestAssembliesInSolution(string solutionPath)
-        {
-            var assemblies = new List<string>();
-            var solutionDir = Path.GetDirectoryName(solutionPath);
-            
-            if (string.IsNullOrEmpty(solutionDir))
-                return assemblies;
 
-            try
-            {
-                // Look for test assemblies in bin/Debug and bin/Release folders
-                var searchPatterns = new[] { "*Test*.dll", "*.Tests.dll" };
-                var searchDirs = new[] { "bin/Debug", "bin/Release" };
-
-                foreach (var searchPattern in searchPatterns)
-                {
-                    foreach (var searchDir in searchDirs)
-                    {
-                        var pattern = Path.Combine(solutionDir, "**", searchDir, "**", searchPattern);
-                        var files = Directory.GetFiles(solutionDir, searchPattern, SearchOption.AllDirectories)
-                            .Where(f => f.Contains("bin") && 
-                                       (f.Contains("Debug") || f.Contains("Release")) &&
-                                       f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
-                            .ToList();
-                        
-                        assemblies.AddRange(files);
-                    }
-                }
-
-                // Remove duplicates and prefer Debug over Release
-                var uniqueAssemblies = assemblies
-                    .GroupBy(f => Path.GetFileName(f))
-                    .Select(g => g.OrderBy(f => f.Contains("Release") ? 1 : 0).First())
-                    .ToList();
-
-                _logger.LogDebug("Found {AssemblyCount} test assemblies: {Assemblies}", 
-                    uniqueAssemblies.Count, string.Join(", ", uniqueAssemblies.Select(Path.GetFileName)));
-
-                return uniqueAssemblies;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error searching for test assemblies in solution directory: {SolutionDir}", solutionDir);
-                return assemblies;
-            }
-        }
 
         /// <summary>
         /// Streams test coverage results incrementally, yielding results as they are found.

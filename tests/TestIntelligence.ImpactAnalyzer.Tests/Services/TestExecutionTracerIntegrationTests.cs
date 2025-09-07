@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using NSubstitute;
 using TestIntelligence.Core.Interfaces;
 using TestIntelligence.Core.Models;
+using TestIntelligence.Core.Services;
 using TestIntelligence.ImpactAnalyzer.Services;
 using TestIntelligence.ImpactAnalyzer.Analysis;
 using Xunit;
@@ -17,14 +18,16 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
     public class TestExecutionTracerIntegrationTests
     {
         private readonly IRoslynAnalyzer _mockRoslynAnalyzer;
+        private readonly IAssemblyPathResolver _mockAssemblyPathResolver;
         private readonly ILogger<TestExecutionTracer> _mockLogger;
         private readonly TestExecutionTracer _tracer;
 
         public TestExecutionTracerIntegrationTests()
         {
             _mockRoslynAnalyzer = Substitute.For<IRoslynAnalyzer>();
+            _mockAssemblyPathResolver = Substitute.For<IAssemblyPathResolver>();
             _mockLogger = Substitute.For<ILogger<TestExecutionTracer>>();
-            _tracer = new TestExecutionTracer(_mockRoslynAnalyzer, _mockLogger);
+            _tracer = new TestExecutionTracer(_mockRoslynAnalyzer, _mockAssemblyPathResolver, _mockLogger);
         }
 
         [Fact]
