@@ -33,9 +33,9 @@ namespace TestIntelligence.CLI.Tests.Services
         _configurationService = Substitute.For<IConfigurationService>();
         _assemblyPathResolver = Substitute.For<IAssemblyPathResolver>();
         _service = new AnalysisService(_logger, _outputFormatter, _configurationService, _assemblyPathResolver);
-            
-            _tempDirectory = Path.Combine(Path.GetTempPath(), $"AnalysisServiceTests_{Guid.NewGuid()}");
-            Directory.CreateDirectory(_tempDirectory);
+
+        _tempDirectory = Path.Combine(Path.GetTempPath(), $"AnalysisServiceTests_{Guid.NewGuid()}");
+        Directory.CreateDirectory(_tempDirectory);
         }
 
         public void Dispose()
