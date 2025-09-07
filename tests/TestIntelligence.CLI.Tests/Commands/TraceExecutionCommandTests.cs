@@ -236,35 +236,35 @@ namespace TestIntelligence.CLI.Tests.Commands
 
         private static ExecutionTrace CreateSampleExecutionTrace(string testMethodId)
         {
-            return new ExecutionTrace
+            return new ExecutionTrace(
+                testMethodId,
+                "ShouldWork", 
+                "MyApp.Tests.SampleTests")
             {
-                TestMethodId = testMethodId,
-                TestMethodName = "ShouldWork",
-                TestClassName = "MyApp.Tests.SampleTests",
                 ExecutedMethods = new List<ExecutedMethod>
                 {
-                    new ExecutedMethod
+                    new ExecutedMethod(
+                        "ProductionMethod1",
+                        "DoWork",
+                        "MyApp.Services.WorkerService",
+                        true)
                     {
-                        MethodId = "ProductionMethod1",
-                        MethodName = "DoWork",
-                        ContainingType = "MyApp.Services.WorkerService",
                         FilePath = "/src/WorkerService.cs",
                         LineNumber = 25,
                         CallPath = new[] { testMethodId, "ProductionMethod1" },
                         CallDepth = 1,
-                        IsProductionCode = true,
                         Category = MethodCategory.BusinessLogic
                     },
-                    new ExecutedMethod
+                    new ExecutedMethod(
+                        "ProductionMethod2",
+                        "ValidateInput", 
+                        "MyApp.Services.ValidationService",
+                        true)
                     {
-                        MethodId = "ProductionMethod2",
-                        MethodName = "ValidateInput",
-                        ContainingType = "MyApp.Services.ValidationService",
                         FilePath = "/src/ValidationService.cs",
                         LineNumber = 42,
                         CallPath = new[] { testMethodId, "ProductionMethod1", "ProductionMethod2" },
                         CallDepth = 2,
-                        IsProductionCode = true,
                         Category = MethodCategory.BusinessLogic
                     }
                 },

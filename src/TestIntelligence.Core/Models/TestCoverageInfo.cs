@@ -2,8 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace TestIntelligence.Core.Models
-{
+namespace TestIntelligence.Core.Models;
     /// <summary>
     /// Represents the relationship between a test method and a production method it exercises.
     /// </summary>
@@ -31,6 +30,11 @@ namespace TestIntelligence.Core.Models
         /// Unique identifier for the test method (typically FullClassName.MethodName).
         /// </summary>
         public string TestMethodId { get; }
+
+        /// <summary>
+        /// Gets the strongly-typed method identifier.
+        /// </summary>
+        public MethodId MethodId => new(TestMethodId);
 
         /// <summary>
         /// Name of the test method.
@@ -273,4 +277,3 @@ namespace TestIntelligence.Core.Models
         /// </summary>
         Security
     }
-}

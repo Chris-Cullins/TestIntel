@@ -45,6 +45,19 @@
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
   </PropertyGroup>
 
+  <!-- Test project specific properties -->
+  <PropertyGroup Condition="'$(IsTestProject)' == 'true'">
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <CollectCoverage>true</CollectCoverage>
+    <CoverletOutputFormat>cobertura,opencover,lcov</CoverletOutputFormat>
+    <CoverletOutput>$(OutputPath)coverage/</CoverletOutput>
+    <ExcludeFromCodeCoverage>true</ExcludeFromCodeCoverage>
+    <!-- Exclude test assemblies from coverage -->
+    <Exclude>[*Tests]*</Exclude>
+    <ExcludeByFile>**/obj/**,**/bin/**,**/*.Designer.cs,**/*.g.cs,**/*.g.i.cs</ExcludeByFile>
+    <ExcludeByAttribute>Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute</ExcludeByAttribute>
+  </PropertyGroup>
+
   <!-- Source Link for debugging -->
   <ItemGroup Condition="'$(IsTestProject)' != 'true'">
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All"/>

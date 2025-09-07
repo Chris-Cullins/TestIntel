@@ -1,0 +1,186 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Text.Json.Serialization;
+using TestIntelligence.Core.Assembly;
+
+namespace TestIntelligence.Core.Models;
+    /// <summary>
+    /// Represents a test method discovered in an assembly.
+    /// </summary>
+    public class TestMethod
+    {
+        public TestMethod(
+            MethodInfo methodInfo,
+            Type declaringType,
+            string assemblyPath,
+            FrameworkVersion frameworkVersion)
+        {
+            MethodInfo = methodInfo ?? throw new ArgumentNullException(nameof(methodInfo));
+            DeclaringType = declaringType ?? throw new ArgumentNullException(nameof(declaringType));
+            AssemblyPath = assemblyPath ?? throw new ArgumentNullException(nameof(assemblyPath));
+            FrameworkVersion = frameworkVersion;
+            
+            MethodName = methodInfo.Name;
+            ClassName = declaringType.Name;
+            FullClassName = declaringType.FullName ?? declaringType.Name;
+            TestAttributes = new List<Attribute>();
+            
+            ExtractTestAttributes();
+        }
+
+        /// <summary>
+        /// The reflection method info for this test method.
+        /// </summary>
+        [JsonIgnore]
+        public MethodInfo MethodInfo { get; }
+
+        /// <summary>
+        /// The declaring type that contains this test method.
+        /// </summary>
+        [JsonIgnore]
+        public Type DeclaringType { get; }
+
+        /// <summary>
+        /// The path to the assembly containing this test.
+        /// </summary>
+        public string AssemblyPath { get; }
+
+        /// <summary>
+        /// The .NET framework version of the assembly.
+        /// </summary>
+        public FrameworkVersion FrameworkVersion { get; }
+
+        /// <summary>
+        /// The name of the test method.
+        /// </summary>
+        public string MethodName { get; }
+
+        /// <summary>
+        /// The simple name of the class containing this test.
+        /// </summary>
+        public string ClassName { get; }
+
+        /// <summary>
+        /// The full name (including namespace) of the class containing this test.
+        /// </summary>
+        public string FullClassName { get; }
+
+        /// <summary>
+        /// Test-related attributes found on this method.
+        /// </summary>
+        [JsonIgnore]
+        public IReadOnlyList<Attribute> TestAttributes { get; private set; }
+
+        /// <summary>
+        /// Whether this method is marked with [Test] attribute.
+        /// </summary>
+        public bool IsTest { get; private set; }
+
+        /// <summary>
+        /// Whether this method is marked with [TestCase] attribute(s).
+        /// </summary>
+        public bool IsTestCase { get; private set; }
+
+        /// <summary>
+        /// Whether this method is marked with [SetUp] attribute.
+        /// </summary>
+        public bool IsSetUp { get; private set; }
+
+        /// <summary>
+        /// Whether this method is marked with [TearDown] attribute.
+        /// </summary>
+        public bool IsTearDown { get; private set; }
+
+        /// <summary>
+        /// Whether this method is marked with [OneTimeSetUp] attribute.
+        /// </summary>
+        public bool IsOneTimeSetUp { get; private set; }
+
+        /// <summary>
+        /// Whether this method is marked with [OneTimeTearDown] attribute.
+        /// </summary>
+        public bool IsOneTimeTearDown { get; private set; }
+
+        /// <summary>
+        /// Gets the unique method identifier for this test method.
+        /// </summary>
+        public MethodId MethodId => MethodId.Create(DeclaringType, MethodName);
+
+        /// <summary>
+        /// Gets a unique identifier for this test method.
+        /// </summary>
+        public string GetUniqueId()
+        {
+            return $"{FullClassName}.{MethodName}";
+        }
+
+        /// <summary>
+        /// Gets the display name for this test method.
+        /// </summary>
+        public string GetDisplayName()
+        {
+            return $"{ClassName}.{MethodName}";
+        }
+
+        /// <summary>
+        /// Extracts and categorizes test-related attributes.
+        /// </summary>
+        private void ExtractTestAttributes()
+        {
+            var attributes = MethodInfo.GetCustomAttributes(inherit: false);
+            var testAttributes = TestAttributeUtils.FilterTestRelatedAttributes(attributes).ToList();
+
+            foreach (var attribute in testAttributes)
+            {
+                var attributeName = attribute.GetType().Name;
+                
+                // Set boolean flags based on attribute type
+                if (TestAttributeUtils.IsTestAttribute(attributeName))
+                    IsTest = true;
+                else if (TestAttributeUtils.IsTestCaseAttribute(attributeName))
+                    IsTestCase = true;
+                else if (TestAttributeUtils.IsSetupAttribute(attributeName))
+                    IsSetUp = true;
+                else if (TestAttributeUtils.IsTeardownAttribute(attributeName))
+                    IsTearDown = true;
+                else if (TestAttributeUtils.IsOneTimeSetupAttribute(attributeName))
+                    IsOneTimeSetUp = true;
+                else if (TestAttributeUtils.IsOneTimeTeardownAttribute(attributeName))
+                    IsOneTimeTearDown = true;
+            }
+
+            TestAttributes = testAttributes.AsReadOnly();
+        }
+
+        /// <summary>
+        /// Determines if this is an executable test method.
+        /// </summary>
+        public bool IsExecutableTest()
+        {
+            return IsTest || IsTestCase;
+        }
+
+        /// <summary>
+        /// Gets all test case parameters if this is a parameterized test.
+        /// </summary>
+        public IEnumerable<object[]> GetTestCaseParameters()
+        {
+            return IsTestCase ? TestAttributeUtils.GetTestCaseArguments(TestAttributes) : Enumerable.Empty<object[]>();
+        }
+
+        /// <summary>
+        /// Gets categories associated with this test method.
+        /// </summary>
+        public IEnumerable<string> GetCategories()
+        {
+            return TestAttributeUtils.GetCategoryNames(TestAttributes);
+        }
+
+        public override string ToString()
+        {
+            return GetDisplayName();
+        }
+    }
+}

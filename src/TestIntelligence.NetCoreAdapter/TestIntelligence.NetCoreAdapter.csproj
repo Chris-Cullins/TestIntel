@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>TestIntelligence.NetCoreAdapter</AssemblyName>
     <RootNamespace>TestIntelligence.NetCoreAdapter</RootNamespace>
     <Description>Adapter for .NET Core/.NET 5+ assembly loading and test discovery</Description>

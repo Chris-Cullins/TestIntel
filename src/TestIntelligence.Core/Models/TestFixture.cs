@@ -5,8 +5,7 @@ using System.Reflection;
 using System.Text.Json.Serialization;
 using TestIntelligence.Core.Assembly;
 
-namespace TestIntelligence.Core.Models
-{
+namespace TestIntelligence.Core.Models;
     /// <summary>
     /// Represents a test fixture (class) discovered in an assembly.
     /// </summary>
@@ -123,18 +122,7 @@ namespace TestIntelligence.Core.Models
         /// </summary>
         public IEnumerable<string> GetCategories()
         {
-            foreach (var attribute in FixtureAttributes)
-            {
-                if (attribute.GetType().Name == "CategoryAttribute")
-                {
-                    // Use reflection to get the Name property
-                    var nameProperty = attribute.GetType().GetProperty("Name");
-                    if (nameProperty?.GetValue(attribute) is string categoryName)
-                    {
-                        yield return categoryName;
-                    }
-                }
-            }
+            return TestAttributeUtils.GetCategoryNames(FixtureAttributes);
         }
 
         /// <summary>
@@ -151,48 +139,16 @@ namespace TestIntelligence.Core.Models
         private void ExtractFixtureAttributes()
         {
             var attributes = Type.GetCustomAttributes(inherit: false);
-            var fixtureAttributes = new List<Attribute>();
+            var fixtureAttributes = TestAttributeUtils.FilterTestRelatedAttributes(attributes).ToList();
 
-            foreach (var attribute in attributes)
+            // Check for explicit fixture attributes
+            foreach (var attribute in fixtureAttributes)
             {
                 var attributeName = attribute.GetType().Name;
-                
-                // Check for test framework fixture attributes
-                switch (attributeName)
+                if (TestAttributeUtils.IsFixtureAttribute(attributeName))
                 {
-                    // NUnit attributes
-                    case "TestFixtureAttribute":
-                        IsTestFixture = true;
-                        fixtureAttributes.Add((Attribute)attribute);
-                        break;
-                    case "SetUpFixtureAttribute":
-                        IsTestFixture = true;
-                        fixtureAttributes.Add((Attribute)attribute);
-                        break;
-                    
-                    // MSTest attributes
-                    case "TestClassAttribute":
-                        IsTestFixture = true;
-                        fixtureAttributes.Add((Attribute)attribute);
-                        break;
-                    
-                    // xUnit doesn't require explicit class attributes, but may have collection attributes
-                    case "CollectionAttribute":
-                        fixtureAttributes.Add((Attribute)attribute);
-                        break;
-                }
-                
-                // Include any test-related attributes
-                if (attributeName.Contains("Test") || 
-                    attributeName.Contains("Category") ||
-                    attributeName.Contains("Ignore") ||
-                    attributeName.Contains("Explicit") ||
-                    attributeName.Contains("Trait") ||
-                    attributeName.Contains("Collection") ||
-                    attributeName.Contains("Owner") ||
-                    attributeName.Contains("Priority"))
-                {
-                    fixtureAttributes.Add((Attribute)attribute);
+                    IsTestFixture = true;
+                    break;
                 }
             }
 
@@ -204,8 +160,8 @@ namespace TestIntelligence.Core.Models
                 {
                     var methodAttributes = method.GetCustomAttributes(false);
                     return methodAttributes.Any(attr => 
-                        attr.GetType().Name == "FactAttribute" || 
-                        attr.GetType().Name == "TheoryAttribute");
+                        TestAttributeUtils.IsTestAttribute(attr.GetType().Name) || 
+                        TestAttributeUtils.IsTestCaseAttribute(attr.GetType().Name));
                 });
             }
 
@@ -239,4 +195,3 @@ namespace TestIntelligence.Core.Models
             return $"{ClassName} ({TestMethods.Count(m => m.IsExecutableTest())} tests)";
         }
     }
-}

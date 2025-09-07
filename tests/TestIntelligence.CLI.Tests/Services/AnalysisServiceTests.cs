@@ -245,6 +245,8 @@ EndProject";
             var config = CreateDefaultConfiguration();
             config.Projects.TestProjectsOnly = true; // Only test projects
             _configurationService.LoadConfigurationAsync(Arg.Any<string>()).Returns(config);
+            _configurationService.FilterProjects(Arg.Any<List<string>>(), Arg.Any<TestIntelConfiguration>())
+                .Returns(callInfo => callInfo.Arg<List<string>>());
 
             // Act
             await _service.AnalyzeAsync(solutionPath, null, "json", true);
@@ -268,6 +270,8 @@ EndProject";
             var config = CreateDefaultConfiguration();
             config.Projects.TestProjectsOnly = true;
             _configurationService.LoadConfigurationAsync(Arg.Any<string>()).Returns(config);
+            _configurationService.FilterProjects(Arg.Any<List<string>>(), Arg.Any<TestIntelConfiguration>())
+                .Returns(callInfo => callInfo.Arg<List<string>>());
 
             // Act
             await _service.AnalyzeAsync(binDir, null, "json", true);

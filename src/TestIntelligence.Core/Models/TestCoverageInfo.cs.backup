@@ -1,0 +1,280 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace TestIntelligence.Core.Models;
+    /// <summary>
+    /// Represents the relationship between a test method and a production method it exercises.
+    /// </summary>
+    public class TestCoverageInfo
+    {
+        public TestCoverageInfo(
+            string testMethodId,
+            string testMethodName,
+            string testClassName,
+            string testAssembly,
+            string[] callPath,
+            double confidence,
+            TestType testType)
+        {
+            TestMethodId = testMethodId ?? throw new ArgumentNullException(nameof(testMethodId));
+            TestMethodName = testMethodName ?? throw new ArgumentNullException(nameof(testMethodName));
+            TestClassName = testClassName ?? throw new ArgumentNullException(nameof(testClassName));
+            TestAssembly = testAssembly ?? throw new ArgumentNullException(nameof(testAssembly));
+            CallPath = callPath ?? throw new ArgumentNullException(nameof(callPath));
+            Confidence = Math.Max(0.0, Math.Min(1.0, confidence)); // Clamp between 0.0 and 1.0
+            TestType = testType;
+        }
+
+        /// <summary>
+        /// Unique identifier for the test method (typically FullClassName.MethodName).
+        /// </summary>
+        public string TestMethodId { get; }
+
+        /// <summary>
+        /// Gets the strongly-typed method identifier.
+        /// </summary>
+        public MethodId MethodId => new(TestMethodId);
+
+        /// <summary>
+        /// Name of the test method.
+        /// </summary>
+        public string TestMethodName { get; }
+
+        /// <summary>
+        /// Full name of the class containing the test method.
+        /// </summary>
+        public string TestClassName { get; }
+
+        /// <summary>
+        /// Assembly containing the test method.
+        /// </summary>
+        public string TestAssembly { get; }
+
+        /// <summary>
+        /// Call path from test method to the target production method.
+        /// First element is the test method, last element is the target method.
+        /// </summary>
+        public string[] CallPath { get; }
+
+        /// <summary>
+        /// Confidence score for this coverage relationship (0.0 - 1.0).
+        /// Higher values indicate more direct/reliable coverage.
+        /// </summary>
+        public double Confidence { get; }
+
+        /// <summary>
+        /// Type of test method (Unit, Integration, End2End, etc.).
+        /// </summary>
+        public TestType TestType { get; }
+
+        /// <summary>
+        /// Gets the depth of the call chain (number of hops from test to target).
+        /// </summary>
+        public int CallDepth => CallPath.Length - 1;
+
+        /// <summary>
+        /// Indicates whether this is direct coverage (test directly calls the method).
+        /// </summary>
+        public bool IsDirectCoverage => CallDepth == 1;
+
+        /// <summary>
+        /// Gets a display string showing the call path.
+        /// </summary>
+        public string GetCallPathDisplay()
+        {
+            return string.Join(" -> ", CallPath);
+        }
+
+        public override string ToString()
+        {
+            return $"{TestMethodName} ({TestType}, Confidence: {Confidence:F2}, Depth: {CallDepth})";
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is TestCoverageInfo other && 
+                   TestMethodId == other.TestMethodId && 
+                   string.Join(",", CallPath) == string.Join(",", other.CallPath);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                var hash = 17;
+                hash = hash * 23 + TestMethodId?.GetHashCode() ?? 0;
+                hash = hash * 23 + string.Join(",", CallPath)?.GetHashCode() ?? 0;
+                return hash;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Represents a complete mapping of production methods to tests that exercise them.
+    /// </summary>
+    public class TestCoverageMap
+    {
+        public TestCoverageMap(
+            Dictionary<string, List<TestCoverageInfo>> methodToTests,
+            DateTime buildTimestamp,
+            string solutionPath)
+        {
+            MethodToTests = methodToTests ?? throw new ArgumentNullException(nameof(methodToTests));
+            BuildTimestamp = buildTimestamp;
+            SolutionPath = solutionPath ?? throw new ArgumentNullException(nameof(solutionPath));
+        }
+
+        /// <summary>
+        /// Mapping from method identifier to list of tests that exercise it.
+        /// </summary>
+        public Dictionary<string, List<TestCoverageInfo>> MethodToTests { get; }
+
+        /// <summary>
+        /// Timestamp when this coverage map was built.
+        /// </summary>
+        public DateTime BuildTimestamp { get; }
+
+        /// <summary>
+        /// Path to the solution this coverage map was built from.
+        /// </summary>
+        public string SolutionPath { get; }
+
+        /// <summary>
+        /// Gets all tests that exercise the specified method.
+        /// </summary>
+        public IReadOnlyList<TestCoverageInfo> GetTestsForMethod(string methodId)
+        {
+            return MethodToTests.TryGetValue(methodId, out var tests) 
+                ? tests.AsReadOnly() 
+                : new List<TestCoverageInfo>().AsReadOnly();
+        }
+
+        /// <summary>
+        /// Gets all tests that exercise methods matching the specified method name pattern.
+        /// Supports partial matching when the full signature is not available.
+        /// </summary>
+        public IReadOnlyList<TestCoverageInfo> GetTestsForMethodPattern(string methodPattern)
+        {
+            var allTests = new List<TestCoverageInfo>();
+            
+            // First try exact match
+            if (MethodToTests.TryGetValue(methodPattern, out var exactTests))
+            {
+                allTests.AddRange(exactTests);
+                return allTests.AsReadOnly();
+            }
+            
+            // If no exact match, try pattern matching
+            foreach (var kvp in MethodToTests)
+            {
+                var fullMethodId = kvp.Key;
+                
+                // Check if the method ID matches the pattern
+                if (IsMethodMatch(fullMethodId, methodPattern))
+                {
+                    allTests.AddRange(kvp.Value);
+                }
+            }
+            
+            return allTests.AsReadOnly();
+        }
+
+        /// <summary>
+        /// Determines if a full method ID matches a given pattern.
+        /// Supports various matching scenarios:
+        /// 1. Exact match
+        /// 2. Class.Method match (without parameters)
+        /// 3. Method name only match
+        /// </summary>
+        private static bool IsMethodMatch(string fullMethodId, string pattern)
+        {
+            if (string.IsNullOrEmpty(fullMethodId) || string.IsNullOrEmpty(pattern))
+                return false;
+
+            // Exact match
+            if (fullMethodId.Equals(pattern, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // Remove global:: prefix if present for comparison
+            var normalizedMethodId = fullMethodId.StartsWith("global::", StringComparison.OrdinalIgnoreCase) 
+                ? fullMethodId.Substring(8) // Remove "global::" prefix
+                : fullMethodId;
+
+            // Extract method name without parameters from normalized ID
+            // Format: Namespace.Class.Method(params)
+            var parenIndex = normalizedMethodId.IndexOf('(');
+            var methodWithoutParams = parenIndex > 0 ? normalizedMethodId.Substring(0, parenIndex) : normalizedMethodId;
+
+            // Check if pattern matches the method without parameters
+            if (methodWithoutParams.Equals(pattern, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // Check if pattern is just the method name (last part after final dot)
+            var lastDotIndex = methodWithoutParams.LastIndexOf('.');
+            if (lastDotIndex >= 0 && lastDotIndex < methodWithoutParams.Length - 1)
+            {
+                var methodNameOnly = methodWithoutParams.Substring(lastDotIndex + 1);
+                if (methodNameOnly.Equals(pattern, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Gets all method identifiers that have test coverage.
+        /// </summary>
+        public IReadOnlyList<string> GetCoveredMethods()
+        {
+            return new List<string>(MethodToTests.Keys).AsReadOnly();
+        }
+
+        /// <summary>
+        /// Gets the total number of methods with test coverage.
+        /// </summary>
+        public int CoveredMethodCount => MethodToTests.Count;
+
+        /// <summary>
+        /// Gets the total number of test coverage relationships.
+        /// </summary>
+        public int TotalCoverageRelationships => 
+            MethodToTests.Values.Sum(tests => tests.Count);
+    }
+
+    /// <summary>
+    /// Enumeration of different test types for classification.
+    /// </summary>
+    public enum TestType
+    {
+        /// <summary>
+        /// Unknown or unclassified test type.
+        /// </summary>
+        Unknown,
+
+        /// <summary>
+        /// Unit test - tests a single unit of code in isolation.
+        /// </summary>
+        Unit,
+
+        /// <summary>
+        /// Integration test - tests interaction between components.
+        /// </summary>
+        Integration,
+
+        /// <summary>
+        /// End-to-end test - tests complete user scenarios.
+        /// </summary>
+        End2End,
+
+        /// <summary>
+        /// Performance test - tests system performance characteristics.
+        /// </summary>
+        Performance,
+
+        /// <summary>
+        /// Security test - tests security-related functionality.
+        /// </summary>
+        Security
+    }
+}

@@ -11,6 +11,10 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="xunit" Version="2.6.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+    <PackageReference Include="coverlet.collector" Version="6.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="FluentAssertions" Version="6.12.0" />
     <PackageReference Include="NSubstitute" Version="5.1.0" />
     <PackageReference Include="Microsoft.Build.Locator" Version="1.6.10" />
@@ -19,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\TestIntelligence.ImpactAnalyzer\TestIntelligence.ImpactAnalyzer.csproj" />
     <ProjectReference Include="..\..\src\TestIntelligence.Core\TestIntelligence.Core.csproj" />
+    <ProjectReference Include="..\TestIntelligence.TestUtilities\TestIntelligence.TestUtilities.csproj" />
   </ItemGroup>
 
 </Project>

@@ -16,6 +16,7 @@ using Xunit;
 
 namespace TestIntelligence.ImpactAnalyzer.Tests.Analysis
 {
+    [Collection("MSBuild Sequential")]
     public class CompilationManagerTests : IDisposable
     {
         private readonly ILogger<CompilationManager> _logger;

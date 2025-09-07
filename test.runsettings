@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <Format>opencover</Format>
+          <Format>lcov</Format>
+          <IncludeTestAssembly>false</IncludeTestAssembly>
+          <ExcludeByFile>
+            <Exclude>**/obj/**</Exclude>
+            <Exclude>**/bin/**</Exclude>
+            <Exclude>**/*.Designer.cs</Exclude>
+            <Exclude>**/*.g.cs</Exclude>
+            <Exclude>**/*.g.i.cs</Exclude>
+            <Exclude>**/GlobalAssemblyInfo.cs</Exclude>
+          </ExcludeByFile>
+          <ExcludeByAttribute>
+            <Exclude>Obsolete</Exclude>
+            <Exclude>GeneratedCodeAttribute</Exclude>
+            <Exclude>CompilerGeneratedAttribute</Exclude>
+            <Exclude>ExcludeFromCodeCoverageAttribute</Exclude>
+          </ExcludeByAttribute>
+          <UseSourceLink>true</UseSourceLink>
+          <SingleHit>false</SingleHit>
+          <CollectAspDotNet>false</CollectAspDotNet>
+          <SkipAutoProps>false</SkipAutoProps>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+  
+  <!-- Test execution settings -->
+  <RunConfiguration>
+    <MaxCpuCount>0</MaxCpuCount>
+    <ResultsDirectory>TestResults</ResultsDirectory>
+    <CollectSourceInformation>true</CollectSourceInformation>
+    <TreatTestAdapterErrorsAsWarnings>false</TreatTestAdapterErrorsAsWarnings>
+  </RunConfiguration>
+  
+  <!-- Logger settings -->
+  <LoggerRunSettings>
+    <Loggers>
+      <Logger friendlyName="trx" enabled="true">
+        <Configuration>
+          <LogFileName>testresults.trx</LogFileName>
+        </Configuration>
+      </Logger>
+      <Logger friendlyName="html" enabled="true">
+        <Configuration>
+          <LogFileName>testresults.html</LogFileName>
+        </Configuration>
+      </Logger>
+    </Loggers>
+  </LoggerRunSettings>
+
+  <!-- Test platform configuration -->
+  <TestRunParameters>
+    <Parameter name="webAppUrl" value="http://localhost" />
+    <Parameter name="webAppUserName" value="" />
+    <Parameter name="webAppPassword" value="" />
+  </TestRunParameters>
+</RunSettings>

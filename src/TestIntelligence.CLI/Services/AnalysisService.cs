@@ -152,8 +152,14 @@ public class AnalysisService : IAnalysisService
                     ? await FindTestProjectsInSolutionAsync(path)
                     : await FindAllProjectsInSolutionAsync(path).ConfigureAwait(false);
                 
+                if (allProjectPaths == null)
+                {
+                    _logger.LogWarning("Project discovery returned null for solution: {SolutionPath}", path);
+                    allProjectPaths = new List<string>();
+                }
+                
                 // Apply configuration-based project filtering
-                var filteredProjectPaths = _configurationService.FilterProjects(allProjectPaths, configuration);
+                var filteredProjectPaths = _configurationService.FilterProjects(allProjectPaths, configuration) ?? new List<string>();
                 
                 foreach (var projectPath in filteredProjectPaths)
                 {

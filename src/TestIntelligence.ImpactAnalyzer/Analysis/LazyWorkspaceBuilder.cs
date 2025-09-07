@@ -17,6 +17,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
     /// </summary>
     public class LazyWorkspaceBuilder : IDisposable
     {
+        private static readonly SemaphoreSlim _msbuildSemaphore = new SemaphoreSlim(1, 1);
         private readonly ILogger<LazyWorkspaceBuilder> _logger;
         private readonly MSBuildWorkspace _workspace;
         private readonly SymbolIndex _symbolIndex;
@@ -138,49 +139,63 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         {
             return await _projectCache.GetOrAdd(projectPath, async path =>
             {
-                CancellationTokenSource? timeoutCts = null;
-                CancellationTokenSource? combinedCts = null;
-                
+                // Use semaphore to prevent concurrent MSBuild operations
+                await _msbuildSemaphore.WaitAsync(cancellationToken);
                 try
                 {
-                    _logger.LogDebug("Loading project on-demand: {ProjectPath}", path);
-                    var startTime = DateTime.UtcNow;
-
-                    // Add timeout to prevent hanging on project loading
-                    timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-                    combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
-
-                    var projectTask = _workspace.OpenProjectAsync(path);
-                    var timeoutTask = Task.Delay(TimeSpan.FromSeconds(15), combinedCts.Token);
+                    CancellationTokenSource? timeoutCts = null;
+                    CancellationTokenSource? combinedCts = null;
                     
-                    var completedTask = await Task.WhenAny(projectTask, timeoutTask);
-                    if (completedTask == timeoutTask)
+                    try
+                    {
+                        _logger.LogDebug("Loading project on-demand: {ProjectPath}", path);
+                        var startTime = DateTime.UtcNow;
+
+                        // Add timeout to prevent hanging on project loading
+                        timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                        combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+                        var projectTask = _workspace.OpenProjectAsync(path);
+                        var timeoutTask = Task.Delay(TimeSpan.FromSeconds(15), combinedCts.Token);
+                        
+                        var completedTask = await Task.WhenAny(projectTask, timeoutTask);
+                        if (completedTask == timeoutTask)
+                        {
+                            _logger.LogWarning("Project loading timed out after 15 seconds: {ProjectPath}", path);
+                            return null;
+                        }
+                        
+                        var project = await projectTask;
+                        
+                        var elapsed = DateTime.UtcNow - startTime;
+                        _logger.LogDebug("Project loaded in {ElapsedMs}ms: {ProjectName}", elapsed.TotalMilliseconds, project.Name);
+
+                        return project;
+                    }
+                    catch (OperationCanceledException) when (timeoutCts?.Token.IsCancellationRequested == true)
                     {
                         _logger.LogWarning("Project loading timed out after 15 seconds: {ProjectPath}", path);
                         return null;
                     }
-                    
-                    var project = await projectTask;
-                    
-                    var elapsed = DateTime.UtcNow - startTime;
-                    _logger.LogDebug("Project loaded in {ElapsedMs}ms: {ProjectName}", elapsed.TotalMilliseconds, project.Name);
-
-                    return project;
-                }
-                catch (OperationCanceledException) when (timeoutCts?.Token.IsCancellationRequested == true)
-                {
-                    _logger.LogWarning("Project loading timed out after 15 seconds: {ProjectPath}", path);
-                    return null;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to load project: {ProjectPath}", path);
-                    return null;
+                    catch (InvalidOperationException ex) when (ex.Message.Contains("build is already in progress"))
+                    {
+                        _logger.LogWarning("MSBuild is busy, skipping project load: {ProjectPath}", path);
+                        return null;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to load project: {ProjectPath}", path);
+                        return null;
+                    }
+                    finally
+                    {
+                        timeoutCts?.Dispose();
+                        combinedCts?.Dispose();
+                    }
                 }
                 finally
                 {
-                    timeoutCts?.Dispose();
-                    combinedCts?.Dispose();
+                    _msbuildSemaphore.Release();
                 }
             });
         }
@@ -318,30 +333,45 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         {
             _logger.LogDebug("Loading solution metadata: {SolutionPath}", solutionPath);
             
-            // Load solution directly with timeout to prevent hanging
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
-            
+            // Use semaphore to prevent concurrent MSBuild operations
+            await _msbuildSemaphore.WaitAsync(cancellationToken);
             try
             {
-                var solutionTask = _workspace.OpenSolutionAsync(solutionPath);
-                var timeoutTask = Task.Delay(TimeSpan.FromSeconds(30), combinedCts.Token);
+                // Load solution directly with timeout to prevent hanging
+                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
                 
-                var completedTask = await Task.WhenAny(solutionTask, timeoutTask);
-                if (completedTask == timeoutTask)
+                try
+                {
+                    var solutionTask = _workspace.OpenSolutionAsync(solutionPath);
+                    var timeoutTask = Task.Delay(TimeSpan.FromSeconds(30), combinedCts.Token);
+                    
+                    var completedTask = await Task.WhenAny(solutionTask, timeoutTask);
+                    if (completedTask == timeoutTask)
+                    {
+                        _logger.LogWarning("Solution loading timed out after 30 seconds, falling back to manual solution parsing");
+                        await InitializeFromSolutionManuallyAsync(solutionPath, cancellationToken);
+                        return;
+                    }
+                    
+                    _solution = await solutionTask;
+                }
+                catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
                 {
                     _logger.LogWarning("Solution loading timed out after 30 seconds, falling back to manual solution parsing");
                     await InitializeFromSolutionManuallyAsync(solutionPath, cancellationToken);
                     return;
                 }
-                
-                _solution = await solutionTask;
+                catch (InvalidOperationException ex) when (ex.Message.Contains("build is already in progress"))
+                {
+                    _logger.LogWarning("MSBuild is busy, falling back to manual solution parsing");
+                    await InitializeFromSolutionManuallyAsync(solutionPath, cancellationToken);
+                    return;
+                }
             }
-            catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
+            finally
             {
-                _logger.LogWarning("Solution loading timed out after 30 seconds, falling back to manual solution parsing");
-                await InitializeFromSolutionManuallyAsync(solutionPath, cancellationToken);
-                return;
+                _msbuildSemaphore.Release();
             }
             
             var solutionInfo = _solution;

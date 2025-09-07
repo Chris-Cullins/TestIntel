@@ -10,6 +10,7 @@ using Xunit;
 
 namespace TestIntelligence.ImpactAnalyzer.Tests.Analysis
 {
+    [Collection("MSBuild Sequential")]
     public class LazyWorkspaceBuilderTests : IDisposable
     {
         private readonly ILogger<LazyWorkspaceBuilder> _mockLogger;

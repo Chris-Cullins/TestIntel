@@ -279,16 +279,16 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                     var isProductionCode = IsProductionCode(currentMethodInfo);
                     var category = CategorizeMethod(currentMethodInfo);
                     
-                    var executedMethod = new ExecutedMethod
+                    var executedMethod = new ExecutedMethod(
+                        currentMethodId,
+                        currentMethodInfo.Name,
+                        currentMethodInfo.ContainingType,
+                        isProductionCode)
                     {
-                        MethodId = currentMethodId,
-                        MethodName = currentMethodInfo.Name,
-                        ContainingType = currentMethodInfo.ContainingType,
                         FilePath = currentMethodInfo.FilePath,
                         LineNumber = currentMethodInfo.LineNumber,
                         CallPath = currentCallPath.ToArray(),
                         CallDepth = currentDepth,
-                        IsProductionCode = isProductionCode,
                         Category = category
                     };
                     
@@ -313,11 +313,11 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             var productionMethodsCount = executedMethods.Count(em => em.IsProductionCode);
             var estimatedComplexity = TimeSpan.FromMilliseconds(executedMethods.Count * 10); // Rough estimation
             
-            return new ExecutionTrace
+            return new ExecutionTrace(
+                testMethod.Id,
+                testMethod.Name,
+                testMethod.ContainingType)
             {
-                TestMethodId = testMethod.Id,
-                TestMethodName = testMethod.Name,
-                TestClassName = testMethod.ContainingType,
                 ExecutedMethods = executedMethods,
                 TotalMethodsCalled = executedMethods.Count,
                 ProductionMethodsCalled = productionMethodsCount,

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net48</TargetFrameworks>
+    <TargetFrameworks>netstandard2.1;net48</TargetFrameworks>
     <AssemblyName>TestIntelligence.Framework48Adapter</AssemblyName>
     <RootNamespace>TestIntelligence.Framework48Adapter</RootNamespace>
     <Description>Adapter for .NET Framework 4.8 assembly loading and test discovery</Description>

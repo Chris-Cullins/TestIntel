@@ -55,7 +55,7 @@ public class TraceExecutionCommandHandler : BaseCommandHandler
             return 0;
         }
 
-        Console.WriteLine($"Found {executionTrace.TotalMethodsCalled} method(s) in execution trace:");
+        Console.WriteLine($"Found {executionTrace.ExecutedMethods.Count} method(s) in execution trace:");
         Console.WriteLine($"Production methods: {executionTrace.ProductionMethodsCalled}");
         Console.WriteLine($"Estimated complexity: {executionTrace.EstimatedExecutionComplexity}");
         Console.WriteLine();

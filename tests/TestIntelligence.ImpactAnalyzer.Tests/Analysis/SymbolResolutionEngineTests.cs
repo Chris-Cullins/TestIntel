@@ -15,6 +15,7 @@ using Xunit;
 
 namespace TestIntelligence.ImpactAnalyzer.Tests.Analysis
 {
+    [Collection("MSBuild Sequential")]
     public class SymbolResolutionEngineTests : IDisposable
     {
         private readonly ILogger<SymbolResolutionEngine> _logger;

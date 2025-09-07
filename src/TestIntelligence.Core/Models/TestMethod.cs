@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Text.Json.Serialization;
 using TestIntelligence.Core.Assembly;
 
-namespace TestIntelligence.Core.Models
-{
+namespace TestIntelligence.Core.Models;
     /// <summary>
     /// Represents a test method discovered in an assembly.
     /// </summary>
@@ -104,6 +104,11 @@ namespace TestIntelligence.Core.Models
         public bool IsOneTimeTearDown { get; private set; }
 
         /// <summary>
+        /// Gets the unique method identifier for this test method.
+        /// </summary>
+        public MethodId MethodId => MethodId.Create(DeclaringType, MethodName);
+
+        /// <summary>
         /// Gets a unique identifier for this test method.
         /// </summary>
         public string GetUniqueId()
@@ -125,103 +130,25 @@ namespace TestIntelligence.Core.Models
         private void ExtractTestAttributes()
         {
             var attributes = MethodInfo.GetCustomAttributes(inherit: false);
-            var testAttributes = new List<Attribute>();
+            var testAttributes = TestAttributeUtils.FilterTestRelatedAttributes(attributes).ToList();
 
-            foreach (var attribute in attributes)
+            foreach (var attribute in testAttributes)
             {
                 var attributeName = attribute.GetType().Name;
                 
-                // Check for NUnit test attributes
-                switch (attributeName)
-                {
-                    case "TestAttribute":
-                        IsTest = true;
-                        testAttributes.Add((Attribute)attribute);
-                        break;
-                    
-                    case "TestCaseAttribute":
-                        IsTestCase = true;
-                        testAttributes.Add((Attribute)attribute);
-                        break;
-                        
-                    case "SetUpAttribute":
-                        IsSetUp = true;
-                        testAttributes.Add((Attribute)attribute);
-                        break;
-                        
-                    case "TearDownAttribute":
-                        IsTearDown = true;
-                        testAttributes.Add((Attribute)attribute);
-                        break;
-                        
-                    case "OneTimeSetUpAttribute":
-                        IsOneTimeSetUp = true;
-                        testAttributes.Add((Attribute)attribute);
-                        break;
-                        
-                    case "OneTimeTearDownAttribute":
-                        IsOneTimeTearDown = true;
-                        testAttributes.Add((Attribute)attribute);
-                        break;
-
-                    // xUnit attributes
-                    case "FactAttribute":
-                        IsTest = true;
-                        testAttributes.Add((Attribute)attribute);
-                        break;
-                        
-                    case "TheoryAttribute":
-                        IsTestCase = true;
-                        testAttributes.Add((Attribute)attribute);
-                        break;
-
-                    // MSTest attributes  
-                    case "TestMethodAttribute":
-                        IsTest = true;
-                        testAttributes.Add((Attribute)attribute);
-                        break;
-                        
-                    case "DataTestMethodAttribute":
-                        IsTestCase = true;
-                        testAttributes.Add((Attribute)attribute);
-                        break;
-                        
-                    case "TestInitializeAttribute":
-                        IsSetUp = true;
-                        testAttributes.Add((Attribute)attribute);
-                        break;
-                        
-                    case "TestCleanupAttribute":
-                        IsTearDown = true;
-                        testAttributes.Add((Attribute)attribute);
-                        break;
-                        
-                    case "ClassInitializeAttribute":
-                        IsOneTimeSetUp = true;
-                        testAttributes.Add((Attribute)attribute);
-                        break;
-                        
-                    case "ClassCleanupAttribute":
-                        IsOneTimeTearDown = true;
-                        testAttributes.Add((Attribute)attribute);
-                        break;
-                }
-                
-                // Include any test-related attributes
-                if (attributeName.Contains("Test") || 
-                    attributeName.Contains("SetUp") || 
-                    attributeName.Contains("TearDown") ||
-                    attributeName.Contains("Ignore") ||
-                    attributeName.Contains("Category") ||
-                    attributeName.Contains("Fact") ||
-                    attributeName.Contains("Theory") ||
-                    attributeName.Contains("Initialize") ||
-                    attributeName.Contains("Cleanup") ||
-                    attributeName.Contains("Trait") ||
-                    attributeName.Contains("Skip"))
-                {
-                    testAttributes.Add((Attribute)attribute);
-                }
+                // Set boolean flags based on attribute type
+                if (TestAttributeUtils.IsTestAttribute(attributeName))
+                    IsTest = true;
+                else if (TestAttributeUtils.IsTestCaseAttribute(attributeName))
+                    IsTestCase = true;
+                else if (TestAttributeUtils.IsSetupAttribute(attributeName))
+                    IsSetUp = true;
+                else if (TestAttributeUtils.IsTeardownAttribute(attributeName))
+                    IsTearDown = true;
+                else if (TestAttributeUtils.IsOneTimeSetupAttribute(attributeName))
+                    IsOneTimeSetUp = true;
+                else if (TestAttributeUtils.IsOneTimeTeardownAttribute(attributeName))
+                    IsOneTimeTearDown = true;
             }
 
             TestAttributes = testAttributes.AsReadOnly();
@@ -240,21 +167,15 @@ namespace TestIntelligence.Core.Models
         /// </summary>
         public IEnumerable<object[]> GetTestCaseParameters()
         {
-            if (!IsTestCase) 
-                yield break;
+            return IsTestCase ? TestAttributeUtils.GetTestCaseArguments(TestAttributes) : Enumerable.Empty<object[]>();
+        }
 
-            foreach (var attribute in TestAttributes)
-            {
-                if (attribute.GetType().Name == "TestCaseAttribute")
-                {
-                    // Use reflection to get the Arguments property
-                    var argsProperty = attribute.GetType().GetProperty("Arguments");
-                    if (argsProperty?.GetValue(attribute) is object[] args)
-                    {
-                        yield return args;
-                    }
-                }
-            }
+        /// <summary>
+        /// Gets categories associated with this test method.
+        /// </summary>
+        public IEnumerable<string> GetCategories()
+        {
+            return TestAttributeUtils.GetCategoryNames(TestAttributes);
         }
 
         public override string ToString()
@@ -262,4 +183,3 @@ namespace TestIntelligence.Core.Models
             return GetDisplayName();
         }
     }
-}

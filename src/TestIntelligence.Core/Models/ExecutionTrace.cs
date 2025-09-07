@@ -1,39 +1,100 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace TestIntelligence.Core.Models;
 
 public class ExecutionTrace
 {
-    public string TestMethodId { get; set; } = string.Empty;
-    public string TestMethodName { get; set; } = string.Empty;
-    public string TestClassName { get; set; } = string.Empty;
-    public List<ExecutedMethod> ExecutedMethods { get; set; } = new();
+    public ExecutionTrace(string testMethodId, string testMethodName, string testClassName)
+    {
+        TestMethodId = testMethodId ?? throw new ArgumentNullException(nameof(testMethodId));
+        TestMethodName = testMethodName ?? throw new ArgumentNullException(nameof(testMethodName));
+        TestClassName = testClassName ?? throw new ArgumentNullException(nameof(testClassName));
+        TraceTimestamp = DateTime.UtcNow;
+    }
+
+    public string TestMethodId { get; }
+    public string TestMethodName { get; }
+    public string TestClassName { get; }
+    public List<ExecutedMethod> ExecutedMethods { get; init; } = new();
     public int TotalMethodsCalled { get; set; }
     public int ProductionMethodsCalled { get; set; }
     public TimeSpan EstimatedExecutionComplexity { get; set; }
-    public DateTime TraceTimestamp { get; set; }
+    public DateTime TraceTimestamp { get; init; }
+
+    /// <summary>
+    /// Gets the strongly-typed method identifier for the test method.
+    /// </summary>
+    public MethodId MethodId => new(TestMethodId);
+
+    /// <summary>
+    /// Recalculates method counts based on current ExecutedMethods collection.
+    /// </summary>
+    public void RefreshCounts()
+    {
+        TotalMethodsCalled = ExecutedMethods.Count;
+        ProductionMethodsCalled = ExecutedMethods.Count(m => m.IsProductionCode);
+    }
 }
 
 public class ExecutedMethod
 {
-    public string MethodId { get; set; } = string.Empty;
-    public string MethodName { get; set; } = string.Empty;
-    public string ContainingType { get; set; } = string.Empty;
-    public string FilePath { get; set; } = string.Empty;
-    public int LineNumber { get; set; }
-    public string[] CallPath { get; set; } = Array.Empty<string>();
-    public int CallDepth { get; set; }
-    public bool IsProductionCode { get; set; }
+    public ExecutedMethod(string methodId, string methodName, string containingType, bool isProductionCode)
+    {
+        MethodId = methodId ?? throw new ArgumentNullException(nameof(methodId));
+        MethodName = methodName ?? throw new ArgumentNullException(nameof(methodName));
+        ContainingType = containingType ?? throw new ArgumentNullException(nameof(containingType));
+        IsProductionCode = isProductionCode;
+    }
+
+    public string MethodId { get; }
+    public string MethodName { get; }
+    public string ContainingType { get; }
+    public string FilePath { get; init; } = string.Empty;
+    public int LineNumber { get; init; }
+    public string[] CallPath { get; init; } = Array.Empty<string>();
+    public int CallDepth { get; init; }
+    public bool IsProductionCode { get; }
     public MethodCategory Category { get; set; }
+
+    /// <summary>
+    /// Gets the strongly-typed method identifier.
+    /// </summary>
+    public MethodId StrongMethodId => new(MethodId);
 }
 
 public class ExecutionCoverageReport
 {
-    public Dictionary<string, ExecutionTrace> TestToExecutionMap { get; set; } = new();
-    public List<string> UncoveredMethods { get; set; } = new();
+    public ExecutionCoverageReport()
+    {
+        GeneratedTimestamp = DateTime.UtcNow;
+    }
+
+    public Dictionary<string, ExecutionTrace> TestToExecutionMap { get; init; } = new();
+    public List<string> UncoveredMethods { get; init; } = new();
     public CoverageStatistics Statistics { get; set; } = new();
-    public DateTime GeneratedTimestamp { get; set; }
+    public DateTime GeneratedTimestamp { get; init; }
+
+    /// <summary>
+    /// Gets all covered methods across all execution traces.
+    /// </summary>
+    public IEnumerable<string> GetAllCoveredMethods()
+    {
+        return TestToExecutionMap.Values
+            .SelectMany(trace => trace.ExecutedMethods)
+            .Select(method => method.MethodId)
+            .Distinct();
+    }
+
+    /// <summary>
+    /// Gets execution traces for methods matching the specified pattern.
+    /// </summary>
+    public IEnumerable<ExecutionTrace> GetTracesForMethodPattern(string methodPattern)
+    {
+        return TestToExecutionMap.Values
+            .Where(trace => trace.MethodId.Matches(methodPattern));
+    }
 }
 
 public class CoverageStatistics
