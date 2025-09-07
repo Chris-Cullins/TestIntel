@@ -79,8 +79,8 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Performance
                     analysisResults.Add(new AnalysisResult
                     {
                         ProjectPath = projectPath,
-                        MethodCount = callGraph.Count,
-                        EdgeCount = callGraph.Values.SelectMany(v => v).Count(),
+                        MethodCount = callGraph.CallGraph.Count,
+                        EdgeCount = callGraph.CallGraph.Values.SelectMany(v => v).Count(),
                         AnalysisDuration = sw.Elapsed
                     });
                 }
@@ -241,7 +241,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Performance
             _output.WriteLine($"  Parallelism Efficiency: {100.0 * avgProjectTime * projectCount / sw.ElapsedMilliseconds:F1}%");
 
             // Should achieve some parallelism benefit
-            sw.ElapsedMilliseconds.Should().BeLessThan(avgProjectTime * projectCount, 
+            sw.ElapsedMilliseconds.Should().BeLessThan((long)(avgProjectTime * projectCount), 
                 "concurrent processing should be faster than sequential");
         }
 

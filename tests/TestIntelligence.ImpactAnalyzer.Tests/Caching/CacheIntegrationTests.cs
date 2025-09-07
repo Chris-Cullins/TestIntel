@@ -65,7 +65,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Caching
 
             var cachedCallGraph = await callGraphCache.GetCallGraphAsync(_projectPaths[0], assemblies);
             cachedCallGraph.Should().NotBeNull();
-            cachedCallGraph.CallGraph.Should().HaveCount(callGraph.Count);
+            cachedCallGraph!.CallGraph.Should().HaveCount(callGraph.Count);
 
             // Act & Assert - Solution Cache Manager Layer
             var solutionStats1 = await solutionCacheManager.GetStatisticsAsync();
@@ -262,7 +262,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Caching
 
             // Assert - Cache should have cleaned up some entries to stay within limits
             var stats = await callGraphCache.GetStatisticsAsync();
-            stats.TotalCompressedSize.Should().BeLessOrEqualTo(cacheOptions.MaxCacheSizeBytes * 1.1); // Allow 10% overflow tolerance
+            stats.TotalCompressedSize.Should().BeLessOrEqualTo((long)(cacheOptions.MaxCacheSizeBytes * 1.1)); // Allow 10% overflow tolerance
         }
 
         [Fact]
@@ -333,7 +333,7 @@ EndProject
 
         private AssemblyMetadataCache CreateAssemblyMetadataCache()
         {
-            return new AssemblyMetadataCache(TimeSpan.FromMinutes(30));
+            return new AssemblyMetadataCache(defaultExpiration: TimeSpan.FromMinutes(30));
         }
 
         private CallGraphCache CreateCallGraphCache()
@@ -350,7 +350,7 @@ EndProject
         private SolutionCacheManager CreateSolutionCacheManager()
         {
             var logger = new TestLogger<SolutionCacheManager>();
-            return new SolutionCacheManager(_solutionPath, logger);
+            return new SolutionCacheManager(_solutionPath, logger: logger);
         }
 
         private static Dictionary<string, HashSet<string>> CreateTestCallGraph(string prefix = "Method")

@@ -611,5 +611,10 @@ namespace TestIntelligence.Core.Caching
         public DateTimeOffset? LastSnapshotTime { get; set; }
         public int TrackedFileCount { get; set; }
         public int DependencyMappingCount { get; set; }
+        
+        /// <summary>
+        /// Gets the timestamp of the last cache snapshot.
+        /// </summary>
+        public DateTimeOffset LastCacheSnapshot => LastSnapshotTime ?? DateTimeOffset.UtcNow;
     }
 }

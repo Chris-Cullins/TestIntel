@@ -48,6 +48,12 @@ namespace TestIntelligence.NetCoreAdapter
         public Assembly UnderlyingAssembly => _assembly;
 
         /// <inheritdoc />
+        public bool IsSuccess => true;
+
+        /// <inheritdoc />
+        public IReadOnlyList<string> Errors => Array.Empty<string>();
+
+        /// <inheritdoc />
         public IReadOnlyList<Type> GetTypes()
         {
             try

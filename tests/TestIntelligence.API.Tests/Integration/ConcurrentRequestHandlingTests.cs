@@ -13,6 +13,8 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using TestIntelligence.API.Models;
+using TestIntelligence.Core.Models;
+using TestIntelligence.ImpactAnalyzer.Models;
 using TestIntelligence.SelectionEngine.Models;
 using TestIntelligence.TestUtilities;
 using Xunit;
@@ -174,7 +176,8 @@ namespace TestIntelligence.API.Tests.Integration
                         operationTasks.Add(Task.Run(async () =>
                         {
                             var request = new TestDiscoveryRequest { Path = solution.Path };
-                            return await PostJsonAsync<TestDiscoveryResponse>(client, "/api/testdiscovery/discover", request);
+                            var result = await PostJsonAsync<TestDiscoveryResponse>(client, "/api/testdiscovery/discover", request);
+                            return (object)result;
                         }));
                         break;
 
@@ -186,7 +189,8 @@ namespace TestIntelligence.API.Tests.Integration
                                 CodeChanges = codeChanges,
                                 ConfidenceLevel = ConfidenceLevel.Medium
                             };
-                            return await PostJsonAsync<TestExecutionPlan>(client, "/api/testselection/plan", request);
+                            var result = await PostJsonAsync<TestExecutionPlan>(client, "/api/testselection/plan", request);
+                            return (object)result;
                         }));
                         break;
 
@@ -198,7 +202,8 @@ namespace TestIntelligence.API.Tests.Integration
                                 SolutionPath = solution.Path,
                                 DiffContent = CreateTestDiffContent(solution)
                             };
-                            return await PostJsonAsync<DiffAnalysisResult>(client, "/api/impactanalysis/analyze-diff", request);
+                            var result = await PostJsonAsync<DiffAnalysisResult>(client, "/api/impactanalysis/analyze-diff", request);
+                            return (object)result;
                         }));
                         break;
                 }
@@ -244,7 +249,7 @@ namespace TestIntelligence.API.Tests.Integration
             _performanceHarness.StartTest("HighLoadTesting");
             var startTime = DateTime.UtcNow;
             
-            var highLoadResult = await _performanceHarness.MeasureConcurrentAsync("HighLoadDiscovery",
+            var highLoadResult = await _performanceHarness.MeasureConcurrentAsync<object>("HighLoadDiscovery",
                 async (taskIndex) =>
                 {
                     var client = concurrentClients[taskIndex % concurrentClients.Count];
@@ -252,11 +257,11 @@ namespace TestIntelligence.API.Tests.Integration
                     try
                     {
                         var response = await PostJsonAsync<TestDiscoveryResponse>(client, "/api/testdiscovery/discover", request);
-                        return new { Success = true, Response = response };
+                        return (object)new { Success = true, Response = response };
                     }
                     catch (Exception ex)
                     {
-                        return new { Success = false, Error = ex.Message };
+                        return (object)new { Success = false, Error = ex.Message };
                     }
                 },
                 concurrentTasks: highConcurrency,
@@ -357,7 +362,7 @@ namespace TestIntelligence.API.Tests.Integration
                     {
                         return new ApiResult { Success = false, Error = ex.Message };
                     }
-                    catch (TaskCanceledException ex)
+                    catch (TaskCanceledException)
                     {
                         return new ApiResult { Success = false, Error = "Timeout", IsTimeout = true };
                     }
@@ -466,11 +471,11 @@ namespace TestIntelligence.API.Tests.Integration
                 try
                 {
                     var response = await PostJsonAsync<TestDiscoveryResponse>(client, "/api/testdiscovery/discover", longRunningRequest);
-                    return new { Success = true, TimedOut = false, Response = response };
+                    return new { Success = true, TimedOut = false, Response = (TestDiscoveryResponse?)response };
                 }
                 catch (TaskCanceledException)
                 {
-                    return new { Success = false, TimedOut = true, Response = (TestDiscoveryResponse)null };
+                    return new { Success = false, TimedOut = true, Response = (TestDiscoveryResponse?)null };
                 }
             });
 
@@ -542,7 +547,7 @@ namespace TestIntelligence.API.Tests.Integration
                 new CodeChange
                 {
                     FilePath = solution.Projects.First().Classes.First().Path,
-                    ChangeType = ChangeType.Modified,
+                    ChangeType = CodeChangeType.Modified,
                     StartLine = 5,
                     EndLine = 10,
                     ChangedContent = "// Test method modification"

@@ -241,6 +241,16 @@ namespace TestIntelligence.TestUtilities
             return new PerformanceBenchmark(name, logger);
         }
 
+        public IDisposable StartMeasurement(string measurementName)
+        {
+            return new MeasurementContext(measurementName, _logger);
+        }
+
+        public double GetPeakMemoryUsageMB()
+        {
+            return Process.GetCurrentProcess().PeakWorkingSet64 / (1024.0 * 1024.0);
+        }
+
         public void Dispose()
         {
             _overallStopwatch?.Stop();
@@ -386,5 +396,26 @@ namespace TestIntelligence.TestUtilities
 
         public PerformanceMeasurement? GetWorstPerforming() => 
             Measurements.OrderBy(m => m.Throughput).FirstOrDefault();
+    }
+
+    public class MeasurementContext : IDisposable
+    {
+        private readonly string _name;
+        private readonly ILogger? _logger;
+        private readonly Stopwatch _stopwatch;
+
+        public MeasurementContext(string name, ILogger? logger)
+        {
+            _name = name;
+            _logger = logger;
+            _stopwatch = Stopwatch.StartNew();
+            _logger?.LogDebug("Started measurement: {Name}", name);
+        }
+
+        public void Dispose()
+        {
+            _stopwatch.Stop();
+            _logger?.LogDebug("Completed measurement: {Name} in {Duration}ms", _name, _stopwatch.ElapsedMilliseconds);
+        }
     }
 }

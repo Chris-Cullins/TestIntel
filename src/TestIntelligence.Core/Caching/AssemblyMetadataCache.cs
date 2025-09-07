@@ -288,6 +288,34 @@ namespace TestIntelligence.Core.Caching
         }
 
         /// <summary>
+        /// Gets an item from cache or creates it using the provided factory function.
+        /// </summary>
+        /// <typeparam name="T">The type of item to cache.</typeparam>
+        /// <param name="key">The cache key.</param>
+        /// <param name="factory">Factory function to create the item if not cached.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>The cached or newly created item.</returns>
+        public async Task<T> GetOrCreateAsync<T>(string key, Func<Task<T>> factory, CancellationToken cancellationToken = default) where T : class
+        {
+            ThrowIfDisposed();
+            
+            var cacheKey = $"Generic:{key}";
+            
+            // Try to get from cache first
+            var cached = await _cacheProvider.GetAsync<T>(cacheKey, cancellationToken);
+            if (cached != null)
+                return cached;
+
+            // Create new item
+            var item = await factory();
+            
+            // Store in cache
+            await _cacheProvider.SetAsync(cacheKey, item, _defaultExpiration, cancellationToken);
+            
+            return item;
+        }
+
+        /// <summary>
         /// Generates a cache key for test discovery results.
         /// </summary>
         private string GetTestDiscoveryCacheKey(string assemblyPath)
@@ -319,8 +347,6 @@ namespace TestIntelligence.Core.Caching
         /// </summary>
         private TimeSpan GetExpirationForAssembly(string assemblyPath)
         {
-            // For now, use the default expiration. In the future, this could be
-            // customized based on assembly properties (e.g., debug vs release builds)
             return _defaultExpiration;
         }
 
@@ -349,20 +375,39 @@ namespace TestIntelligence.Core.Caching
         /// </summary>
         private async Task<string> GetAssemblyHashAsync(string assemblyPath)
         {
-            return await Task.Run(() => GetAssemblyHash(assemblyPath)).ConfigureAwait(false);
+            try
+            {
+                var lastWriteTime = "0";
+                if (File.Exists(assemblyPath))
+                {
+                    await Task.Yield(); // Make it truly async
+                    lastWriteTime = File.GetLastWriteTimeUtc(assemblyPath).ToBinary().ToString();
+                }
+                
+                var input = $"{assemblyPath}:{lastWriteTime}";
+                return ComputeHash(input);
+            }
+            catch
+            {
+                return ComputeHash(assemblyPath);
+            }
         }
 
         /// <summary>
-        /// Computes a SHA-256 hash of the input string.
+        /// Computes SHA256 hash of the input string.
         /// </summary>
         private static string ComputeHash(string input)
         {
-            using var sha256 = SHA256.Create();
-            var bytes = Encoding.UTF8.GetBytes(input);
-            var hashBytes = sha256.ComputeHash(bytes);
-            return Convert.ToBase64String(hashBytes);
+            using (var sha256 = SHA256.Create())
+            {
+                var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(input));
+                return Convert.ToBase64String(hashBytes)[..16]; // Take first 16 characters for brevity
+            }
         }
 
+        /// <summary>
+        /// Checks if the cache is disposed.
+        /// </summary>
         private void ThrowIfDisposed()
         {
             if (_disposed)

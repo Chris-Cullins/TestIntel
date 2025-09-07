@@ -42,6 +42,13 @@ namespace TestIntelligence.Core.Assembly
         /// <param name="message">The message to log.</param>
         /// <param name="args">Optional message formatting arguments.</param>
         void LogDebug(string message, params object[] args);
+
+        /// <summary>
+        /// Logs an assembly load attempt for debugging purposes.
+        /// </summary>
+        /// <param name="assemblyPath">The path of the assembly being loaded.</param>
+        /// <param name="frameworkVersion">The framework version detected for the assembly.</param>
+        void LogAssemblyLoadAttempt(string assemblyPath, FrameworkVersion frameworkVersion);
     }
 
     /// <summary>
@@ -82,6 +89,12 @@ namespace TestIntelligence.Core.Assembly
 #endif
         }
 
+        /// <inheritdoc />
+        public void LogAssemblyLoadAttempt(string assemblyPath, FrameworkVersion frameworkVersion)
+        {
+            LogDebug("Assembly load attempt: {0} (Framework: {1})", assemblyPath, frameworkVersion);
+        }
+
         private static void WriteLog(string level, string message, params object[] args)
         {
             var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
@@ -116,5 +129,8 @@ namespace TestIntelligence.Core.Assembly
 
         /// <inheritdoc />
         public void LogDebug(string message, params object[] args) { }
+
+        /// <inheritdoc />
+        public void LogAssemblyLoadAttempt(string assemblyPath, FrameworkVersion frameworkVersion) { }
     }
 }

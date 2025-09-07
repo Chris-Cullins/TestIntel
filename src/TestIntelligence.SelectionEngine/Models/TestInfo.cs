@@ -103,6 +103,11 @@ namespace TestIntelligence.SelectionEngine.Models
         }
 
         /// <summary>
+        /// Gets the full name for this test (for API compatibility).
+        /// </summary>
+        public string FullName => GetDisplayName();
+
+        /// <summary>
         /// Calculates the failure rate based on execution history.
         /// </summary>
         public double CalculateFailureRate()

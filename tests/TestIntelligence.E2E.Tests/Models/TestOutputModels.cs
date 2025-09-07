@@ -39,6 +39,7 @@ public class TestAssemblyInfo
     public string AssemblyPath { get; set; } = string.Empty;
     public int TestMethodCount { get; set; }
     public int TestFixtureCount { get; set; }
+    public string TargetFramework { get; set; } = string.Empty;
 }
 
 public class CallGraphJsonOutput

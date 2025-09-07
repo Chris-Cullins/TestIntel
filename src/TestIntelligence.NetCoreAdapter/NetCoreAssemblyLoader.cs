@@ -57,7 +57,11 @@ namespace TestIntelligence.NetCoreAdapter
             }
             catch (BadImageFormatException ex)
             {
-                throw new InvalidOperationException($"Invalid assembly format: {ex.Message}", ex);
+                // Provide more specific error message for cross-platform issues
+                var architecture = Environment.Is64BitProcess ? "64-bit" : "32-bit";
+                var currentPlatform = Environment.OSVersion.Platform;
+                throw new InvalidOperationException($"Invalid assembly format (cross-platform/architecture mismatch): {ex.Message}. " +
+                    $"Current runtime: {currentPlatform} {architecture}. Assembly: {assemblyPath}", ex);
             }
             catch (Exception ex)
             {
@@ -90,10 +94,18 @@ namespace TestIntelligence.NetCoreAdapter
         {
             try
             {
-                if (!File.Exists(assemblyPath))
+                if (string.IsNullOrWhiteSpace(assemblyPath) || !File.Exists(assemblyPath))
                     return false;
 
+                // First check if it's a valid .NET assembly file
                 var assemblyName = AssemblyName.GetAssemblyName(assemblyPath);
+                if (assemblyName == null)
+                    return false;
+
+                // Check for cross-platform compatibility - verify it's not a different architecture
+                if (!IsCompatibleArchitecture(assemblyPath))
+                    return false;
+                    
                 var targetFramework = GetTargetFrameworkFromAssembly(assemblyPath);
                 
                 return targetFramework?.StartsWith(".NETCoreApp") == true ||
@@ -104,7 +116,12 @@ namespace TestIntelligence.NetCoreAdapter
                        targetFramework?.StartsWith("net7") == true ||
                        targetFramework?.StartsWith("net8") == true;
             }
-            catch
+            catch (BadImageFormatException)
+            {
+                // This is likely a cross-platform architecture mismatch
+                return false;
+            }
+            catch (Exception)
             {
                 return false;
             }
@@ -144,6 +161,30 @@ namespace TestIntelligence.NetCoreAdapter
             catch
             {
                 return FrameworkVersion.Net5Plus;
+            }
+        }
+
+        private bool IsCompatibleArchitecture(string assemblyPath)
+        {
+            try
+            {
+                var assemblyName = AssemblyName.GetAssemblyName(assemblyPath);
+                
+                // Check if processor architecture is compatible
+                var assemblyArch = assemblyName.ProcessorArchitecture;
+                var currentArch = Environment.Is64BitProcess ? ProcessorArchitecture.Amd64 : ProcessorArchitecture.X86;
+                
+                // MSIL and None are architecture-neutral and should work on any platform
+                if (assemblyArch == ProcessorArchitecture.MSIL || assemblyArch == ProcessorArchitecture.None)
+                    return true;
+                    
+                // For other architectures, check compatibility
+                return assemblyArch == currentArch || 
+                       (currentArch == ProcessorArchitecture.Amd64 && assemblyArch == ProcessorArchitecture.X86); // x64 can run x86
+            }
+            catch
+            {
+                return false;
             }
         }
 

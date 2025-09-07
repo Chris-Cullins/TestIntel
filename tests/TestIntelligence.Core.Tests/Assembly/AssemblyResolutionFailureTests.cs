@@ -344,25 +344,22 @@ namespace TestIntelligence.Core.Tests.Assembly
                 .ToList();
 
             // Act - Detect frameworks concurrently
-            var tasks = problematicFiles.Select(async file =>
+            var tasks = problematicFiles.Select(file => Task.Run(() =>
             {
-                return await Task.Run(() =>
+                try
                 {
-                    try
-                    {
-                        return new { File = file, Framework = _loader.DetectFrameworkVersion(file) };
-                    }
-                    catch (Exception ex)
-                    {
-                        return new { File = file, Framework = FrameworkVersion.Unknown, Error = ex.Message };
-                    }
-                });
-            }).ToArray();
+                    return new { File = file, Framework = _loader.DetectFrameworkVersion(file), Error = (string?)null };
+                }
+                catch (Exception ex)
+                {
+                    return new { File = file, Framework = FrameworkVersion.Unknown, Error = (string?)ex.Message };
+                }
+            })).ToArray();
 
             var results = await Task.WhenAll(tasks);
 
             // Assert
-            results.Should().HaveLength(problematicFiles.Count);
+            results.Should().HaveCount(problematicFiles.Count);
             
             // All should complete without throwing exceptions
             foreach (var result in results)

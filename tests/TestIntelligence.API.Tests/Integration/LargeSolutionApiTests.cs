@@ -12,6 +12,8 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using TestIntelligence.API.Models;
+using TestIntelligence.Core.Models;
+using TestIntelligence.ImpactAnalyzer.Models;
 using TestIntelligence.SelectionEngine.Models;
 using TestIntelligence.TestUtilities;
 using Xunit;
@@ -268,7 +270,7 @@ namespace TestIntelligence.API.Tests.Integration
             {
                 SolutionPath = largeSolution.Path,
                 DiffContent = hugeDiff,
-                ConfidenceLevel = ConfidenceLevel.Low // Lower confidence for faster analysis
+                ConfidenceLevel = ConfidenceLevel.Fast // Lower confidence for faster analysis
             };
 
             // Add timeout header
@@ -507,7 +509,7 @@ namespace TestIntelligence.API.Tests.Integration
                     changes.Add(new CodeChange
                     {
                         FilePath = classFile.Path,
-                        ChangeType = ChangeType.Modified,
+                        ChangeType = CodeChangeType.Modified,
                         StartLine = 1,
                         EndLine = 10,
                         ChangedContent = "// Modified method implementation"
@@ -525,7 +527,7 @@ namespace TestIntelligence.API.Tests.Integration
                 new CodeChange
                 {
                     FilePath = solution.Projects.First().Classes.First().Path,
-                    ChangeType = ChangeType.Modified,
+                    ChangeType = CodeChangeType.Modified,
                     StartLine = 5,
                     EndLine = 8,
                     ChangedContent = "// Simple method change"

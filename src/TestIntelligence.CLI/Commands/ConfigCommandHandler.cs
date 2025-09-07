@@ -134,40 +134,47 @@ public class ConfigCommandHandler : BaseCommandHandler
 
     private static async Task DisplayProjectAnalysisAsync(ProjectFilterAnalysisResult result, string? outputPath)
     {
+        if (result == null)
+        {
+            throw new ArgumentNullException(nameof(result));
+        }
+
         var output = new StringBuilder();
         
         // Header
         output.AppendLine("=== TestIntelligence Project Filtering Analysis ===");
-        output.AppendLine($"Solution: {result.SolutionPath}");
+        output.AppendLine($"Solution: {result.SolutionPath ?? "Unknown"}");
         output.AppendLine($"Analysis Date: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
         output.AppendLine();
         
-        // Summary
+        // Summary - Fix null reference by initializing if needed
         output.AppendLine("=== SUMMARY ===");
-        output.AppendLine($"Total Projects: {result.Summary.TotalProjects}");
-        output.AppendLine($"✅ Included: {result.Summary.IncludedProjects}");
-        output.AppendLine($"❌ Excluded: {result.Summary.ExcludedProjects}");
-        output.AppendLine($"🧪 Test Projects: {result.Summary.TestProjects}");
-        output.AppendLine($"🏭 Production Projects: {result.Summary.ProductionProjects}");
+        var summary = result.Summary ?? new ProjectFilterSummary();
+        output.AppendLine($"Total Projects: {summary.TotalProjects}");
+        output.AppendLine($"✅ Included: {summary.IncludedProjects}");
+        output.AppendLine($"❌ Excluded: {summary.ExcludedProjects}");
+        output.AppendLine($"🧪 Test Projects: {summary.TestProjects}");
+        output.AppendLine($"🏭 Production Projects: {summary.ProductionProjects}");
         output.AppendLine();
 
         // Configuration Summary
         output.AppendLine("=== CONFIGURATION APPLIED ===");
-        output.AppendLine($"Test Projects Only: {result.Configuration.Projects.TestProjectsOnly}");
+        var config = result.Configuration ?? new TestIntelConfiguration();
+        output.AppendLine($"Test Projects Only: {config.Projects.TestProjectsOnly}");
         
-        if (result.Configuration.Projects.Include.Any())
+        if (config.Projects.Include?.Any() == true)
         {
-            output.AppendLine($"Include Patterns: {string.Join(", ", result.Configuration.Projects.Include)}");
+            output.AppendLine($"Include Patterns: {string.Join(", ", config.Projects.Include)}");
         }
         
-        if (result.Configuration.Projects.Exclude.Any())
+        if (config.Projects.Exclude?.Any() == true)
         {
-            output.AppendLine($"Exclude Patterns: {string.Join(", ", result.Configuration.Projects.Exclude)}");
+            output.AppendLine($"Exclude Patterns: {string.Join(", ", config.Projects.Exclude)}");
         }
         
-        if (result.Configuration.Projects.ExcludeTypes.Any())
+        if (config.Projects.ExcludeTypes?.Any() == true)
         {
-            output.AppendLine($"Exclude Types: {string.Join(", ", result.Configuration.Projects.ExcludeTypes)}");
+            output.AppendLine($"Exclude Types: {string.Join(", ", config.Projects.ExcludeTypes)}");
         }
         output.AppendLine();
 
@@ -175,8 +182,8 @@ public class ConfigCommandHandler : BaseCommandHandler
         output.AppendLine("=== PROJECT DETAILS ===");
         
         // Group by included/excluded
-        var includedProjects = result.Projects.Where(p => p.IsIncluded).OrderBy(p => p.ProjectName).ToList();
-        var excludedProjects = result.Projects.Where(p => !p.IsIncluded).OrderBy(p => p.ProjectName).ToList();
+        var includedProjects = result.Projects?.Where(p => p.IsIncluded).OrderBy(p => p.ProjectName).ToList() ?? new List<ProjectAnalysisDetail>();
+        var excludedProjects = result.Projects?.Where(p => !p.IsIncluded).OrderBy(p => p.ProjectName).ToList() ?? new List<ProjectAnalysisDetail>();
 
         if (includedProjects.Any())
         {
@@ -187,9 +194,12 @@ public class ConfigCommandHandler : BaseCommandHandler
                 var testInfo = project.IsTestProject ? " (Test)" : " (Prod)";
                 output.AppendLine($"  • {project.ProjectName}{typeInfo}{testInfo}");
                 
-                foreach (var reason in project.FilteringReasons)
+                if (project.FilteringReasons != null)
                 {
-                    output.AppendLine($"    └─ {reason}");
+                    foreach (var reason in project.FilteringReasons)
+                    {
+                        output.AppendLine($"    └─ {reason}");
+                    }
                 }
                 output.AppendLine();
             }
@@ -204,9 +214,12 @@ public class ConfigCommandHandler : BaseCommandHandler
                 var testInfo = project.IsTestProject ? " (Test)" : " (Prod)";
                 output.AppendLine($"  • {project.ProjectName}{typeInfo}{testInfo}");
                 
-                foreach (var reason in project.FilteringReasons)
+                if (project.FilteringReasons != null)
                 {
-                    output.AppendLine($"    └─ {reason}");
+                    foreach (var reason in project.FilteringReasons)
+                    {
+                        output.AppendLine($"    └─ {reason}");
+                    }
                 }
                 output.AppendLine();
             }

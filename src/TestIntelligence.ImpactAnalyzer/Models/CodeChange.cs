@@ -22,15 +22,20 @@ namespace TestIntelligence.ImpactAnalyzer.Models
             DetectedAt = DateTimeOffset.UtcNow;
         }
 
+        // Parameterless constructor for test compatibility
+        public CodeChange() : this(string.Empty, CodeChangeType.Modified, Array.Empty<string>(), Array.Empty<string>())
+        {
+        }
+
         /// <summary>
         /// Path to the file that was changed.
         /// </summary>
-        public string FilePath { get; }
+        public string FilePath { get; set; } = string.Empty;
 
         /// <summary>
         /// Type of change (Added, Modified, Deleted, Renamed).
         /// </summary>
-        public CodeChangeType ChangeType { get; }
+        public CodeChangeType ChangeType { get; set; }
 
         /// <summary>
         /// List of method names that were changed.
@@ -46,6 +51,21 @@ namespace TestIntelligence.ImpactAnalyzer.Models
         /// When this change was detected.
         /// </summary>
         public DateTimeOffset DetectedAt { get; }
+
+        /// <summary>
+        /// Starting line number of the change (for compatibility).
+        /// </summary>
+        public int StartLine { get; set; }
+
+        /// <summary>
+        /// Ending line number of the change (for compatibility).
+        /// </summary>
+        public int EndLine { get; set; }
+
+        /// <summary>
+        /// The changed content (for compatibility).
+        /// </summary>
+        public string ChangedContent { get; set; } = string.Empty;
 
         public override string ToString()
         {

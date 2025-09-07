@@ -184,6 +184,16 @@ namespace TestIntelligence.TestUtilities
             }
         }
 
+        /// <summary>
+        /// Applies memory pressure by allocating memory for a specified duration.
+        /// </summary>
+        /// <param name="targetMemoryMB">Target memory allocation in MB.</param>
+        /// <param name="durationSeconds">Duration to maintain pressure in seconds.</param>
+        public void ApplyPressure(int targetMemoryMB = 50, int durationSeconds = 5)
+        {
+            Task.Run(async () => await SimulateMemoryPressure(targetMemoryMB, durationSeconds));
+        }
+
         public void ForceGarbageCollection()
         {
             TakeSnapshot("Before GC");

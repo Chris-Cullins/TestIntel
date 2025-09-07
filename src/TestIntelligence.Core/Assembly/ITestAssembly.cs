@@ -73,5 +73,15 @@ namespace TestIntelligence.Core.Assembly
         /// Gets the referenced assemblies.
         /// </summary>
         IReadOnlyList<AssemblyName> GetReferencedAssemblies();
+
+        /// <summary>
+        /// Gets a value indicating whether the assembly was loaded successfully.
+        /// </summary>
+        bool IsSuccess { get; }
+
+        /// <summary>
+        /// Gets the errors that occurred during assembly loading, if any.
+        /// </summary>
+        IReadOnlyList<string> Errors { get; }
     }
 }

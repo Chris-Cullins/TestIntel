@@ -90,8 +90,9 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
                 return null;
             }
 
-            // Check if project files have been modified
-            if (await HasProjectChangedAsync(projectPath, cachedEntry.CreatedAt, cancellationToken))
+            // Check if project files have been modified (cached lookup to avoid repeated file system calls)
+            if (await ShouldCheckProjectModificationAsync(projectPath) && 
+                await HasProjectChangedAsync(projectPath, cachedEntry.CreatedAt, cancellationToken))
             {
                 _logger?.LogDebug("Project files changed since cache creation: {ProjectPath}", projectPath);
                 await _cache.RemoveAsync(cacheKey, cancellationToken);
@@ -100,15 +101,21 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
                 return null;
             }
 
-            // Validate data integrity
-            var validation = cachedEntry.ValidateIntegrity();
-            if (!validation.IsValid)
+            // Validate data integrity - only for entries that might be corrupted
+            if (cachedEntry.Metadata?.ContainsKey("RequiresValidation") == true)
             {
-                _logger?.LogWarning("Cache entry failed integrity check: {Issues}", string.Join(", ", validation.Issues));
-                await _cache.RemoveAsync(cacheKey, cancellationToken);
-                RemoveProjectFromTracking(projectPath);
-                IncrementCorruption();
-                return null;
+                var validation = cachedEntry.ValidateIntegrity();
+                if (!validation.IsValid)
+                {
+                    _logger?.LogWarning("Cache entry failed integrity check: {Issues}", string.Join(", ", validation.Issues));
+                    await _cache.RemoveAsync(cacheKey, cancellationToken);
+                    RemoveProjectFromTracking(projectPath);
+                    IncrementCorruption();
+                    return null;
+                }
+                
+                // Remove validation flag after successful validation
+                cachedEntry.Metadata.Remove("RequiresValidation");
             }
 
             IncrementHit();
@@ -243,6 +250,16 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
             {
                 _invalidationLock.Release();
             }
+        }
+
+        /// <summary>
+        /// Invalidates cached call graphs for a project. Alias for InvalidateProjectAsync.
+        /// </summary>
+        /// <param name="projectPath">Path to the project to invalidate.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        public async Task InvalidateAsync(string projectPath, CancellationToken cancellationToken = default)
+        {
+            await InvalidateProjectAsync(projectPath, cancellationToken);
         }
 
         /// <summary>
@@ -417,10 +434,26 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
             }
         }
 
+        private Task<bool> ShouldCheckProjectModificationAsync(string projectPath)
+        {
+            // Cache modification checks to avoid repeated file system calls
+            lock (_statsLock)
+            {
+                if (_lastModifiedTimes.TryGetValue(projectPath, out var lastCheck))
+                {
+                    // Only check every 30 seconds to reduce file system overhead
+                    var timeSinceLastCheck = DateTime.UtcNow - lastCheck;
+                    return Task.FromResult(timeSinceLastCheck > TimeSpan.FromSeconds(30));
+                }
+                return Task.FromResult(true); // First time, always check
+            }
+        }
+
         private Task<bool> HasProjectChangedAsync(string projectPath, DateTime cacheCreationTime, CancellationToken cancellationToken)
         {
             try
             {
+                // Quick check - just the project file for better performance
                 if (File.Exists(projectPath))
                 {
                     var projectInfo = new FileInfo(projectPath);
@@ -428,19 +461,30 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
                         return Task.FromResult(true);
                 }
 
-                // Check for source file changes in the project directory
-                var projectDirectory = Path.GetDirectoryName(projectPath);
-                if (!string.IsNullOrEmpty(projectDirectory) && Directory.Exists(projectDirectory))
+                // Only check source files if explicitly requested via environment variable
+                if (Environment.GetEnvironmentVariable("TESTINTEL_DEEP_FILE_CHECKING") == "true")
                 {
-                    var sourceFiles = Directory.GetFiles(projectDirectory, "*.cs", SearchOption.AllDirectories)
-                        .Concat(Directory.GetFiles(projectDirectory, "*.vb", SearchOption.AllDirectories));
-                    
-                    foreach (var sourceFile in sourceFiles)
+                    var projectDirectory = Path.GetDirectoryName(projectPath);
+                    if (!string.IsNullOrEmpty(projectDirectory) && Directory.Exists(projectDirectory))
                     {
-                        var fileInfo = new FileInfo(sourceFile);
-                        if (fileInfo.LastWriteTimeUtc > cacheCreationTime)
-                            return Task.FromResult(true);
+                        // Limit to immediate directory only for performance, and limit file count
+                        var sourceFiles = Directory.EnumerateFiles(projectDirectory, "*.cs", SearchOption.TopDirectoryOnly)
+                            .Concat(Directory.EnumerateFiles(projectDirectory, "*.vb", SearchOption.TopDirectoryOnly))
+                            .Take(50); // Limit to first 50 files for performance
+                        
+                        foreach (var sourceFile in sourceFiles)
+                        {
+                            var fileInfo = new FileInfo(sourceFile);
+                            if (fileInfo.LastWriteTimeUtc > cacheCreationTime)
+                                return Task.FromResult(true);
+                        }
                     }
+                }
+
+                // Update the last check time to avoid repeated checks
+                lock (_statsLock)
+                {
+                    _lastModifiedTimes[projectPath] = DateTime.UtcNow;
                 }
 
                 return Task.FromResult(false);

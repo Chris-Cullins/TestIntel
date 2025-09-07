@@ -104,7 +104,20 @@ namespace TestIntelligence.Core.Caching
             }
             catch (Exception ex)
             {
-                _logger?.LogWarning(ex, "Failed to read compressed cache entry for key: {Key}", key);
+                _logger?.LogWarning(ex, "Failed to read compressed cache entry for key: {Key}, removing corrupted entry", key);
+                
+                // Remove corrupted cache entry
+                try
+                {
+                    if (File.Exists(filePath))
+                        File.Delete(filePath);
+                    _metadata.TryRemove(key, out _);
+                }
+                catch (Exception deleteEx)
+                {
+                    _logger?.LogDebug(deleteEx, "Failed to delete corrupted cache file: {FilePath}", filePath);
+                }
+                
                 IncrementMiss();
                 return null;
             }
@@ -554,10 +567,12 @@ namespace TestIntelligence.Core.Caching
     public class CompressedCacheOptions
     {
         public long MaxCacheSizeBytes { get; set; } = 500 * 1024 * 1024; // 500MB
+        public long MaxMemoryUsageBytes { get; set; } = 100 * 1024 * 1024; // 100MB memory usage limit
         public int MaxEntriesPerProject { get; set; } = 10; // Keep last 10 analyses
         public TimeSpan MaxAge { get; set; } = TimeSpan.FromDays(30);
         public CompressionLevel CompressionLevel { get; set; } = CompressionLevel.Optimal;
         public TimeSpan MaintenanceInterval { get; set; } = TimeSpan.FromMinutes(30);
         public bool EnableBackgroundMaintenance { get; set; } = true;
+        public bool EnableCompression { get; set; } = true;
     }
 }

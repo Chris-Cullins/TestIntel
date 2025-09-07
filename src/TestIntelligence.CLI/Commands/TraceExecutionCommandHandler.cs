@@ -49,13 +49,13 @@ public class TraceExecutionCommandHandler : BaseCommandHandler
 
         var executionTrace = await testExecutionTracer.TraceTestExecutionAsync(test!, solution!);
         
-        if (executionTrace.ExecutedMethods.Count == 0)
+        if (executionTrace?.ExecutedMethods == null || executionTrace.ExecutedMethods.Count == 0)
         {
             Console.WriteLine("No methods found in execution trace.");
             return 0;
         }
 
-        Console.WriteLine($"Found {executionTrace.ExecutedMethods.Count} method(s) in execution trace:");
+        Console.WriteLine($"Found {executionTrace.ExecutedMethods?.Count ?? 0} method(s) in execution trace:");
         Console.WriteLine($"Production methods: {executionTrace.ProductionMethodsCalled}");
         Console.WriteLine($"Estimated complexity: {executionTrace.EstimatedExecutionComplexity}");
         Console.WriteLine();
@@ -77,9 +77,10 @@ public class TraceExecutionCommandHandler : BaseCommandHandler
         {
             var result = new StringBuilder();
             
-            // Group by production vs non-production
-            var productionMethods = executionTrace.ExecutedMethods.Where(em => em.IsProductionCode).ToList();
-            var nonProductionMethods = executionTrace.ExecutedMethods.Where(em => !em.IsProductionCode).ToList();
+            // Group by production vs non-production - safe null access
+            var executedMethods = executionTrace.ExecutedMethods ?? new List<TestIntelligence.Core.Models.ExecutedMethod>();
+            var productionMethods = executedMethods.Where(em => em.IsProductionCode).ToList();
+            var nonProductionMethods = executedMethods.Where(em => !em.IsProductionCode).ToList();
 
             if (productionMethods.Any())
             {

@@ -82,8 +82,9 @@ namespace TestIntelligence.E2E.Tests.Workflows
                 // Should only include projects matching the include patterns
                 var includedProjectNames = result.TestAssemblies.Select(a => a.AssemblyName).ToList();
                 includedProjectNames.Should().AllSatisfy(name => 
-                    name.Contains("Test") || name.Contains("Integration"),
-                    "Only projects matching include patterns should be analyzed");
+                {
+                    (name.Contains("Test") || name.Contains("Integration")).Should().BeTrue();
+                });
             }
         }
 
@@ -112,8 +113,9 @@ namespace TestIntelligence.E2E.Tests.Workflows
             {
                 var includedProjectNames = result.TestAssemblies.Select(a => a.AssemblyName).ToList();
                 includedProjectNames.Should().AllSatisfy(name => 
-                    !name.Contains("Database") && !name.Contains("Migration") && !name.Contains("ORM"),
-                    "Projects matching exclude patterns should not be analyzed");
+                {
+                    (!name.Contains("Database") && !name.Contains("Migration") && !name.Contains("ORM")).Should().BeTrue();
+                });
             }
         }
 
@@ -322,7 +324,7 @@ namespace TestIntelligence.E2E.Tests.Workflows
 
             // Assert
             result.Success.Should().BeFalse();
-            result.StandardError.Should().Contain("configuration", StringComparison.OrdinalIgnoreCase);
+            result.StandardError.Should().Contain("configuration");
             result.StandardError.Should().NotBeEmpty("Should provide helpful error message for invalid JSON");
         }
 
@@ -339,8 +341,8 @@ namespace TestIntelligence.E2E.Tests.Workflows
 
             // Assert
             result.Success.Should().BeFalse();
-            result.StandardError.Should().Contain("configuration", StringComparison.OrdinalIgnoreCase);
-            result.StandardError.Should().Contain("not found", StringComparison.OrdinalIgnoreCase);
+            result.StandardError.Should().Contain("configuration");
+            result.StandardError.Should().Contain("not found");
         }
 
         [Fact]

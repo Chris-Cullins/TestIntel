@@ -89,7 +89,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Caching
                 
                 try
                 {
-                    await cache.StoreCallGraphAsync(projectPath, referencedAssemblies, entry.CallGraph);
+            await cache.StoreCallGraphAsync(projectPath, referencedAssemblies, entry.CallGraph, entry.ReverseCallGraph, TimeSpan.FromSeconds(1));
                     writeResults.Add(true);
                 }
                 catch
@@ -120,7 +120,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Caching
             
             // Pre-populate cache
             var initialEntry = CreateTestCacheEntry(projectPath, referencedAssemblies);
-            await cache.StoreCallGraphAsync(projectPath, referencedAssemblies, initialEntry.CallGraph);
+            await cache.StoreCallGraphAsync(projectPath, referencedAssemblies, initialEntry.CallGraph, initialEntry.ReverseCallGraph, TimeSpan.FromSeconds(1));
 
             var invalidationResults = new ConcurrentBag<bool>();
 
@@ -184,7 +184,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Caching
                             
                         case 1: // Write
                             var entry = CreateTestCacheEntry(projectPath, referencedAssemblies);
-                            await cache.StoreCallGraphAsync(projectPath, referencedAssemblies, entry.CallGraph);
+                    await cache.StoreCallGraphAsync(projectPath, referencedAssemblies, entry.CallGraph, entry.ReverseCallGraph, TimeSpan.FromSeconds(1));
                             operationResults.Add(new OperationResult { Type = "Write", Success = true });
                             break;
                             
@@ -241,7 +241,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Caching
             {
                 try
                 {
-                    await cache.StoreCallGraphAsync(item.ProjectPath, new[] { "System.dll" }, item.Entry.CallGraph);
+                    await cache.StoreCallGraphAsync(item.ProjectPath, new[] { "System.dll" }, item.Entry.CallGraph, item.Entry.ReverseCallGraph, TimeSpan.FromSeconds(1));
                     return true;
                 }
                 catch
@@ -291,7 +291,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Caching
             
             // Pre-populate cache
             var entry = CreateTestCacheEntry(projectPath, referencedAssemblies);
-            await cache.StoreCallGraphAsync(projectPath, referencedAssemblies, entry.CallGraph);
+            await cache.StoreCallGraphAsync(projectPath, referencedAssemblies, entry.CallGraph, entry.ReverseCallGraph, TimeSpan.FromSeconds(1));
 
             var accessResults = new ConcurrentBag<bool>();
             
@@ -348,7 +348,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Caching
                     if (i % 2 == 0)
                     {
                         var entry = CreateTestCacheEntry(projectPath, referencedAssemblies);
-                        await cache1.StoreCallGraphAsync(projectPath, referencedAssemblies, entry.CallGraph);
+                        await cache1.StoreCallGraphAsync(projectPath, referencedAssemblies, entry.CallGraph, entry.ReverseCallGraph, TimeSpan.FromSeconds(1));
                         operationResults.Add("Cache1-Store-Success");
                     }
                     else
@@ -370,7 +370,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Caching
                     if (i % 2 == 1)
                     {
                         var entry = CreateTestCacheEntry(projectPath, referencedAssemblies);
-                        await cache2.StoreCallGraphAsync(projectPath, referencedAssemblies, entry.CallGraph);
+                        await cache2.StoreCallGraphAsync(projectPath, referencedAssemblies, entry.CallGraph, entry.ReverseCallGraph, TimeSpan.FromSeconds(1));
                         operationResults.Add("Cache2-Store-Success");
                     }
                     else
@@ -421,7 +421,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Caching
                     if (i % 3 == 0)
                     {
                         var entry = CreateTestCacheEntry(project.Path, referencedAssemblies);
-                        await cache.StoreCallGraphAsync(project.Path, referencedAssemblies, entry.CallGraph);
+                        await cache.StoreCallGraphAsync(project.Path, referencedAssemblies, entry.CallGraph, entry.ReverseCallGraph, TimeSpan.FromSeconds(1));
                     }
                     else if (i % 3 == 1)
                     {
@@ -475,11 +475,11 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Caching
 
         private CompressedCallGraphCacheEntry CreateTestCacheEntry(string projectPath, IEnumerable<string> referencedAssemblies)
         {
-            var callGraph = new Dictionary<string, List<string>>
+            var callGraph = new Dictionary<string, HashSet<string>>
             {
-                { "TestMethod1", new List<string> { "TestMethod2", "TestMethod3" } },
-                { "TestMethod2", new List<string> { "TestMethod3" } },
-                { "TestMethod3", new List<string>() }
+                { "TestMethod1", new HashSet<string> { "TestMethod2", "TestMethod3" } },
+                { "TestMethod2", new HashSet<string> { "TestMethod3" } },
+                { "TestMethod3", new HashSet<string>() }
             };
 
             var dependencyHashes = referencedAssemblies.ToDictionary(

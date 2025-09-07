@@ -111,9 +111,39 @@ public class TestDiscoveryRequest
     public bool IncludeDetailedAnalysis { get; set; } = true;
 
     /// <summary>
+    /// Whether to include source location information.
+    /// </summary>
+    public bool IncludeSource { get; set; } = false;
+
+    /// <summary>
+    /// Whether to include assembly information.
+    /// </summary>
+    public bool IncludeAssemblyInfo { get; set; } = false;
+
+    /// <summary>
+    /// Whether to stream results as they are discovered.
+    /// </summary>
+    public bool StreamResults { get; set; } = false;
+
+    /// <summary>
+    /// Patterns to include tests (if null, includes all).
+    /// </summary>
+    public List<string>? IncludePatterns { get; set; }
+
+    /// <summary>
+    /// Patterns to exclude tests.
+    /// </summary>
+    public List<string>? ExcludePatterns { get; set; }
+
+    /// <summary>
     /// Categories to filter by (empty = all categories).
     /// </summary>
     public List<TestCategory>? CategoryFilter { get; set; }
+
+    /// <summary>
+    /// Whether to perform deep analysis (for backward compatibility).
+    /// </summary>
+    public bool DeepAnalysis { get; set; } = false;
 }
 
 /// <summary>
@@ -130,6 +160,16 @@ public class TestDiscoveryResponse
     /// Summary statistics.
     /// </summary>
     public TestDiscoverySummary Summary { get; set; } = new();
+
+    /// <summary>
+    /// Time taken to discover tests.
+    /// </summary>
+    public TimeSpan DiscoveryTime { get; set; }
+
+    /// <summary>
+    /// Warning messages from discovery process.
+    /// </summary>
+    public List<string> Warnings { get; set; } = new();
 
     /// <summary>
     /// Any errors encountered during discovery.
@@ -454,4 +494,161 @@ public class ExecutionCoverageReportResponse
     /// When the analysis was performed.
     /// </summary>
     public DateTime Timestamp { get; set; }
+}
+
+// ====== ADDITIONAL API MODELS FOR COMPATIBILITY ======
+
+/// <summary>
+/// Request model for execution trace submission.
+/// </summary>
+public class ExecutionTraceSubmissionRequest
+{
+    /// <summary>
+    /// Test method identifier.
+    /// </summary>
+    public string TestMethodId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Path to the solution.
+    /// </summary>
+    public string SolutionPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Execution trace data.
+    /// </summary>
+    public ExecutionTrace ExecutionTrace { get; set; } = null!;
+
+    /// <summary>
+    /// Whether to include coverage information.
+    /// </summary>
+    public bool IncludeCoverage { get; set; } = false;
+
+    /// <summary>
+    /// Whether to include performance data.
+    /// </summary>
+    public bool IncludePerformanceData { get; set; } = false;
+
+    /// <summary>
+    /// When the trace was captured.
+    /// </summary>
+    public DateTime Timestamp { get; set; }
+}
+
+/// <summary>
+/// Response model for execution trace submission.
+/// </summary>
+public class ExecutionTraceResponse
+{
+    /// <summary>
+    /// Whether the submission was successful.
+    /// </summary>
+    public bool Success { get; set; }
+
+    /// <summary>
+    /// Any error message.
+    /// </summary>
+    public string? ErrorMessage { get; set; }
+
+    /// <summary>
+    /// Number of methods processed from the trace.
+    /// </summary>
+    public int ProcessedMethods { get; set; }
+
+    /// <summary>
+    /// Coverage information if requested.
+    /// </summary>
+    public object? CoverageInfo { get; set; }
+
+    /// <summary>
+    /// Time taken to process the trace.
+    /// </summary>
+    public TimeSpan ProcessingTime { get; set; }
+
+    /// <summary>
+    /// Response timestamp.
+    /// </summary>
+    public DateTime Timestamp { get; set; }
+}
+
+/// <summary>
+/// Request model for coverage report generation.
+/// </summary>
+public class CoverageReportRequest
+{
+    /// <summary>
+    /// Path to the solution.
+    /// </summary>
+    public string SolutionPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Report format.
+    /// </summary>
+    public string Format { get; set; } = "json";
+
+    /// <summary>
+    /// Whether to include method-level coverage.
+    /// </summary>
+    public bool IncludeMethodLevel { get; set; } = true;
+
+    /// <summary>
+    /// Whether to include file-level coverage.
+    /// </summary>
+    public bool IncludeFileLevel { get; set; } = true;
+
+    /// <summary>
+    /// Whether to group results by project.
+    /// </summary>
+    public bool GroupByProject { get; set; } = false;
+}
+
+/// <summary>
+/// Response model for coverage report generation.
+/// </summary>
+public class CoverageReportResponse
+{
+    /// <summary>
+    /// Generated report content.
+    /// </summary>
+    public string Content { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Report format.
+    /// </summary>
+    public string Format { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Overall coverage percentage.
+    /// </summary>
+    public CoverageMetrics OverallCoverage { get; set; } = new();
+
+    /// <summary>
+    /// Project-level coverage breakdown.
+    /// </summary>
+    public Dictionary<string, double> ProjectCoverage { get; set; } = new();
+
+    /// <summary>
+    /// Method-level coverage information.
+    /// </summary>
+    public Dictionary<string, bool> MethodCoverage { get; set; } = new();
+
+    /// <summary>
+    /// Generation timestamp.
+    /// </summary>
+    public DateTime Timestamp { get; set; }
+}
+
+/// <summary>
+/// Coverage metrics with line and branch percentages.
+/// </summary>
+public class CoverageMetrics
+{
+    /// <summary>
+    /// Line coverage percentage (0-100).
+    /// </summary>
+    public double LinePercent { get; set; }
+
+    /// <summary>
+    /// Branch coverage percentage (0-100).
+    /// </summary>
+    public double BranchPercent { get; set; }
 }

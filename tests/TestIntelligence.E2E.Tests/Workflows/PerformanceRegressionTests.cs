@@ -330,7 +330,7 @@ namespace TestIntelligence.E2E.Tests.Workflows
                     var analysisResult = await CliTestHelper.RunCliCommandWithJsonOutputAsync<AnalyzeJsonOutput>(
                         "analyze", $"--path \"{solution.Path}\" --json");
                     
-                    return new { Duration = result.Measurement.AverageTime, TestMethods = analysisResult.Summary.TotalTestMethods };
+                    return new { Duration = TimeSpan.Zero, TestMethods = analysisResult.Summary.TotalTestMethods };
                 }, iterations: 1);
 
                 scalingResults.Add((projectCount, result.Measurement.AverageTime, result.Results[0].TestMethods));

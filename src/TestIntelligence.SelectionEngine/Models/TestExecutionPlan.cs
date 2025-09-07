@@ -81,6 +81,21 @@ namespace TestIntelligence.SelectionEngine.Models
         public int ParallelismDegree { get; set; }
 
         /// <summary>
+        /// Selected tests for execution (for API compatibility).
+        /// </summary>
+        public IReadOnlyList<TestInfo> SelectedTests => Tests;
+
+        /// <summary>
+        /// Estimated execution time (for API compatibility).
+        /// </summary>
+        public TimeSpan EstimatedExecutionTime => EstimatedDuration;
+
+        /// <summary>
+        /// Reason for test selection (for API compatibility).
+        /// </summary>
+        public string SelectionReason => Description ?? "Selected based on configured selection criteria";
+
+        /// <summary>
         /// Creates optimized execution batches for parallel execution.
         /// </summary>
         public void CreateExecutionBatches(int maxParallelism = 4)

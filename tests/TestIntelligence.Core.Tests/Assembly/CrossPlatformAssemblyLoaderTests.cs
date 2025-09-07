@@ -364,7 +364,7 @@ namespace TestIntelligence.Core.Tests.Assembly
             var results = await Task.WhenAll(tasks);
 
             // Assert
-            results.Should().HaveLength(assemblies.Count);
+            results.Should().HaveCount(assemblies.Count);
             
             // All operations should complete consistently
             foreach (var result in results)
@@ -398,7 +398,7 @@ namespace TestIntelligence.Core.Tests.Assembly
             stopwatch.Stop();
 
             // Assert
-            results.Should().HaveLength(assemblies.Count);
+            results.Should().HaveCount(assemblies.Count);
             stopwatch.ElapsedMilliseconds.Should().BeLessThan(10000); // Should complete within 10 seconds
             
             // All detections should produce valid results
