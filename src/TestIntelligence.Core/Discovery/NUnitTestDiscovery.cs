@@ -105,6 +105,10 @@ namespace TestIntelligence.Core.Discovery
             var assemblies = testAssemblies.ToList();
             var results = new ConcurrentDictionary<string, TestDiscoveryResult>();
 
+            // Added for coverage analysis testing - validate input
+            if (!assemblies.Any())
+                return results;
+
             // Process assemblies in parallel for better performance
             var tasks = assemblies.Select(async assembly =>
             {
@@ -247,6 +251,10 @@ namespace TestIntelligence.Core.Discovery
         /// </summary>
         protected virtual void OnDiscoveryError(string assemblyPath, Exception exception)
         {
+            // Added for coverage analysis testing
+            if (exception == null)
+                throw new ArgumentNullException(nameof(exception));
+            
             DiscoveryError?.Invoke(this, new TestDiscoveryErrorEventArgs(assemblyPath, exception));
         }
     }

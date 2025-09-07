@@ -102,16 +102,42 @@ namespace TestIntelligence.SelectionEngine.Algorithms
             var changedMethods = new HashSet<string>(changes.GetChangedMethods(), StringComparer.OrdinalIgnoreCase);
             var changedTypes = new HashSet<string>(changes.GetChangedTypes(), StringComparer.OrdinalIgnoreCase);
 
-            // Direct dependency match
+            // HIGH PRIORITY: Direct dependency match (Unit tests that directly test changed code)
             var directMatches = testInfo.Dependencies.Count(dep => 
                 changedMethods.Contains(dep) || changedTypes.Contains(dep));
             
             if (directMatches > 0)
             {
-                score += Math.Min(0.8, directMatches * 0.2); // Up to 0.8 for direct matches
+                score += Math.Min(0.9, directMatches * 0.3); // Up to 0.9 for direct matches
+                
+                // BOOST for unit tests with direct dependencies
+                if (testInfo.Category == TestCategory.Unit)
+                {
+                    score += 0.1; // Extra boost for unit tests with direct relationships
+                }
+                
+                _logger.LogDebug("Direct match found for {TestName}: {Matches} matches, score boost: {Score}",
+                    testInfo.GetDisplayName(), directMatches, score);
             }
 
-            // Test in same file as changes
+            // Check for test name patterns that suggest direct relationships
+            var testName = testInfo.GetDisplayName().ToLower();
+            var directNameMatch = false;
+            
+            foreach (var changedType in changedTypes)
+            {
+                var typeName = changedType.Split('.').LastOrDefault()?.ToLower();
+                if (!string.IsNullOrEmpty(typeName) && testName.Contains(typeName))
+                {
+                    score += 0.8; // High score for name-based relationships
+                    directNameMatch = true;
+                    _logger.LogDebug("Name match found for {TestName} -> {ChangedType}, score boost: 0.8",
+                        testInfo.GetDisplayName(), changedType);
+                    break;
+                }
+            }
+
+            // Test in same file as changes (less common but possible)
             var changedFiles = new HashSet<string>(changes.GetChangedFiles(), StringComparer.OrdinalIgnoreCase);
             var testFilePath = testInfo.TestMethod.AssemblyPath;
             if (changedFiles.Any(file => string.Equals(file, testFilePath, StringComparison.OrdinalIgnoreCase)))
@@ -119,22 +145,25 @@ namespace TestIntelligence.SelectionEngine.Algorithms
                 score += 0.5;
             }
 
-            // Category-based impact scoring
-            score += testInfo.Category switch
+            // Category-based impact scoring (revised with better prioritization)
+            var categoryScore = testInfo.Category switch
             {
-                TestCategory.Unit => directMatches > 0 ? 0.4 : 0.1,
-                TestCategory.Integration => 0.6,
+                // Unit tests should be highest priority when they have direct relationships
+                TestCategory.Unit => (directMatches > 0 || directNameMatch) ? 0.6 : 0.2,
+                TestCategory.Integration => 0.4, // Lower priority than direct unit tests
                 TestCategory.Database => changes.Changes.Any(c => c.ChangedTypes.Any(t => 
-                    t.Contains("Repository") || t.Contains("DbContext") || t.Contains("Entity"))) ? 0.8 : 0.3,
+                    t.Contains("Repository") || t.Contains("DbContext") || t.Contains("Entity"))) ? 0.7 : 0.2,
                 TestCategory.API => changes.Changes.Any(c => c.ChangedTypes.Any(t => 
-                    t.Contains("Controller") || t.Contains("Service"))) ? 0.9 : 0.4,
+                    t.Contains("Controller") || t.Contains("Service"))) ? 0.8 : 0.3,
                 TestCategory.UI => changes.Changes.Any(c => c.FilePath.Contains("View") || 
-                    c.FilePath.Contains("Component")) ? 0.7 : 0.2,
-                TestCategory.EndToEnd => 0.5, // E2E tests are generally relevant to most changes
+                    c.FilePath.Contains("Component")) ? 0.6 : 0.1,
+                TestCategory.EndToEnd => 0.3, // Lower priority than unit tests for targeted changes
                 TestCategory.Security => changes.Changes.Any(c => c.FilePath.Contains("Auth") || 
-                    c.FilePath.Contains("Security")) ? 1.0 : 0.2,
-                _ => 0.2
+                    c.FilePath.Contains("Security")) ? 1.0 : 0.1,
+                _ => 0.1
             };
+            
+            score += categoryScore;
 
             // Boost for configuration changes
             if (changes.Changes.Any(c => c.ChangeType == ImpactAnalyzer.Models.CodeChangeType.Configuration))
@@ -154,7 +183,22 @@ namespace TestIntelligence.SelectionEngine.Algorithms
                 score += 0.2;
             }
 
-            return Math.Min(1.0, score);
+            // Penalty for tests that are likely unrelated
+            if (score < 0.1 && testInfo.Category == TestCategory.Integration)
+            {
+                // Don't completely exclude integration tests, but lower their priority
+                score = 0.1;
+            }
+
+            var finalScore = Math.Min(1.0, score);
+            
+            if (directMatches > 0 || directNameMatch)
+            {
+                _logger.LogDebug("High relevance test {TestName}: final score {Score:F3} (direct matches: {DirectMatches}, name match: {NameMatch})",
+                    testInfo.GetDisplayName(), finalScore, directMatches, directNameMatch);
+            }
+
+            return finalScore;
         }
 
         private bool HasHistoricalSuccess(TestInfo testInfo, TestScoringContext context)

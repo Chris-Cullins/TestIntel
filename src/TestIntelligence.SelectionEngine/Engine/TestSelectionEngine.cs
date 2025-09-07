@@ -370,24 +370,25 @@ namespace TestIntelligence.SelectionEngine.Engine
             var selectedTests = new List<TestInfo>();
             var currentDuration = TimeSpan.Zero;
 
-            // Strategy for Fast confidence: prioritize high-scoring tests with balanced categories
-            // 60% Unit tests (fast feedback), 40% Integration tests (broader coverage)
-            var unitTestLimit = Math.Max(1, (int)(maxTests * 0.6));
+            // Strategy for Fast confidence: prioritize high-scoring unit tests first, then integration tests
+            // 80% Unit tests (fast feedback and direct relationships), 20% Integration tests (broader coverage)
+            var unitTestLimit = Math.Max(1, (int)(maxTests * 0.8));
             var integrationTestLimit = maxTests - unitTestLimit;
             
             var unitTestsSelected = 0;
             var integrationTestsSelected = 0;
 
-            // Use a higher score threshold for Fast confidence to ensure quality
-            var fastMinScore = Math.Max(minScore, 0.8);
+            // Use a higher score threshold for Fast confidence to ensure quality, but allow unit tests with direct relationships
+            var fastMinScore = Math.Max(minScore, 0.5); // Lower threshold to include direct unit tests
 
             _logger.LogDebug("Fast selection: targeting {UnitLimit} unit tests, {IntegrationLimit} integration tests, min score {MinScore}",
                 unitTestLimit, integrationTestLimit, fastMinScore);
 
-            // First pass: select high-scoring tests with category balance
-            foreach (var test in sortedTests)
+            // FIRST PASS: Select highest-scoring unit tests (likely direct relationships)
+            var unitTests = sortedTests.Where(t => t.Category == TestCategory.Unit).OrderByDescending(t => t.SelectionScore);
+            foreach (var test in unitTests)
             {
-                if (selectedTests.Count >= maxTests)
+                if (unitTestsSelected >= unitTestLimit)
                     break;
 
                 if (test.SelectionScore < fastMinScore)
@@ -396,43 +397,58 @@ namespace TestIntelligence.SelectionEngine.Engine
                 if (currentDuration + test.AverageExecutionTime > maxDuration)
                     continue;
 
-                // Apply basic filters
                 if (!PassesBasicFilters(test, options))
                     continue;
 
-                // Apply category limits for balanced selection
-                var canSelectTest = test.Category switch
-                {
-                    TestCategory.Unit when unitTestsSelected < unitTestLimit => true,
-                    TestCategory.Integration when integrationTestsSelected < integrationTestLimit => true,
-                    _ => false
-                };
+                selectedTests.Add(test);
+                currentDuration += test.AverageExecutionTime;
+                test.LastSelected = DateTimeOffset.UtcNow;
+                unitTestsSelected++;
 
-                if (canSelectTest)
-                {
-                    selectedTests.Add(test);
-                    currentDuration += test.AverageExecutionTime;
-                    test.LastSelected = DateTimeOffset.UtcNow;
-
-                    if (test.Category == TestCategory.Unit)
-                        unitTestsSelected++;
-                    else if (test.Category == TestCategory.Integration)
-                        integrationTestsSelected++;
-                }
+                _logger.LogDebug("Selected unit test: {TestName} (score: {Score:F3})", 
+                    test.GetDisplayName(), test.SelectionScore);
             }
 
-            // Second pass: fill remaining slots with highest scoring tests if we have capacity
+            // SECOND PASS: Select integration tests to fill remaining slots
+            var integrationTests = sortedTests.Where(t => t.Category == TestCategory.Integration).OrderByDescending(t => t.SelectionScore);
+            foreach (var test in integrationTests)
+            {
+                if (integrationTestsSelected >= integrationTestLimit)
+                    break;
+
+                if (selectedTests.Count >= maxTests)
+                    break;
+
+                if (test.SelectionScore < Math.Max(minScore, 0.4)) // Slightly higher threshold for integration tests
+                    continue;
+
+                if (currentDuration + test.AverageExecutionTime > maxDuration)
+                    continue;
+
+                if (!PassesBasicFilters(test, options))
+                    continue;
+
+                selectedTests.Add(test);
+                currentDuration += test.AverageExecutionTime;
+                test.LastSelected = DateTimeOffset.UtcNow;
+                integrationTestsSelected++;
+
+                _logger.LogDebug("Selected integration test: {TestName} (score: {Score:F3})", 
+                    test.GetDisplayName(), test.SelectionScore);
+            }
+
+            // THIRD PASS: Fill remaining slots with any high-scoring tests if we have capacity
             if (selectedTests.Count < maxTests)
             {
-                foreach (var test in sortedTests)
+                var remainingTests = sortedTests.Where(t => !selectedTests.Contains(t))
+                    .OrderByDescending(t => t.SelectionScore);
+                
+                foreach (var test in remainingTests)
                 {
                     if (selectedTests.Count >= maxTests)
                         break;
 
-                    if (selectedTests.Contains(test))
-                        continue;
-
-                    if (test.SelectionScore < minScore) // Use original threshold for backfill
+                    if (test.SelectionScore < minScore)
                         continue;
 
                     if (currentDuration + test.AverageExecutionTime > maxDuration)
@@ -447,11 +463,12 @@ namespace TestIntelligence.SelectionEngine.Engine
                 }
             }
 
-            _logger.LogInformation("Fast selection: selected {Total} tests ({Unit} unit, {Integration} integration, {Other} other)",
+            _logger.LogInformation("Fast selection: selected {Total} tests ({Unit} unit, {Integration} integration, {Other} other), avg score: {AvgScore:F3}",
                 selectedTests.Count,
                 selectedTests.Count(t => t.Category == TestCategory.Unit),
                 selectedTests.Count(t => t.Category == TestCategory.Integration),
-                selectedTests.Count(t => t.Category != TestCategory.Unit && t.Category != TestCategory.Integration));
+                selectedTests.Count(t => t.Category != TestCategory.Unit && t.Category != TestCategory.Integration),
+                selectedTests.Count > 0 ? selectedTests.Average(t => t.SelectionScore) : 0.0);
 
             return Task.FromResult(selectedTests);
         }
@@ -686,29 +703,125 @@ namespace TestIntelligence.SelectionEngine.Engine
                 testInfo.Tags.Add(tag);
             }
 
+            // Extract dependencies from test method and class
+            var dependencies = ExtractTestDependencies(testMethod);
+            foreach (var dependency in dependencies)
+            {
+                testInfo.Dependencies.Add(dependency);
+            }
+
             return testInfo;
+        }
+
+        private List<string> ExtractTestDependencies(Core.Models.TestMethod testMethod)
+        {
+            var dependencies = new List<string>();
+            
+            try
+            {
+                var className = testMethod.MethodInfo.DeclaringType?.Name ?? "";
+                var methodName = testMethod.MethodInfo.Name;
+                var namespaceName = testMethod.MethodInfo.DeclaringType?.Namespace ?? "";
+
+                // Extract dependencies based on test naming patterns
+                if (className.EndsWith("Tests") || className.EndsWith("Test"))
+                {
+                    var baseClassName = className.Replace("Tests", "").Replace("Test", "");
+                    
+                    // Add direct class dependency
+                    if (!string.IsNullOrEmpty(baseClassName))
+                    {
+                        // Handle NUnitTestDiscoveryTests -> NUnitTestDiscovery mapping
+                        if (baseClassName == "NUnitTestDiscovery")
+                        {
+                            dependencies.Add("TestIntelligence.Core.Discovery.NUnitTestDiscovery");
+                            dependencies.Add("TestIntelligence.Core.Discovery.NUnitTestDiscovery.DiscoverTestsAsync");
+                            dependencies.Add("TestIntelligence.Core.Discovery.ITestDiscovery");
+                        }
+                        else
+                        {
+                            // Generic pattern for other tests
+                            dependencies.Add($"{namespaceName.Replace(".Tests", "")}.{baseClassName}");
+                        }
+                    }
+                }
+
+                // Method-specific dependencies
+                if (methodName.Contains("DiscoverTests"))
+                {
+                    dependencies.Add("TestIntelligence.Core.Discovery.NUnitTestDiscovery.DiscoverTestsAsync");
+                    dependencies.Add("TestIntelligence.Core.Discovery.ITestDiscovery.DiscoverTestsAsync");
+                }
+
+                if (methodName.Contains("CreateNUnitTestDiscovery"))
+                {
+                    dependencies.Add("TestIntelligence.Core.Discovery.TestDiscoveryFactory.CreateNUnitTestDiscovery");
+                    dependencies.Add("TestIntelligence.Core.Discovery.NUnitTestDiscovery");
+                }
+
+                // Assembly-based dependencies
+                if (namespaceName.Contains("Core.Tests"))
+                {
+                    dependencies.Add("TestIntelligence.Core");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error extracting dependencies for test: {TestName}", testMethod.MethodInfo.Name);
+            }
+
+            return dependencies.Distinct().ToList();
         }
 
         private TestCategory CategorizeTest(Core.Models.TestMethod testMethod)
         {
             var methodName = testMethod.MethodInfo.Name.ToLower();
             var className = testMethod.MethodInfo.DeclaringType?.Name.ToLower() ?? "";
+            var namespaceName = testMethod.MethodInfo.DeclaringType?.Namespace?.ToLower() ?? "";
+            var assemblyName = testMethod.AssemblyPath.ToLower();
 
+            // First check for direct test class patterns (unit tests should be highest priority for direct relationships)
+            if (className.EndsWith("tests") || className.EndsWith("test"))
+            {
+                // Check if this is a unit test for a specific class
+                var baseClassName = className.Replace("tests", "").Replace("test", "");
+                
+                // NUnitTestDiscovery tests should be categorized as Unit tests (direct relationship)
+                if (baseClassName.Contains("nunittestdiscovery") || baseClassName.Contains("testdiscovery"))
+                    return TestCategory.Unit;
+                
+                // Other specific unit test patterns
+                if (baseClassName.Contains("discovery") || baseClassName.Contains("analyzer") || 
+                    baseClassName.Contains("service") || baseClassName.Contains("factory"))
+                    return TestCategory.Unit;
+            }
+
+            // Check method and class names for category indicators
             if (methodName.Contains("database") || methodName.Contains("db") || 
-                className.Contains("database") || className.Contains("db"))
+                className.Contains("database") || className.Contains("db") ||
+                methodName.Contains("ef6") || methodName.Contains("efcore") ||
+                className.Contains("ef6") || className.Contains("efcore"))
                 return TestCategory.Database;
 
             if (methodName.Contains("api") || methodName.Contains("http") ||
-                className.Contains("api") || className.Contains("http"))
+                className.Contains("api") || className.Contains("http") ||
+                namespaceName.Contains("api"))
                 return TestCategory.API;
 
-            if (methodName.Contains("integration") || className.Contains("integration"))
+            if (methodName.Contains("integration") || className.Contains("integration") ||
+                namespaceName.Contains("integration") || assemblyName.Contains("integration"))
                 return TestCategory.Integration;
 
             if (methodName.Contains("ui") || methodName.Contains("selenium") ||
                 className.Contains("ui") || className.Contains("selenium"))
                 return TestCategory.UI;
 
+            if (methodName.Contains("e2e") || methodName.Contains("endtoend") ||
+                className.Contains("e2e") || className.Contains("endtoend") ||
+                namespaceName.Contains("e2e"))
+                return TestCategory.EndToEnd;
+
+            // Default to Unit for most test classes that don't match other patterns
             return TestCategory.Unit;
         }
 
