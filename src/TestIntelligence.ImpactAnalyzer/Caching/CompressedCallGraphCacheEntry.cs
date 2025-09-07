@@ -176,7 +176,7 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
             }
 
             // Mark as invalid for critical errors or significant inconsistencies
-            result.IsValid = criticalErrors == 0 && warningCount == 0;
+            result.IsValid = criticalErrors == 0 && warningCount <= maxWarnings;
             
             if (warningCount > maxWarnings)
             {
