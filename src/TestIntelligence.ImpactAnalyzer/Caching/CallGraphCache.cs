@@ -441,9 +441,11 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
             {
                 if (_lastModifiedTimes.TryGetValue(projectPath, out var lastCheck))
                 {
-                    // Only check every 30 seconds to reduce file system overhead
-                    var timeSinceLastCheck = DateTime.UtcNow - lastCheck;
-                    return Task.FromResult(timeSinceLastCheck > TimeSpan.FromSeconds(30));
+                     // Only check periodically to reduce file system overhead, but allow tests to override
+                     var checkInterval = Environment.GetEnvironmentVariable("TESTINTEL_CACHE_CHECK_INTERVAL_MS");
+                     var intervalMs = int.TryParse(checkInterval, out var parsedInterval) ? parsedInterval : 30000; // Default 30 seconds
+                     var timeSinceLastCheck = DateTime.UtcNow - lastCheck;
+                     return Task.FromResult(timeSinceLastCheck > TimeSpan.FromMilliseconds(intervalMs));
                 }
                 return Task.FromResult(true); // First time, always check
             }

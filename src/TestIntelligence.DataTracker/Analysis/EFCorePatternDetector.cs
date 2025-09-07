@@ -195,7 +195,33 @@ namespace TestIntelligence.DataTracker.Analysis
         /// <inheritdoc />
         public bool RequiresExclusiveDbAccess(TestMethod testMethod)
         {
-            return RequiresExclusiveDbAccessAsync(testMethod).ConfigureAwait(false).GetAwaiter().GetResult();
+            if (testMethod == null)
+                throw new ArgumentNullException(nameof(testMethod));
+
+            try
+            {
+                // Synchronous implementation to avoid blocking async calls
+                // Check for attributes indicating exclusive access first (fast path)
+                foreach (var attribute in testMethod.TestAttributes)
+                {
+                    var attributeName = attribute.GetType().Name;
+                    if (attributeName.Contains("Exclusive") || 
+                        attributeName.Contains("Sequential") ||
+                        attributeName.Contains("NonParallel"))
+                    {
+                        return true;
+                    }
+                }
+
+                // EF Core in-memory databases typically don't require exclusive access
+                // Conservative approach - assume no exclusive access for EF Core (due to in-memory defaults)
+                return false;
+            }
+            catch
+            {
+                // Conservative approach - assume no exclusive access for EF Core (due to in-memory defaults)
+                return false;
+            }
         }
 
         /// <inheritdoc />

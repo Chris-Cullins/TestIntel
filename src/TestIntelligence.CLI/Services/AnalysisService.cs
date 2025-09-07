@@ -1,8 +1,13 @@
-using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using TestIntelligence.CLI.Models;
 using TestIntelligence.Core.Assembly;
 using TestIntelligence.Core.Discovery;
+using TestIntelligence.Core.Services;
 using TestIntelligence.SelectionEngine.Models;
 
 namespace TestIntelligence.CLI.Services;
@@ -15,15 +20,18 @@ public class AnalysisService : IAnalysisService
     private readonly ILogger<AnalysisService> _logger;
     private readonly IOutputFormatter _outputFormatter;
     private readonly IConfigurationService _configurationService;
+    private readonly IAssemblyPathResolver _assemblyPathResolver;
 
     public AnalysisService(
         ILogger<AnalysisService> logger, 
         IOutputFormatter outputFormatter,
-        IConfigurationService configurationService)
+        IConfigurationService configurationService,
+        IAssemblyPathResolver assemblyPathResolver)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _outputFormatter = outputFormatter ?? throw new ArgumentNullException(nameof(outputFormatter));
         _configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
+        _assemblyPathResolver = assemblyPathResolver ?? throw new ArgumentNullException(nameof(assemblyPathResolver));
     }
 
     public async Task AnalyzeAsync(string path, string? outputPath, string format, bool verbose)
@@ -163,7 +171,7 @@ public class AnalysisService : IAnalysisService
                 
                 foreach (var projectPath in filteredProjectPaths)
                 {
-                    var assemblyPath = GetAssemblyPathFromProject(projectPath);
+                    var assemblyPath = _assemblyPathResolver.ResolveAssemblyPath(projectPath);
                     if (File.Exists(assemblyPath))
                     {
                         _logger.LogDebug("Found assembly: {AssemblyPath}", assemblyPath);
@@ -404,54 +412,6 @@ public class AnalysisService : IAnalysisService
         return projects;
     }
 
-    private string GetAssemblyPathFromProject(string projectPath)
-    {
-        var projectDir = Path.GetDirectoryName(projectPath)!;
-        var projectName = Path.GetFileNameWithoutExtension(projectPath);
-        
-        // Try to detect target framework from project file
-        var targetFrameworks = GetTargetFrameworksFromProject(projectPath);
-        
-        var possiblePaths = new List<string>();
-        
-        // Try different configurations and frameworks
-        var configurations = new[] { "Debug", "Release" };
-        
-        foreach (var config in configurations)
-        {
-            foreach (var framework in targetFrameworks)
-            {
-                possiblePaths.Add(Path.Combine(projectDir, "bin", config, framework, $"{projectName}.dll"));
-            }
-        }
-        
-        // Fallback to common frameworks if none detected
-        if (!targetFrameworks.Any())
-        {
-            foreach (var config in configurations)
-            {
-                possiblePaths.AddRange(new[]
-                {
-                    Path.Combine(projectDir, "bin", config, "net8.0", $"{projectName}.dll"),
-                    Path.Combine(projectDir, "bin", config, "net6.0", $"{projectName}.dll"),
-                    Path.Combine(projectDir, "bin", config, "net5.0", $"{projectName}.dll"),
-                    Path.Combine(projectDir, "bin", config, "netcoreapp3.1", $"{projectName}.dll"),
-                    Path.Combine(projectDir, "bin", config, "netstandard2.0", $"{projectName}.dll")
-                });
-            }
-        }
-
-        var existingPath = possiblePaths.FirstOrDefault(File.Exists);
-        if (existingPath != null)
-        {
-            _logger.LogDebug("Found assembly at: {AssemblyPath}", existingPath);
-            return existingPath;
-        }
-        
-        _logger.LogWarning("Assembly not found for project {ProjectPath}, using default path", projectPath);
-        return possiblePaths.First();
-    }
-
     private Dictionary<TestCategory, int> CalculateCategoryBreakdown(List<AssemblyAnalysis> assemblies)
     {
         var breakdown = new Dictionary<TestCategory, int>();
@@ -508,108 +468,36 @@ public class AnalysisService : IAnalysisService
             return false;
         }
     }
-    
-    /// <summary>
-    /// Extracts target framework versions from a project file.
-    /// </summary>
-    private List<string> GetTargetFrameworksFromProject(string projectPath)
-    {
-        var frameworks = new List<string>();
-        
-        try
-        {
-            var projectContent = File.ReadAllText(projectPath);
-            
-            // Look for TargetFramework (single) or TargetFrameworks (multiple)
-            var lines = projectContent.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            
-            foreach (var line in lines)
-            {
-                var trimmed = line.Trim();
-                
-                if (trimmed.StartsWith("<TargetFramework>", StringComparison.OrdinalIgnoreCase))
-                {
-                    var framework = ExtractXmlElementContent(trimmed, "TargetFramework");
-                    if (!string.IsNullOrEmpty(framework))
-                    {
-                        frameworks.Add(framework);
-                    }
-                }
-                else if (trimmed.StartsWith("<TargetFrameworks>", StringComparison.OrdinalIgnoreCase))
-                {
-                    var frameworksString = ExtractXmlElementContent(trimmed, "TargetFrameworks");
-                    if (!string.IsNullOrEmpty(frameworksString))
-                    {
-                        frameworks.AddRange(frameworksString.Split(';', StringSplitOptions.RemoveEmptyEntries)
-                            .Select(f => f.Trim()));
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to parse target frameworks from: {ProjectPath}", projectPath);
-        }
-        
-        return frameworks;
-    }
-    
-    /// <summary>
-    /// Extracts content from an XML element in a simple way.
-    /// </summary>
-    private string? ExtractXmlElementContent(string line, string elementName)
-    {
-        var startTag = $"<{elementName}>";
-        var endTag = $"</{elementName}>";
-        
-        var startIndex = line.IndexOf(startTag, StringComparison.OrdinalIgnoreCase);
-        var endIndex = line.IndexOf(endTag, StringComparison.OrdinalIgnoreCase);
-        
-        if (startIndex >= 0 && endIndex > startIndex)
-        {
-            var contentStart = startIndex + startTag.Length;
-            var contentLength = endIndex - contentStart;
-            return line.Substring(contentStart, contentLength).Trim();
-        }
-        
-        return null;
-    }
-    
-    /// <summary>
-    /// Determines if an assembly name represents a test framework.
-    /// </summary>
+
     private bool IsTestFrameworkAssembly(string? assemblyName)
     {
         if (string.IsNullOrEmpty(assemblyName))
             return false;
-            
-        var testFrameworkNames = new[]
+
+        var testFrameworkPrefixes = new[]
         {
-            "xunit", "nunit", "mstest", "Microsoft.VisualStudio.TestPlatform",
-            "FluentAssertions", "Shouldly", "Moq", "NSubstitute", "FakeItEasy",
-            "Microsoft.NET.Test", "TestAdapter", "TestFramework"
+            "nunit", "xunit", "mstest", "Microsoft.VisualStudio.TestPlatform",
+            "Microsoft.TestPlatform", "FluentAssertions", "Moq", "NSubstitute",
+            "AutoFixture", "Shouldly", "Machine.Specifications"
         };
-        
-        return testFrameworkNames.Any(framework => 
-            assemblyName.Contains(framework, StringComparison.OrdinalIgnoreCase));
+
+        return testFrameworkPrefixes.Any(prefix =>
+            assemblyName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
     }
-    
-    /// <summary>
-    /// Determines if an assembly name represents a system/runtime assembly.
-    /// </summary>
+
     private bool IsSystemAssembly(string? assemblyName)
     {
         if (string.IsNullOrEmpty(assemblyName))
             return false;
-            
+
         var systemPrefixes = new[]
         {
             "System", "Microsoft.Extensions", "Microsoft.AspNetCore", 
             "Microsoft.EntityFrameworkCore", "Newtonsoft", "mscorlib",
             "netstandard", "Microsoft.CSharp", "Microsoft.Win32"
         };
-        
-        return systemPrefixes.Any(prefix => 
+
+        return systemPrefixes.Any(prefix =>
             assemblyName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
     }
 }

@@ -113,18 +113,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             var paths = new Dictionary<string, List<string>>();
 
             // Debug logging for ScoreTestsAsync method lookup
-            if (methodId.Contains("ScoreTestsAsync"))
-            {
-                System.Console.WriteLine($"DEBUG: Starting BFS for method: {methodId}");
-                var initialDependents = GetMethodDependents(methodId);
-                System.Console.WriteLine($"DEBUG: Initial dependents count: {initialDependents.Count}");
-                foreach (var dep in initialDependents)
-                {
-                    System.Console.WriteLine($"  - {dep}");
-                    var methodInfo = GetMethodInfo(dep);
-                    System.Console.WriteLine($"    IsTest: {methodInfo?.IsTestMethod}");
-                }
-            }
+
 
             // BFS to find all test methods that can reach the target method
             var queue = new Queue<(string methodId, List<string> path)>();
@@ -158,11 +147,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                                 newPath.ToArray(),
                                 confidence));
                             
-                            // Debug logging for found tests
-                            if (methodId.Contains("ScoreTestsAsync"))
-                            {
-                                System.Console.WriteLine($"DEBUG: Found test method: {methodInfo.Name} (confidence: {confidence})");
-                            }
+
                         }
                         else
                         {
@@ -173,15 +158,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                 }
             }
 
-            // Debug logging for final results
-            if (methodId.Contains("ScoreTestsAsync"))
-            {
-                System.Console.WriteLine($"DEBUG: Final results count: {results.Count}");
-                foreach (var result in results)
-                {
-                    System.Console.WriteLine($"  - {result.TestMethodName}");
-                }
-            }
+
 
             return results;
         }
@@ -203,15 +180,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             }
 
             // Debug logging for ScoreTestsAsync reverse graph entries
-            if (reverseGraph.ContainsKey("global::TestIntelligence.SelectionEngine.Engine.TestSelectionEngine.ScoreTestsAsync(global::System.Collections.Generic.IEnumerable<global::TestIntelligence.SelectionEngine.Models.TestInfo>,global::TestIntelligence.ImpactAnalyzer.Models.CodeChangeSet,global::System.Threading.CancellationToken)"))
-            {
-                var dependents = reverseGraph["global::TestIntelligence.SelectionEngine.Engine.TestSelectionEngine.ScoreTestsAsync(global::System.Collections.Generic.IEnumerable<global::TestIntelligence.SelectionEngine.Models.TestInfo>,global::TestIntelligence.ImpactAnalyzer.Models.CodeChangeSet,global::System.Threading.CancellationToken)"];
-                System.Console.WriteLine($"DEBUG: ScoreTestsAsync has {dependents.Count} dependents in reverse graph:");
-                foreach (var dependent in dependents)
-                {
-                    System.Console.WriteLine($"  - {dependent}");
-                }
-            }
+
 
             return reverseGraph;
         }

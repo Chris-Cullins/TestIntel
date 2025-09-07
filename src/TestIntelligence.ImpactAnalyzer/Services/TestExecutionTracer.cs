@@ -5,10 +5,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using TestIntelligence.Core.Interfaces;
 using TestIntelligence.Core.Models;
-using TestIntelligence.ImpactAnalyzer.Analysis;
+using TestIntelligence.Core.Interfaces;
+using TestIntelligence.Core.Services;
 using TestIntelligence.ImpactAnalyzer.Classification;
+using TestIntelligence.ImpactAnalyzer.Analysis;
 
 namespace TestIntelligence.ImpactAnalyzer.Services
 {
@@ -20,6 +21,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
     {
         private readonly IRoslynAnalyzer _roslynAnalyzer;
         private readonly TestMethodClassifier _testClassifier;
+        private readonly IAssemblyPathResolver _assemblyPathResolver;
         private readonly ILogger<TestExecutionTracer> _logger;
         
         // Cache to avoid rebuilding call graphs for the same solution
@@ -36,9 +38,11 @@ namespace TestIntelligence.ImpactAnalyzer.Services
 
         public TestExecutionTracer(
             IRoslynAnalyzer roslynAnalyzer,
+            IAssemblyPathResolver assemblyPathResolver,
             ILogger<TestExecutionTracer> logger)
         {
             _roslynAnalyzer = roslynAnalyzer ?? throw new ArgumentNullException(nameof(roslynAnalyzer));
+            _assemblyPathResolver = assemblyPathResolver ?? throw new ArgumentNullException(nameof(assemblyPathResolver));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _testClassifier = new TestMethodClassifier();
         }
@@ -232,7 +236,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 _logger.LogWarning(ex, "MSBuild workspace failed, falling back to assembly-based analysis");
                 
                 // Fallback: Try to analyze compiled assemblies instead
-                var assemblyPaths = FindTestAssembliesInSolution(solutionPath);
+                var assemblyPaths = await _assemblyPathResolver.FindTestAssembliesInSolutionAsync(solutionPath);
                 if (assemblyPaths.Any())
                 {
                     _logger.LogInformation("Found {AssemblyCount} test assemblies for fallback analysis", assemblyPaths.Count);
@@ -487,45 +491,6 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 }
                 _logger.LogDebug("Cache cleanup: removed {RemovedCount} entries, cache size now {CacheSize}", 
                     keysToRemove.Count, _traceCache.Count);
-            }
-        }
-
-        private IReadOnlyList<string> FindTestAssembliesInSolution(string solutionPath)
-        {
-            var assemblies = new List<string>();
-            var solutionDir = Path.GetDirectoryName(solutionPath);
-            
-            if (string.IsNullOrEmpty(solutionDir))
-                return assemblies;
-
-            try
-            {
-                // Look for test assemblies in bin/Debug and bin/Release folders
-                var searchPatterns = new[] { "*Test*.dll", "*.Tests.dll" };
-                
-                foreach (var searchPattern in searchPatterns)
-                {
-                    var files = Directory.GetFiles(solutionDir, searchPattern, SearchOption.AllDirectories)
-                        .Where(f => f.Contains("bin") && 
-                                   (f.Contains("Debug") || f.Contains("Release")) &&
-                                   f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
-                        .ToList();
-                    
-                    assemblies.AddRange(files);
-                }
-
-                // Remove duplicates and prefer Debug over Release
-                var uniqueAssemblies = assemblies
-                    .GroupBy(f => Path.GetFileName(f))
-                    .Select(g => g.OrderBy(f => f.Contains("Release") ? 1 : 0).First())
-                    .ToList();
-
-                return uniqueAssemblies;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error searching for test assemblies in solution directory: {SolutionDir}", solutionDir);
-                return assemblies;
             }
         }
 

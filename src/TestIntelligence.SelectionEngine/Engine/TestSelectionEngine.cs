@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using TestIntelligence.Core.Assembly;
 using TestIntelligence.Core.Discovery;
+using TestIntelligence.Core.Services;
 using TestIntelligence.ImpactAnalyzer.Models;
 using TestIntelligence.SelectionEngine.Interfaces;
 using TestIntelligence.SelectionEngine.Models;
@@ -23,6 +24,7 @@ namespace TestIntelligence.SelectionEngine.Engine
         private readonly List<ITestScoringAlgorithm> _scoringAlgorithms;
         private readonly ITestCategorizer? _testCategorizer;
         private readonly IImpactAnalyzer? _impactAnalyzer;
+        private readonly IAssemblyPathResolver? _assemblyPathResolver;
         private readonly string? _solutionPath;
 
         // In-memory storage for demonstration - in production this would be a database
@@ -34,11 +36,13 @@ namespace TestIntelligence.SelectionEngine.Engine
             IEnumerable<ITestScoringAlgorithm>? scoringAlgorithms = null,
             ITestCategorizer? testCategorizer = null,
             IImpactAnalyzer? impactAnalyzer = null,
+            IAssemblyPathResolver? assemblyPathResolver = null,
             string? solutionPath = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _testCategorizer = testCategorizer;
             _impactAnalyzer = impactAnalyzer;
+            _assemblyPathResolver = assemblyPathResolver;
             _solutionPath = solutionPath;
             _testRepository = new Dictionary<string, TestInfo>();
             _executionHistory = new List<TestExecutionResult>();
@@ -539,7 +543,9 @@ namespace TestIntelligence.SelectionEngine.Engine
             try
             {
                 // Find test assemblies in the solution
-                var assemblyPaths = await FindTestAssembliesInSolution(solutionPath);
+                var assemblyPaths = _assemblyPathResolver != null 
+                    ? await _assemblyPathResolver.FindTestAssembliesInSolutionAsync(solutionPath)
+                    : await FindTestAssembliesInSolution(solutionPath);
                 
                 _logger.LogInformation("Found {AssemblyCount} test assemblies in solution", assemblyPaths.Count);
                 foreach (var path in assemblyPaths)
@@ -602,7 +608,8 @@ namespace TestIntelligence.SelectionEngine.Engine
 
                 foreach (var projectPath in projectPaths)
                 {
-                    var assemblyPath = GetAssemblyPathFromProject(projectPath);
+                    var assemblyPath = _assemblyPathResolver?.ResolveAssemblyPath(projectPath) 
+                        ?? GetAssemblyPathFromProject(projectPath);
                     _logger.LogDebug("Checking assembly path: {Assembly} (exists: {Exists})", assemblyPath, File.Exists(assemblyPath));
                     if (File.Exists(assemblyPath))
                     {

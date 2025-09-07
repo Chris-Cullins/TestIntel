@@ -23,6 +23,9 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Caching
             _testProjectPath = Path.Combine(_tempDirectory, "TestProject.csproj");
             _mockLogger = new TestLogger<CallGraphCache>();
             
+            // Set a short cache check interval for tests
+            Environment.SetEnvironmentVariable("TESTINTEL_CACHE_CHECK_INTERVAL_MS", "100");
+            
             Directory.CreateDirectory(_tempDirectory);
             File.WriteAllText(_testProjectPath, "<Project></Project>");
         }
@@ -133,7 +136,7 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Caching
             await cache.StoreCallGraphAsync(_testProjectPath, assemblies, callGraph, reverseCallGraph, TimeSpan.FromSeconds(5));
 
             // Modify the project file after caching
-            await Task.Delay(100); // Ensure different timestamp
+            await Task.Delay(1100); // Ensure different timestamp (more than 1 second)
             File.WriteAllText(_testProjectPath, "<Project Modified></Project>");
 
             // Act

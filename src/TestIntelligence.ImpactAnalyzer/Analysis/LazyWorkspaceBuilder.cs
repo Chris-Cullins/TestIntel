@@ -143,17 +143,13 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                 await _msbuildSemaphore.WaitAsync(cancellationToken);
                 try
                 {
-                    CancellationTokenSource? timeoutCts = null;
-                    CancellationTokenSource? combinedCts = null;
+                    using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                    using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
                     
                     try
                     {
                         _logger.LogDebug("Loading project on-demand: {ProjectPath}", path);
                         var startTime = DateTime.UtcNow;
-
-                        // Add timeout to prevent hanging on project loading
-                        timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-                        combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
                         var projectTask = _workspace.OpenProjectAsync(path);
                         var timeoutTask = Task.Delay(TimeSpan.FromSeconds(15), combinedCts.Token);
@@ -172,7 +168,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
                         return project;
                     }
-                    catch (OperationCanceledException) when (timeoutCts?.Token.IsCancellationRequested == true)
+                    catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
                     {
                         _logger.LogWarning("Project loading timed out after 15 seconds: {ProjectPath}", path);
                         return null;
@@ -186,11 +182,6 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                     {
                         _logger.LogError(ex, "Failed to load project: {ProjectPath}", path);
                         return null;
-                    }
-                    finally
-                    {
-                        timeoutCts?.Dispose();
-                        combinedCts?.Dispose();
                     }
                 }
                 finally

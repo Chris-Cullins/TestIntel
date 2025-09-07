@@ -77,10 +77,11 @@ public class TraceExecutionCommandHandler : BaseCommandHandler
         {
             var result = new StringBuilder();
             
-            // Group by production vs non-production - safe null access
+            // Group by production vs non-production in a single pass with null safety
             var executedMethods = executionTrace.ExecutedMethods ?? new List<TestIntelligence.Core.Models.ExecutedMethod>();
-            var productionMethods = executedMethods.Where(em => em.IsProductionCode).ToList();
-            var nonProductionMethods = executedMethods.Where(em => !em.IsProductionCode).ToList();
+            var methodGroups = executedMethods.ToLookup(em => em.IsProductionCode);
+            var productionMethods = methodGroups[true].ToList();
+            var nonProductionMethods = methodGroups[false].ToList();
 
             if (productionMethods.Any())
             {

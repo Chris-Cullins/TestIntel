@@ -42,8 +42,16 @@ namespace TestIntelligence.API
             services.AddScoped<IRoslynAnalyzer, RoslynAnalyzer>();
             services.AddScoped<IGitDiffParser, GitDiffParser>();
             services.AddScoped<ISimplifiedDiffImpactAnalyzer, SimplifiedDiffImpactAnalyzer>();
+            // Register comprehensive test coverage analyzer
             services.AddScoped<ITestCoverageAnalyzer, TestCoverageAnalyzer>();
+            
+            // Register focused interfaces using the same implementation
+            services.AddScoped<ITestCoverageQuery>(provider => provider.GetRequiredService<ITestCoverageAnalyzer>());
+            services.AddScoped<ITestCoverageMapBuilder>(provider => provider.GetRequiredService<ITestCoverageAnalyzer>());
+            services.AddScoped<ITestCoverageStatistics>(provider => provider.GetRequiredService<ITestCoverageAnalyzer>());
+            services.AddScoped<ITestCoverageCacheManager>(provider => provider.GetRequiredService<ITestCoverageAnalyzer>());
             services.AddScoped<ITestExecutionTracer, TestExecutionTracer>();
+            services.AddScoped<IAssemblyPathResolver, AssemblyPathResolver>();
 
             // Add CORS for AI agent integration
             services.AddCors(options =>
