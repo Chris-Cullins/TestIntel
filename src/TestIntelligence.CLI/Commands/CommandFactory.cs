@@ -27,6 +27,7 @@ namespace TestIntelligence.CLI.Commands
             rootCommand.Add(CreateConfigCommand(host));
             rootCommand.Add(CreateCacheCommand(host));
             rootCommand.Add(CreateVersionCommand(host));
+            rootCommand.Add(CreateCompareTestsCommand(host));
 
             return rootCommand;
         }
@@ -477,6 +478,61 @@ namespace TestIntelligence.CLI.Commands
                 var exitCode = await handler.ExecuteAsync(context);
                 Environment.ExitCode = exitCode;
             });
+
+            return command;
+        }
+
+        private Command CreateCompareTestsCommand(IHost host)
+        {
+            var test1Option = new Option<string>("--test1", "First test method identifier to compare (format: Namespace.ClassName.MethodName)") { IsRequired = true };
+            test1Option.AddAlias("-t1");
+            
+            var test2Option = new Option<string>("--test2", "Second test method identifier to compare (format: Namespace.ClassName.MethodName)") { IsRequired = true };
+            test2Option.AddAlias("-t2");
+            
+            var solutionOption = new Option<string>("--solution", "Path to solution file (.sln) or project directory") { IsRequired = true };
+            solutionOption.AddAlias("-s");
+            
+            var formatOption = new Option<string>("--format", () => "text", "Output format: text, json");
+            formatOption.AddAlias("-f");
+            formatOption.FromAmong("text", "json");
+            
+            var outputOption = new Option<string>("--output", "Output file path (default: console)");
+            outputOption.AddAlias("-o");
+            
+            var depthOption = new Option<string>("--depth", () => "medium", "Analysis depth: shallow, medium, deep");
+            depthOption.AddAlias("-d");
+            depthOption.FromAmong("shallow", "medium", "deep");
+            
+            var verboseOption = new Option<bool>("--verbose", () => false, "Enable verbose output with detailed analysis");
+            verboseOption.AddAlias("-v");
+            
+            var includePerformanceOption = new Option<bool>("--include-performance", () => false, "Include performance metrics in output");
+            
+            var command = new Command("compare-tests", "Compare two test methods and analyze their overlap and similarities")
+            {
+                test1Option, test2Option, solutionOption, formatOption, outputOption, 
+                depthOption, verboseOption, includePerformanceOption
+            };
+
+            command.SetHandler(async (string test1, string test2, string solution, string format, string output, 
+                string depth, bool verbose, bool includePerformance) =>
+            {
+                var handler = host.Services.GetRequiredService<CompareTestsCommandHandler>();
+                var context = new CommandContext(host.Services);
+                context.SetParameter("test1", test1);
+                context.SetParameter("test2", test2);
+                context.SetParameter("solution", solution);
+                context.SetParameter("format", format);
+                context.SetParameter("output", output);
+                context.SetParameter("depth", depth);
+                context.SetParameter("verbose", verbose);
+                context.SetParameter("include-performance", includePerformance);
+                
+                var exitCode = await handler.ExecuteAsync(context);
+                Environment.ExitCode = exitCode;
+            }, test1Option, test2Option, solutionOption, formatOption, outputOption, 
+               depthOption, verboseOption, includePerformanceOption);
 
             return command;
         }

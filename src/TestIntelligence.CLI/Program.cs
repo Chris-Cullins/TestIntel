@@ -16,6 +16,10 @@ using TestIntelligence.Core.Interfaces;
 using TestIntelligence.Core.Services;
 using TestIntelligence.Core.Assembly;
 using TestIntelligence.CLI.Commands;
+using TestIntelligence.CLI.Progress;
+using TestIntelligence.TestComparison.Services;
+using TestIntelligence.TestComparison.Algorithms;
+using TestIntelligence.TestComparison.Formatters;
 
 namespace TestIntelligence.CLI;
 
@@ -127,7 +131,21 @@ public class Program
                 services.AddTransient<ConfigCommandHandler>();
                 services.AddTransient<CacheCommandHandler>();
                 services.AddTransient<VersionCommandHandler>();
+                services.AddTransient<CompareTestsCommandHandler>();
                 services.AddTransient<ICommandFactory, CommandFactory>();
+                
+                // Test Comparison services
+                services.AddScoped<ITestComparisonService, TestComparisonService>();
+                services.AddScoped<TestCoverageComparisonService>();
+                services.AddScoped<ISimilarityCalculator, SimilarityCalculator>();
+                services.AddScoped<OptimizationRecommendationEngine>();
+                
+                // Comparison formatters
+                services.AddTransient<IComparisonFormatter, TextComparisonFormatter>();
+                services.AddTransient<IComparisonFormatter, JsonComparisonFormatter>();
+                
+                // Progress reporting
+                services.AddTransient<IProgressReporter, ConsoleProgressBar>();
             });
     }
 }

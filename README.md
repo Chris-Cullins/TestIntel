@@ -29,6 +29,9 @@ test-intel select --path MyProject.Tests.dll --changes "src/UserService.cs" --co
 
 # 📈 Coverage analysis
 test-intel analyze-coverage --solution MySolution.sln --tests "*.Tests.*" --git-command "diff HEAD~1"
+
+# 🔄 Compare tests for overlap and optimization
+test-intel compare-tests --test1 "MyTests.Test1" --test2 "MyTests.Test2" --solution MySolution.sln
 ```
 
 ## ✨ Key Features
@@ -40,6 +43,7 @@ test-intel analyze-coverage --solution MySolution.sln --tests "*.Tests.*" --git-
 - **🏷️ Auto-Categorization** - Classify tests as Unit, Integration, Database, API
 - **⚡ Performance Boost** - Up to 90% faster with intelligent caching
 - **🔧 Multi-Framework** - NUnit, xUnit, MSTest across .NET Framework 4.8 to .NET 8+
+- **🔄 Test Comparison** - Compare tests for coverage overlap and optimization opportunities
 
 ## Configuration
 
@@ -200,6 +204,7 @@ All CLI commands automatically detect and use configuration files in the solutio
 | **`diff`** | Analyze git changes for test impact | `test-intel diff --solution MySolution.sln --git-command "diff HEAD~1"` |
 | **`select`** | Smart test selection with confidence levels | `test-intel select --path MyProject.Tests.dll --changes "src/UserService.cs" --confidence Medium` |
 | **`analyze-coverage`** | Coverage analysis for code changes | `test-intel analyze-coverage --solution MySolution.sln --tests "*.Tests.*" --git-command "diff HEAD~1"` |
+| **`compare-tests`** | Compare tests for overlap and optimization | `test-intel compare-tests --test1 "MyTests.Test1" --test2 "MyTests.Test2" --solution MySolution.sln` |
 
 ### Confidence Levels
 - **`Fast`** - ~70% confidence, ≤30s execution
@@ -265,6 +270,42 @@ test-intel cache --solution MySolution.sln --action clear
 ```bash
 test-intel config init --path MySolution.sln
 ```
+</details>
+
+<details>
+<summary><strong>compare-tests</strong> - Compare tests for coverage overlap and optimization opportunities</summary>
+
+```bash
+# Basic comparison between two tests
+test-intel compare-tests --test1 "MyTests.UserServiceTests.CreateUser" --test2 "MyTests.UserServiceTests.UpdateUser" --solution MySolution.sln
+
+# JSON output for CI/CD integration
+test-intel compare-tests --test1 "Test1" --test2 "Test2" --solution MySolution.sln --format json --output comparison.json
+
+# Detailed analysis with performance metrics
+test-intel compare-tests --test1 "Test1" --test2 "Test2" --solution MySolution.sln --depth deep --verbose --include-performance
+
+# Output to file for review
+test-intel compare-tests --test1 "Test1" --test2 "Test2" --solution MySolution.sln --output comparison-report.txt
+```
+
+**Analysis Depth Levels**:
+- **`shallow`** - Quick analysis focusing on direct method calls
+- **`medium`** - Standard analysis including 2-level transitive dependencies (default)
+- **`deep`** - Comprehensive analysis including all transitive dependencies
+
+**Output Includes**:
+- **Overall similarity score** - Percentage indicating how similar the tests are
+- **Coverage overlap analysis** - Shared production methods between tests
+- **Metadata similarity** - Category alignment, naming patterns, tags
+- **Optimization recommendations** - Merge, extract common, or maintain separate
+- **Confidence scores** - For each recommendation
+
+**Use Cases**:
+- Identify redundant tests that can be merged
+- Find tests with high overlap for refactoring
+- Optimize test suite execution time
+- Understand test coverage relationships
 </details>
 
 ## 🌐 API & Integration
