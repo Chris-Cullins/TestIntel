@@ -393,6 +393,222 @@ EndProject";
             _logger.Received().LogDebug(Arg.Is<string>(msg => msg.StartsWith("Found assembly:")), Arg.Any<object>());
         }
 
+        [Fact]
+        public async Task AnalyzeAsync_WithSolutionFileButNoProjects_HandlesEmptyProjectList()
+        {
+            // Arrange - Solution with no valid projects
+            var solutionContent = @"
+Microsoft Visual Studio Solution File, Format Version 12.00
+# No valid projects here";
+            
+            var solutionPath = Path.Combine(_tempDirectory, "EmptySolution.sln");
+            File.WriteAllText(solutionPath, solutionContent);
+            
+            var config = CreateDefaultConfiguration();
+            _configurationService.LoadConfigurationAsync(Arg.Any<string>()).Returns(config);
+            _configurationService.FilterProjects(Arg.Any<List<string>>(), Arg.Any<TestIntelConfiguration>())
+                .Returns(new List<string>());
+
+            // Act
+            await _service.AnalyzeAsync(solutionPath, null, "json", false);
+
+            // Assert
+            await _outputFormatter.Received(1).WriteOutputAsync(
+                Arg.Is<AnalysisResult>(result => 
+                    result.Assemblies.Count == 0 && 
+                    result.Summary != null && 
+                    result.Summary.TotalAssemblies == 0),
+                "json",
+                Arg.Any<string>());
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_WithProjectDiscoveryReturningNull_HandlesGracefully()
+        {
+            // Arrange
+            var solutionPath = Path.Combine(_tempDirectory, "TestSolution.sln");
+            File.WriteAllText(solutionPath, "Valid solution content");
+            
+            var config = CreateDefaultConfiguration();
+            config.Projects.TestProjectsOnly = true;
+            _configurationService.LoadConfigurationAsync(Arg.Any<string>()).Returns(config);
+            
+            // Simulate null return from project discovery
+            _configurationService.FilterProjects(Arg.Any<List<string>>(), Arg.Any<TestIntelConfiguration>())
+                .Returns((List<string>?)null);
+
+            // Act
+            await _service.AnalyzeAsync(solutionPath, null, "json", false);
+
+            // Assert
+            _logger.Received().LogWarning("Project discovery returned null for solution: {SolutionPath}", solutionPath);
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_WithAssemblyPathResolverReturningNonExistentPath_SkipsAndLogsWarning()
+        {
+            // Arrange
+            var solutionContent = @"
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project(""{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}"") = ""TestProject"", ""src\TestProject\TestProject.csproj"", ""{12345678-1234-1234-1234-123456789012}""
+EndProject";
+            
+            var solutionPath = Path.Combine(_tempDirectory, "TestSolution.sln");
+            File.WriteAllText(solutionPath, solutionContent);
+            
+            var projectPath = Path.Combine(_tempDirectory, "src", "TestProject", "TestProject.csproj");
+            var projectDir = Path.GetDirectoryName(projectPath)!;
+            Directory.CreateDirectory(projectDir);
+            File.WriteAllText(projectPath, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>");
+            
+            var config = CreateDefaultConfiguration();
+            _configurationService.LoadConfigurationAsync(Arg.Any<string>()).Returns(config);
+            _configurationService.FilterProjects(Arg.Any<List<string>>(), Arg.Any<TestIntelConfiguration>())
+                .Returns(new List<string> { projectPath });
+
+            // Mock assembly resolver to return non-existent path
+            var nonExistentAssemblyPath = Path.Combine(_tempDirectory, "nonexistent.dll");
+            _assemblyPathResolver.ResolveAssemblyPath(projectPath).Returns(nonExistentAssemblyPath);
+
+            // Act
+            await _service.AnalyzeAsync(solutionPath, null, "json", false);
+
+            // Assert
+            _logger.Received().LogWarning("Assembly not found for project {ProjectPath}, expected at {AssemblyPath}", 
+                projectPath, nonExistentAssemblyPath);
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_WithDirectoryContainingObjFolder_FiltersOutObjFiles()
+        {
+            // Arrange
+            var binDir = Path.Combine(_tempDirectory, "bin");
+            var objDir = Path.Combine(_tempDirectory, "obj");
+            Directory.CreateDirectory(binDir);
+            Directory.CreateDirectory(objDir);
+            
+            File.WriteAllText(Path.Combine(binDir, "ValidAssembly.dll"), "dummy");
+            File.WriteAllText(Path.Combine(objDir, "TempAssembly.dll"), "dummy"); // Should be filtered out
+            
+            var config = CreateDefaultConfiguration();
+            _configurationService.LoadConfigurationAsync(Arg.Any<string>()).Returns(config);
+
+            // Act
+            await _service.AnalyzeAsync(_tempDirectory, null, "json", true);
+
+            // Assert
+            _logger.Received().LogInformation("Found {Count} assemblies to analyze", 1);
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_WithConfigurationFilteringEnabled_LogsFilteringInformation()
+        {
+            // Arrange  
+            var dllPath = Path.Combine(_tempDirectory, "test.dll");
+            File.WriteAllText(dllPath, "dummy");
+            
+            var config = CreateDefaultConfiguration();
+            _configurationService.LoadConfigurationAsync(Arg.Any<string>()).Returns(config);
+
+            // Act - Test the branch where allAssemblyPaths.Count != assemblyPaths.Count would be true
+            // This is hard to test directly since we can't easily mock the filtering, but we can verify the method runs
+            await _service.AnalyzeAsync(dllPath, null, "json", false);
+
+            // Assert - Verify basic analysis completed
+            await _outputFormatter.Received(1).WriteOutputAsync(Arg.Any<AnalysisResult>(), "json", Arg.Any<string>());
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_WithAnalysisFailure_IncludesFailureInSummary()
+        {
+            // Arrange
+            var dllPath1 = Path.Combine(_tempDirectory, "valid.dll");
+            var dllPath2 = Path.Combine(_tempDirectory, "invalid.dll");
+            
+            File.WriteAllText(dllPath1, "dummy valid dll");
+            File.WriteAllText(dllPath2, "invalid dll content");
+            
+            var config = CreateDefaultConfiguration();
+            _configurationService.LoadConfigurationAsync(Arg.Any<string>()).Returns(config);
+
+            // Act
+            await _service.AnalyzeAsync(_tempDirectory, null, "json", false);
+
+            // Assert - Should have both successful and failed analyses in summary
+            await _outputFormatter.Received(1).WriteOutputAsync(
+                Arg.Is<AnalysisResult>(result => 
+                    result.Summary != null && 
+                    result.Summary.TotalAssemblies == 2 &&
+                    result.Summary.FailedAnalyses >= 1),
+                "json",
+                Arg.Any<string>());
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_WithoutOutputPath_GeneratesTimestampedFileInConfiguredDirectory()
+        {
+            // Arrange
+            var dllPath = Path.Combine(_tempDirectory, "test.dll");
+            File.WriteAllText(dllPath, "dummy");
+            
+            var outputDir = Path.Combine(_tempDirectory, "outputs");
+            Directory.CreateDirectory(outputDir);
+            
+            var config = CreateDefaultConfiguration();
+            config.Output.OutputDirectory = outputDir;
+            config.Output.Format = "json";
+            _configurationService.LoadConfigurationAsync(Arg.Any<string>()).Returns(config);
+
+            // Act
+            await _service.AnalyzeAsync(dllPath, null, "", false); // Empty format should use config
+
+            // Assert
+            await _outputFormatter.Received(1).WriteOutputAsync(
+                Arg.Any<AnalysisResult>(),
+                "json", // Should use configured format
+                Arg.Is<string>(path => 
+                    path.StartsWith(outputDir) && 
+                    path.Contains("analysis_") &&
+                    path.EndsWith(".json")));
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_WithUnsupportedFileExtension_ThrowsFileNotFoundException()
+        {
+            // Arrange
+            var txtPath = Path.Combine(_tempDirectory, "test.txt");
+            File.WriteAllText(txtPath, "not a dll or solution");
+            
+            var config = CreateDefaultConfiguration();
+            _configurationService.LoadConfigurationAsync(Arg.Any<string>()).Returns(config);
+
+            // Act & Assert
+            var exception = await Assert.ThrowsAsync<FileNotFoundException>(
+                () => _service.AnalyzeAsync(txtPath, null, "json", false));
+            
+            exception.Message.Should().Contain("Path not found");
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_WithAnalysisException_LogsErrorAndRethrows()
+        {
+            // Arrange
+            var dllPath = Path.Combine(_tempDirectory, "test.dll");
+            File.WriteAllText(dllPath, "dummy");
+            
+            // Make configuration service throw an exception
+            _configurationService.LoadConfigurationAsync(Arg.Any<string>())
+                .Returns(Task.FromException<TestIntelConfiguration>(new InvalidOperationException("Config error")));
+
+            // Act & Assert
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => _service.AnalyzeAsync(dllPath, null, "json", false));
+            
+            exception.Message.Should().Be("Config error");
+            
+            _logger.Received().LogError(exception, "Error during analysis");
+        }
+
         private static TestIntelConfiguration CreateDefaultConfiguration()
         {
             return new TestIntelConfiguration

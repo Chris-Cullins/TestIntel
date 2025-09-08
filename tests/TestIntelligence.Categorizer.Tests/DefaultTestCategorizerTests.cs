@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using FluentAssertions;
 using TestIntelligence.Categorizer;
+using TestIntelligence.Core.Models;
 using TestIntelligence.SelectionEngine.Models;
 using Xunit;
 
@@ -194,7 +195,7 @@ namespace TestIntelligence.Categorizer.Tests
         public async Task CategorizeAsync_WithEmptyInput_ReturnsEmptyResult()
         {
             // Arrange
-            var tests = Array.Empty<TestInfo>();
+            var tests = Array.Empty<TestCategorizationInfo>();
 
             // Act
             var results = await _categorizer.CategorizeAsync(tests);
@@ -219,23 +220,9 @@ namespace TestIntelligence.Categorizer.Tests
             result.Should().Be(expectedCategory);
         }
 
-        private TestInfo CreateTestInfo(string methodName, string className, string namespaceName, string assemblyName)
+        private TestCategorizationInfo CreateTestInfo(string methodName, string className, string namespaceName, string assemblyName)
         {
-            // Create a mock method info
-            var type = typeof(DefaultTestCategorizerTests);
-            var method = type.GetMethod(nameof(CreateTestInfo), BindingFlags.NonPublic | BindingFlags.Instance)!;
-            
-            // Create a test method with the specified details
-            var testMethod = new Core.Models.TestMethod
-            {
-                MethodInfo = method,
-                AssemblyPath = assemblyName
-            };
-
-            // Override the type information for testing
-            var testInfo = new TestInfo(testMethod, TestCategory.Unit, TimeSpan.Zero);
-            
-            return testInfo;
+            return new TestCategorizationInfo(methodName, className, namespaceName, assemblyName);
         }
     }
 }

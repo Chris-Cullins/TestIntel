@@ -274,4 +274,73 @@ public class ExecutionTraceController : ControllerBase
             return StatusCode(500, new { error = "An error occurred while getting execution statistics" });
         }
     }
+
+    /// <summary>
+    /// Submit execution trace data for storage and processing.
+    /// </summary>
+    /// <param name="request">Request containing execution trace data</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Response indicating processing status</returns>
+    [HttpPost("submit")]
+    public async Task<ActionResult<ExecutionTraceResponse>> SubmitExecutionTrace(
+        [FromBody] ExecutionTraceSubmissionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (request == null)
+            {
+                return BadRequest("Request is required");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.SolutionPath))
+            {
+                return BadRequest("Solution path is required");
+            }
+
+            if (request.ExecutionTrace == null)
+            {
+                return BadRequest("Execution trace is required");
+            }
+
+            _logger.LogInformation("Submitting execution trace for solution: {SolutionPath}", request.SolutionPath);
+
+            // Process the execution trace
+            // For now, we'll simulate processing and return a success response
+            var processedMethodsCount = request.ExecutionTrace.ExecutedMethods?.Count ?? 0;
+            
+            _logger.LogInformation("Processed execution trace with {MethodCount} methods", processedMethodsCount);
+
+            // Simulate some async work
+            await Task.CompletedTask;
+
+            var response = new ExecutionTraceResponse
+            {
+                Success = true,
+                ProcessedMethods = processedMethodsCount,
+                CoverageInfo = request.IncludeCoverage ? new Dictionary<string, object>
+                {
+                    ["TotalMethods"] = processedMethodsCount,
+                    ["CoveredMethods"] = processedMethodsCount,
+                    ["CoveragePercentage"] = processedMethodsCount > 0 ? 100.0 : 0.0
+                } : null
+            };
+
+            return Ok(response);
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning("Invalid execution trace submission: {Error}", ex.Message);
+            return BadRequest(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error submitting execution trace");
+            return StatusCode(500, new ExecutionTraceResponse 
+            { 
+                Success = false, 
+                ErrorMessage = "An error occurred while processing execution trace" 
+            });
+        }
+    }
 }
