@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
@@ -132,7 +133,7 @@ namespace TestIntelligence.CLI.Tests.Commands
             _context.SetParameter("path", path);
 
             _mockAnalysisService.AnalyzeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>())
-                .ThrowsAsync(new InvalidOperationException("Analysis failed"));
+                .Returns(Task.FromException(new InvalidOperationException("Analysis failed")));
 
             // Act
             var result = await _handler.ExecuteAsync(_context);
@@ -151,7 +152,7 @@ namespace TestIntelligence.CLI.Tests.Commands
             _context.SetParameter("path", path);
 
             _mockAnalysisService.AnalyzeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>())
-                .ThrowsAsync(new OperationCanceledException());
+                .Returns(Task.FromException(new OperationCanceledException()));
 
             // Act
             var result = await _handler.ExecuteAsync(_context, cancellationToken);
@@ -169,7 +170,7 @@ namespace TestIntelligence.CLI.Tests.Commands
             _context.SetParameter("path", path);
 
             _mockAnalysisService.AnalyzeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>())
-                .ThrowsAsync(new System.IO.FileNotFoundException("File not found", path));
+                .Returns(Task.FromException(new System.IO.FileNotFoundException("File not found", path)));
 
             // Act
             var result = await _handler.ExecuteAsync(_context);
@@ -187,7 +188,7 @@ namespace TestIntelligence.CLI.Tests.Commands
             _context.SetParameter("path", path);
 
             _mockAnalysisService.AnalyzeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>())
-                .ThrowsAsync(new System.IO.DirectoryNotFoundException("Directory not found"));
+                .Returns(Task.FromException(new System.IO.DirectoryNotFoundException("Directory not found")));
 
             // Act
             var result = await _handler.ExecuteAsync(_context);
@@ -205,7 +206,7 @@ namespace TestIntelligence.CLI.Tests.Commands
             _context.SetParameter("path", path);
 
             _mockAnalysisService.AnalyzeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>())
-                .ThrowsAsync(new UnauthorizedAccessException("Access denied"));
+                .Returns(Task.FromException(new UnauthorizedAccessException("Access denied")));
 
             // Act
             var result = await _handler.ExecuteAsync(_context);

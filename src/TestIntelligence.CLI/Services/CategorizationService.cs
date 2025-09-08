@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using TestIntelligence.CLI.Models;
+using TestIntelligence.Core.Models;
 using TestIntelligence.SelectionEngine.Models;
 
 namespace TestIntelligence.CLI.Services;

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using TestIntelligence.Core.Models;
 
 namespace TestIntelligence.SelectionEngine.Models
 {

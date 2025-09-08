@@ -9,6 +9,7 @@ using NSubstitute;
 using TestIntelligence.API.Controllers;
 using TestIntelligence.API.Models;
 using TestIntelligence.Core.Discovery;
+using TestIntelligence.Core.Models;
 using TestIntelligence.SelectionEngine.Models;
 using Xunit;
 

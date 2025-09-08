@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using TestIntelligence.CLI.Models;
 using TestIntelligence.Core.Assembly;
+using TestIntelligence.Core.Models;
 using TestIntelligence.Core.Utilities;
 using TestIntelligence.SelectionEngine.Models;
 

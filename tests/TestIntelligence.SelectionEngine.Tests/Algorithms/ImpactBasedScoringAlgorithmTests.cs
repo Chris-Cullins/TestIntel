@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Moq;
+using TestIntelligence.Core.Assembly;
 using TestIntelligence.Core.Models;
 using TestIntelligence.SelectionEngine.Algorithms;
 using TestIntelligence.SelectionEngine.Models;
@@ -71,11 +72,11 @@ namespace TestIntelligence.SelectionEngine.Tests.Algorithms
         {
             // Arrange
             var testInfo = CreateTestInfo(TestCategory.Unit);
-            testInfo.ExecutionHistory.Add(new TestExecutionResult
-            {
-                Passed = false,
-                ExecutedAt = DateTimeOffset.UtcNow.AddDays(-3) // Recent failure
-            });
+            testInfo.ExecutionHistory.Add(new TestExecutionResult(
+                passed: false,
+                duration: TimeSpan.FromMilliseconds(100),
+                executedAt: DateTimeOffset.UtcNow.AddDays(-3) // Recent failure
+            ));
             
             var context = CreateScoringContextWithoutChanges();
 
@@ -92,11 +93,11 @@ namespace TestIntelligence.SelectionEngine.Tests.Algorithms
         {
             // Arrange
             var testInfo = CreateTestInfo(TestCategory.Unit);
-            testInfo.ExecutionHistory.Add(new TestExecutionResult
-            {
-                Passed = false,
-                ExecutedAt = DateTimeOffset.UtcNow.AddDays(-20) // Old failure (within month)
-            });
+            testInfo.ExecutionHistory.Add(new TestExecutionResult(
+                passed: false,
+                duration: TimeSpan.FromMilliseconds(100),
+                executedAt: DateTimeOffset.UtcNow.AddDays(-20) // Old failure (within month)
+            ));
             
             var context = CreateScoringContextWithoutChanges();
 
@@ -162,25 +163,25 @@ namespace TestIntelligence.SelectionEngine.Tests.Algorithms
         [Fact]
         public async Task CalculateScoreAsync_WithNameMatch_GetsHighScore()
         {
-            // Arrange
+            // Arrange - Create a test that looks like it tests "String" class
             var testMethod = new TestMethod(
-                "MyClass", // Test class name matches changed type
-                "TestMyMethod",
-                "/test/path",
-                FrameworkVersion.Net5Plus,
-                "TestAssembly"
+                typeof(string).GetMethod("ToString", Type.EmptyTypes)!, 
+                typeof(string), 
+                "/test/path", 
+                FrameworkVersion.Net5Plus
             );
             
             var testInfo = new TestInfo(testMethod, TestCategory.Unit, TimeSpan.FromMilliseconds(100));
             
-            var changes = CreateCodeChanges(Array.Empty<string>(), new[] { "MyNamespace.MyClass" });
+            // Create a change to the String type - should match test name since test is on String
+            var changes = CreateCodeChanges(Array.Empty<string>(), new[] { "System.String" });
             var context = CreateScoringContext(changes);
 
             // Act
             var score = await _algorithm.CalculateScoreAsync(testInfo, context);
 
             // Assert
-            // Should get high score due to name match
+            // Should get high score due to name match (test method is on String, changed type is String)
             score.Should().BeGreaterThan(0.8);
         }
 
@@ -213,13 +214,12 @@ namespace TestIntelligence.SelectionEngine.Tests.Algorithms
             var testInfo = CreateTestInfo(TestCategory.Integration);
             var changes = CreateCodeChangeSet(new[]
             {
-                new CodeChange
-                {
-                    FilePath = "appsettings.json",
-                    ChangeType = CodeChangeType.Configuration,
-                    ChangedTypes = Array.Empty<string>(),
-                    ChangedMethods = Array.Empty<string>()
-                }
+                new CodeChange(
+                    filePath: "appsettings.json",
+                    changeType: CodeChangeType.Configuration,
+                    changedMethods: Array.Empty<string>(),
+                    changedTypes: Array.Empty<string>()
+                )
             });
             var context = CreateScoringContext(changes);
 
@@ -238,13 +238,17 @@ namespace TestIntelligence.SelectionEngine.Tests.Algorithms
             var testInfo = CreateTestInfo(TestCategory.Unit);
             
             // Add some historical failures (but not too many to indicate flakiness)
-            testInfo.ExecutionHistory.AddRange(new[]
+            var executionResults = new[]
             {
-                new TestExecutionResult { Passed = false, ExecutedAt = DateTimeOffset.UtcNow.AddDays(-15) },
-                new TestExecutionResult { Passed = true, ExecutedAt = DateTimeOffset.UtcNow.AddDays(-16) },
-                new TestExecutionResult { Passed = true, ExecutedAt = DateTimeOffset.UtcNow.AddDays(-17) },
-                new TestExecutionResult { Passed = true, ExecutedAt = DateTimeOffset.UtcNow.AddDays(-18) }
-            });
+                new TestExecutionResult(passed: false, duration: TimeSpan.FromMilliseconds(100), executedAt: DateTimeOffset.UtcNow.AddDays(-15)),
+                new TestExecutionResult(passed: true, duration: TimeSpan.FromMilliseconds(100), executedAt: DateTimeOffset.UtcNow.AddDays(-16)),
+                new TestExecutionResult(passed: true, duration: TimeSpan.FromMilliseconds(100), executedAt: DateTimeOffset.UtcNow.AddDays(-17)),
+                new TestExecutionResult(passed: true, duration: TimeSpan.FromMilliseconds(100), executedAt: DateTimeOffset.UtcNow.AddDays(-18))
+            };
+            foreach (var result in executionResults)
+            {
+                testInfo.ExecutionHistory.Add(result);
+            }
             
             var changes = CreateCodeChanges(new[] { "SomeMethod" }, new[] { "SomeClass" });
             var context = CreateScoringContext(changes);
@@ -262,7 +266,10 @@ namespace TestIntelligence.SelectionEngine.Tests.Algorithms
         {
             // Arrange - create scenario that could potentially exceed 1.0
             var testInfo = CreateTestInfo(TestCategory.Security);
-            testInfo.Dependencies.AddRange(new[] { "Method1", "Method2", "Method3" });
+            foreach (var dependency in new[] { "Method1", "Method2", "Method3" })
+            {
+                testInfo.Dependencies.Add(dependency);
+            }
             
             var changes = CreateCodeChanges(
                 new[] { "Method1", "Method2", "Method3" }, 
@@ -326,11 +333,10 @@ namespace TestIntelligence.SelectionEngine.Tests.Algorithms
         private TestInfo CreateTestInfo(TestCategory category)
         {
             var testMethod = new TestMethod(
-                "TestClass",
-                "TestMethod",
+                typeof(object).GetMethod("ToString")!,
+                typeof(object),
                 "/test/path",
-                FrameworkVersion.Net5Plus,
-                "TestAssembly"
+                FrameworkVersion.Net5Plus
             );
 
             return new TestInfo(testMethod, category, TimeSpan.FromMilliseconds(100));
@@ -340,14 +346,19 @@ namespace TestIntelligence.SelectionEngine.Tests.Algorithms
         {
             var testInfo = CreateTestInfo(category);
             
-            // Add execution history that makes it appear flaky
-            testInfo.ExecutionHistory.AddRange(new[]
+            // Add execution history that makes it appear flaky (need at least 5 for IsFlaky() to detect)
+            var executionResults = new[]
             {
-                new TestExecutionResult { Passed = true, ExecutedAt = DateTimeOffset.UtcNow.AddDays(-1) },
-                new TestExecutionResult { Passed = false, ExecutedAt = DateTimeOffset.UtcNow.AddDays(-2) },
-                new TestExecutionResult { Passed = true, ExecutedAt = DateTimeOffset.UtcNow.AddDays(-3) },
-                new TestExecutionResult { Passed = false, ExecutedAt = DateTimeOffset.UtcNow.AddDays(-4) }
-            });
+                new TestExecutionResult(true, TimeSpan.FromMilliseconds(100), DateTimeOffset.UtcNow.AddDays(-1)),
+                new TestExecutionResult(false, TimeSpan.FromMilliseconds(100), DateTimeOffset.UtcNow.AddDays(-2)),
+                new TestExecutionResult(true, TimeSpan.FromMilliseconds(100), DateTimeOffset.UtcNow.AddDays(-3)),
+                new TestExecutionResult(false, TimeSpan.FromMilliseconds(100), DateTimeOffset.UtcNow.AddDays(-4)),
+                new TestExecutionResult(true, TimeSpan.FromMilliseconds(100), DateTimeOffset.UtcNow.AddDays(-5))
+            };
+            foreach (var result in executionResults)
+            {
+                testInfo.ExecutionHistory.Add(result);
+            }
             
             return testInfo;
         }
@@ -364,15 +375,29 @@ namespace TestIntelligence.SelectionEngine.Tests.Algorithms
 
         private CodeChangeSet CreateCodeChanges(string[] changedMethods, string[] changedTypes)
         {
+            // Determine appropriate file path based on changed types
+            var filePath = "/some/path/File.cs";
+            if (changedTypes.Any(t => t.Contains("Auth")))
+            {
+                filePath = "/some/path/AuthService.cs";
+            }
+            else if (changedTypes.Any(t => t.Contains("Security")))
+            {
+                filePath = "/some/path/SecurityService.cs";
+            }
+            else if (changedTypes.Any(t => t.Contains("Controller")))
+            {
+                filePath = "/some/path/UserController.cs";
+            }
+            
             var changes = new List<CodeChange>
             {
-                new CodeChange
-                {
-                    FilePath = "/some/path/File.cs",
-                    ChangeType = CodeChangeType.Modified,
-                    ChangedMethods = changedMethods,
-                    ChangedTypes = changedTypes
-                }
+                new CodeChange(
+                    filePath,
+                    CodeChangeType.Modified,
+                    changedMethods,
+                    changedTypes
+                )
             };
 
             return CreateCodeChangeSet(changes);
@@ -380,7 +405,7 @@ namespace TestIntelligence.SelectionEngine.Tests.Algorithms
 
         private CodeChangeSet CreateCodeChangeSet(IEnumerable<CodeChange> changes)
         {
-            return new CodeChangeSet(changes, DateTimeOffset.UtcNow);
+            return new CodeChangeSet(changes.ToList());
         }
     }
 }

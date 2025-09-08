@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
@@ -154,7 +155,7 @@ namespace TestIntelligence.CLI.Tests.Commands
             _context.SetParameter("path", path);
 
             _mockCallGraphService.AnalyzeCallGraphAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<int?>())
-                .ThrowsAsync(new InvalidOperationException("Call graph analysis failed"));
+                .Returns(Task.FromException(new InvalidOperationException("Call graph analysis failed")));
 
             // Act
             var result = await _handler.ExecuteAsync(_context);
@@ -173,7 +174,7 @@ namespace TestIntelligence.CLI.Tests.Commands
             _context.SetParameter("path", path);
 
             _mockCallGraphService.AnalyzeCallGraphAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<int?>())
-                .ThrowsAsync(new OperationCanceledException());
+                .Returns(Task.FromException(new OperationCanceledException()));
 
             // Act
             var result = await _handler.ExecuteAsync(_context, cancellationToken);
@@ -191,7 +192,7 @@ namespace TestIntelligence.CLI.Tests.Commands
             _context.SetParameter("path", path);
 
             _mockCallGraphService.AnalyzeCallGraphAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<int?>())
-                .ThrowsAsync(new System.IO.FileNotFoundException("File not found", path));
+                .Returns(Task.FromException(new System.IO.FileNotFoundException("File not found", path)));
 
             // Act
             var result = await _handler.ExecuteAsync(_context);

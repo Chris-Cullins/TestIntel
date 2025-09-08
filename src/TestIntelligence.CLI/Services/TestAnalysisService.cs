@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Logging;
+using TestIntelligence.Categorizer;
 using TestIntelligence.CLI.Models;
 using TestIntelligence.Core.Assembly;
 using TestIntelligence.Core.Discovery;
+using TestIntelligence.Core.Models;
 using TestIntelligence.Core.Utilities;
 using TestIntelligence.SelectionEngine.Models;
 
@@ -39,6 +41,7 @@ public interface ITestAnalysisService
 public class TestAnalysisService : ITestAnalysisService
 {
     private readonly ILogger<TestAnalysisService> _logger;
+    private readonly ITestCategorizer _testCategorizer;
 
     // Test framework and system assembly filters
     private static readonly string[] TestFrameworkNames = new[]
@@ -55,9 +58,10 @@ public class TestAnalysisService : ITestAnalysisService
         "netstandard", "Microsoft.CSharp", "Microsoft.Win32"
     };
 
-    public TestAnalysisService(ILogger<TestAnalysisService> logger)
+    public TestAnalysisService(ILogger<TestAnalysisService> logger, ITestCategorizer testCategorizer)
     {
         _logger = ExceptionHelper.ThrowIfNull(logger, nameof(logger));
+        _testCategorizer = ExceptionHelper.ThrowIfNull(testCategorizer, nameof(testCategorizer));
     }
 
     public async Task<AssemblyAnalysis> AnalyzeAssemblyAsync(string assemblyPath, bool verbose, CrossFrameworkAssemblyLoader? sharedLoader = null)
@@ -102,26 +106,12 @@ public class TestAnalysisService : ITestAnalysisService
         return analysis;
     }
 
-    public Task<TestCategory> CategorizeTestMethodAsync(Core.Models.TestMethod testMethod)
+    public async Task<TestCategory> CategorizeTestMethodAsync(Core.Models.TestMethod testMethod)
     {
         ExceptionHelper.ThrowIfNull(testMethod, nameof(testMethod));
-
-        var methodName = testMethod.MethodInfo.Name.ToLowerInvariant();
-
-        // Simple categorization based on method name patterns
-        if (methodName.Contains("database") || methodName.Contains("db"))
-            return Task.FromResult(TestCategory.Database);
-
-        if (methodName.Contains("api") || methodName.Contains("http"))
-            return Task.FromResult(TestCategory.API);
-
-        if (methodName.Contains("integration"))
-            return Task.FromResult(TestCategory.Integration);
-
-        if (methodName.Contains("ui") || methodName.Contains("selenium"))
-            return Task.FromResult(TestCategory.UI);
-
-        return Task.FromResult(TestCategory.Unit);
+        
+        var testInfo = new Core.Models.TestCategorizationInfo(testMethod);
+        return await _testCategorizer.CategorizeAsync(testInfo);
     }
 
     public List<string> ExtractTags(Core.Models.TestMethod testMethod)

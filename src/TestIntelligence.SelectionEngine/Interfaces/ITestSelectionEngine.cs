@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using TestIntelligence.Categorizer;
+using TestIntelligence.Core.Models;
 using TestIntelligence.ImpactAnalyzer.Models;
 using TestIntelligence.SelectionEngine.Models;
 
@@ -75,25 +77,7 @@ namespace TestIntelligence.SelectionEngine.Interfaces
         double Weight { get; }
     }
 
-    /// <summary>
-    /// Interface for test categorization services.
-    /// </summary>
-    public interface ITestCategorizer
-    {
-        /// <summary>
-        /// Categorizes a test method based on its characteristics.
-        /// </summary>
-        Task<TestCategory> CategorizeAsync(
-            TestInfo testInfo,
-            CancellationToken cancellationToken = default);
 
-        /// <summary>
-        /// Bulk categorization of multiple tests.
-        /// </summary>
-        Task<IReadOnlyDictionary<string, TestCategory>> CategorizeAsync(
-            IEnumerable<TestInfo> tests,
-            CancellationToken cancellationToken = default);
-    }
 
     /// <summary>
     /// Interface for impact analysis services.

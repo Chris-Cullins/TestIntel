@@ -1,4 +1,5 @@
 using TestIntelligence.SelectionEngine.Models;
+using TestIntelligence.Core.Models;
 
 namespace TestIntelligence.CLI.Models;
 

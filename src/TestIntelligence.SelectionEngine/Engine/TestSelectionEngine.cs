@@ -5,8 +5,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using TestIntelligence.Categorizer;
 using TestIntelligence.Core.Assembly;
 using TestIntelligence.Core.Discovery;
+using TestIntelligence.Core.Models;
 using TestIntelligence.Core.Services;
 using TestIntelligence.ImpactAnalyzer.Models;
 using TestIntelligence.SelectionEngine.Interfaces;
@@ -782,54 +784,10 @@ namespace TestIntelligence.SelectionEngine.Engine
 
         private TestCategory CategorizeTest(Core.Models.TestMethod testMethod)
         {
-            var methodName = testMethod.MethodInfo.Name.ToLower();
-            var className = testMethod.MethodInfo.DeclaringType?.Name.ToLower() ?? "";
-            var namespaceName = testMethod.MethodInfo.DeclaringType?.Namespace?.ToLower() ?? "";
-            var assemblyName = testMethod.AssemblyPath.ToLower();
-
-            // First check for direct test class patterns (unit tests should be highest priority for direct relationships)
-            if (className.EndsWith("tests") || className.EndsWith("test"))
-            {
-                // Check if this is a unit test for a specific class
-                var baseClassName = className.Replace("tests", "").Replace("test", "");
-                
-                // NUnitTestDiscovery tests should be categorized as Unit tests (direct relationship)
-                if (baseClassName.Contains("nunittestdiscovery") || baseClassName.Contains("testdiscovery"))
-                    return TestCategory.Unit;
-                
-                // Other specific unit test patterns
-                if (baseClassName.Contains("discovery") || baseClassName.Contains("analyzer") || 
-                    baseClassName.Contains("service") || baseClassName.Contains("factory"))
-                    return TestCategory.Unit;
-            }
-
-            // Check method and class names for category indicators
-            if (methodName.Contains("database") || methodName.Contains("db") || 
-                className.Contains("database") || className.Contains("db") ||
-                methodName.Contains("ef6") || methodName.Contains("efcore") ||
-                className.Contains("ef6") || className.Contains("efcore"))
-                return TestCategory.Database;
-
-            if (methodName.Contains("api") || methodName.Contains("http") ||
-                className.Contains("api") || className.Contains("http") ||
-                namespaceName.Contains("api"))
-                return TestCategory.API;
-
-            if (methodName.Contains("integration") || className.Contains("integration") ||
-                namespaceName.Contains("integration") || assemblyName.Contains("integration"))
-                return TestCategory.Integration;
-
-            if (methodName.Contains("ui") || methodName.Contains("selenium") ||
-                className.Contains("ui") || className.Contains("selenium"))
-                return TestCategory.UI;
-
-            if (methodName.Contains("e2e") || methodName.Contains("endtoend") ||
-                className.Contains("e2e") || className.Contains("endtoend") ||
-                namespaceName.Contains("e2e"))
-                return TestCategory.EndToEnd;
-
-            // Default to Unit for most test classes that don't match other patterns
-            return TestCategory.Unit;
+            // Use injected categorizer if available, otherwise use default implementation
+            var categorizer = _testCategorizer ?? new DefaultTestCategorizer();
+            var testInfo = new Core.Models.TestCategorizationInfo(testMethod);
+            return categorizer.CategorizeAsync(testInfo, CancellationToken.None).GetAwaiter().GetResult();
         }
 
         private List<string> ExtractTestTags(Core.Models.TestMethod testMethod)

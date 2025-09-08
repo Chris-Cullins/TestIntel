@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Moq;
+using TestIntelligence.Core.Assembly;
 using TestIntelligence.Core.Models;
 using TestIntelligence.SelectionEngine.Algorithms;
 using TestIntelligence.SelectionEngine.Models;
@@ -42,14 +43,14 @@ namespace TestIntelligence.SelectionEngine.Tests.Algorithms
         }
 
         [Theory]
-        [InlineData(25, 1.0)]      // Super fast (≤50ms) -> 1.0
-        [InlineData(75, 0.9)]      // Very fast (≤100ms) -> 0.9
-        [InlineData(200, 0.8)]     // Fast (≤250ms) -> 0.8
-        [InlineData(400, 0.7)]     // Medium-fast (≤500ms) -> 0.7
-        [InlineData(750, 0.5)]     // Medium (≤1s) -> 0.5
-        [InlineData(3000, 0.3)]    // Slow (≤5s) -> 0.3
-        [InlineData(10000, 0.2)]   // Very slow (≤15s) -> 0.2
-        [InlineData(20000, 0.1)]   // Extremely slow (>15s) -> 0.1
+        [InlineData(25, 1.0)]      // Super fast (≤50ms) -> 1.0, no penalty
+        [InlineData(75, 0.9)]      // Very fast (≤100ms) -> 0.9, no penalty
+        [InlineData(200, 0.8)]     // Fast (≤250ms) -> 0.8, no penalty
+        [InlineData(400, 0.7)]     // Medium-fast (≤500ms) -> 0.7, no penalty
+        [InlineData(750, 0.5)]     // Medium (≤1s) -> 0.5, no penalty
+        [InlineData(3000, 0.3)]    // Slow (≤5s) -> 0.3, no penalty (at 5s threshold)
+        [InlineData(10000, 0.12)]  // Very slow (≤15s) -> 0.2 * 0.6 (Medium confidence penalty)
+        [InlineData(20000, 0.06)]  // Extremely slow (>15s) -> 0.1 * 0.6 (Medium confidence penalty)
         public async Task CalculateScoreAsync_WithDifferentExecutionTimes_ReturnsExpectedBaseScores(
             int milliseconds, double expectedScore)
         {
@@ -65,10 +66,10 @@ namespace TestIntelligence.SelectionEngine.Tests.Algorithms
         }
 
         [Theory]
-        [InlineData(ConfidenceLevel.Fast, 100, 0.9)]     // Fast tests boosted by 20%
-        [InlineData(ConfidenceLevel.Fast, 600, 0.21)]    // Slow tests penalized to 30% (0.7 * 0.3)
+        [InlineData(ConfidenceLevel.Fast, 100, 1.0)]     // Fast tests boosted by 20% (0.9 * 1.2 = 1.08, clamped to 1.0)
+        [InlineData(ConfidenceLevel.Fast, 600, 0.15)]    // Slow tests penalized to 30% (0.5 * 0.3)
         [InlineData(ConfidenceLevel.Medium, 100, 0.9)]   // No adjustment for medium confidence
-        [InlineData(ConfidenceLevel.Medium, 6000, 0.18)] // Penalty for >5s (0.3 * 0.6)
+        [InlineData(ConfidenceLevel.Medium, 6000, 0.12)] // Penalty for >5s (0.2 * 0.6)
         [InlineData(ConfidenceLevel.High, 100, 0.9)]     // No adjustment for high confidence
         [InlineData(ConfidenceLevel.High, 35000, 0.08)]  // Small penalty for >30s (0.1 * 0.8)
         [InlineData(ConfidenceLevel.Full, 100, 0.81)]    // Slight preference for faster (0.9 * 0.9)
@@ -150,7 +151,7 @@ namespace TestIntelligence.SelectionEngine.Tests.Algorithms
 
             // Assert
             // Should use average (300ms) for base score, no variability penalty
-            score.Should().BeApproximately(0.3, 0.05); // ~0.3 for 300ms
+            score.Should().BeApproximately(0.7, 0.05); // 0.7 for 300ms (≤500ms category)
         }
 
         [Fact]
@@ -217,11 +218,10 @@ namespace TestIntelligence.SelectionEngine.Tests.Algorithms
         private TestInfo CreateTestInfo(TimeSpan averageExecutionTime)
         {
             var testMethod = new TestMethod(
-                "TestClass",
-                "TestMethod",
+                typeof(object).GetMethod("ToString")!,
+                typeof(object),
                 "/test/path",
-                FrameworkVersion.Net5Plus,
-                "TestAssembly"
+                FrameworkVersion.Net5Plus
             );
 
             return new TestInfo(
@@ -234,11 +234,10 @@ namespace TestIntelligence.SelectionEngine.Tests.Algorithms
         private TestInfo CreateTestInfoWithVariableExecutionTimes(TimeSpan[] executionTimes)
         {
             var testMethod = new TestMethod(
-                "TestClass",
-                "TestMethod",
+                typeof(object).GetMethod("ToString")!,
+                typeof(object),
                 "/test/path",
-                FrameworkVersion.Net5Plus,
-                "TestAssembly"
+                FrameworkVersion.Net5Plus
             );
 
             var averageTime = TimeSpan.FromMilliseconds(
@@ -250,12 +249,11 @@ namespace TestIntelligence.SelectionEngine.Tests.Algorithms
             // Add execution history
             foreach (var time in executionTimes)
             {
-                testInfo.ExecutionHistory.Add(new TestExecutionResult
-                {
-                    Duration = time,
-                    Passed = true,
-                    ExecutedAt = DateTimeOffset.UtcNow
-                });
+                testInfo.ExecutionHistory.Add(new TestExecutionResult(
+                    passed: true,
+                    duration: time,
+                    executedAt: DateTimeOffset.UtcNow
+                ));
             }
 
             return testInfo;

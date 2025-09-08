@@ -10,6 +10,7 @@ using TestIntelligence.CLI.Models;
 using TestIntelligence.Core.Services;
 using FluentAssertions;
 using System.Linq;
+using TestIntelligence.Categorizer;
 
 namespace TestIntelligence.CLI.Tests.Services
 {
@@ -23,6 +24,7 @@ namespace TestIntelligence.CLI.Tests.Services
     private readonly IOutputFormatter _outputFormatter;
     private readonly IConfigurationService _configurationService;
     private readonly IAssemblyPathResolver _assemblyPathResolver;
+    private readonly ITestCategorizer _testCategorizer;
     private readonly AnalysisService _service;
     private readonly string _tempDirectory;
 
@@ -32,7 +34,8 @@ namespace TestIntelligence.CLI.Tests.Services
         _outputFormatter = Substitute.For<IOutputFormatter>();
         _configurationService = Substitute.For<IConfigurationService>();
         _assemblyPathResolver = Substitute.For<IAssemblyPathResolver>();
-        _service = new AnalysisService(_logger, _outputFormatter, _configurationService, _assemblyPathResolver);
+        _testCategorizer = Substitute.For<ITestCategorizer>();
+        _service = new AnalysisService(_logger, _outputFormatter, _configurationService, _assemblyPathResolver, _testCategorizer);
 
         _tempDirectory = Path.Combine(Path.GetTempPath(), $"AnalysisServiceTests_{Guid.NewGuid()}");
         Directory.CreateDirectory(_tempDirectory);
@@ -51,7 +54,7 @@ namespace TestIntelligence.CLI.Tests.Services
         {
             // Act & Assert
         var exception = Assert.Throws<ArgumentNullException>(
-            () => new AnalysisService(null!, _outputFormatter, _configurationService, _assemblyPathResolver));
+            () => new AnalysisService(null!, _outputFormatter, _configurationService, _assemblyPathResolver, _testCategorizer));
             exception.ParamName.Should().Be("logger");
         }
 
@@ -60,7 +63,7 @@ namespace TestIntelligence.CLI.Tests.Services
         {
             // Act & Assert
         var exception = Assert.Throws<ArgumentNullException>(
-            () => new AnalysisService(_logger, null!, _configurationService, _assemblyPathResolver));
+            () => new AnalysisService(_logger, null!, _configurationService, _assemblyPathResolver, _testCategorizer));
             exception.ParamName.Should().Be("outputFormatter");
         }
 
@@ -69,8 +72,17 @@ namespace TestIntelligence.CLI.Tests.Services
         {
             // Act & Assert
         var exception = Assert.Throws<ArgumentNullException>(
-            () => new AnalysisService(_logger, _outputFormatter, null!, _assemblyPathResolver));
+            () => new AnalysisService(_logger, _outputFormatter, null!, _assemblyPathResolver, _testCategorizer));
             exception.ParamName.Should().Be("configurationService");
+        }
+
+        [Fact]
+        public void Constructor_WithNullTestCategorizer_ThrowsArgumentNullException()
+        {
+            // Act & Assert
+            var exception = Assert.Throws<ArgumentNullException>(
+                () => new AnalysisService(_logger, _outputFormatter, _configurationService, _assemblyPathResolver, null!));
+            exception.ParamName.Should().Be("testCategorizer");
         }
 
         [Fact]

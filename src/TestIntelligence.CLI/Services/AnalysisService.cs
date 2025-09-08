@@ -4,9 +4,11 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using TestIntelligence.Categorizer;
 using TestIntelligence.CLI.Models;
 using TestIntelligence.Core.Assembly;
 using TestIntelligence.Core.Discovery;
+using TestIntelligence.Core.Models;
 using TestIntelligence.Core.Services;
 using TestIntelligence.SelectionEngine.Models;
 
@@ -21,17 +23,20 @@ public class AnalysisService : IAnalysisService
     private readonly IOutputFormatter _outputFormatter;
     private readonly IConfigurationService _configurationService;
     private readonly IAssemblyPathResolver _assemblyPathResolver;
+    private readonly ITestCategorizer _testCategorizer;
 
     public AnalysisService(
         ILogger<AnalysisService> logger, 
         IOutputFormatter outputFormatter,
         IConfigurationService configurationService,
-        IAssemblyPathResolver assemblyPathResolver)
+        IAssemblyPathResolver assemblyPathResolver,
+        ITestCategorizer testCategorizer)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _outputFormatter = outputFormatter ?? throw new ArgumentNullException(nameof(outputFormatter));
         _configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
         _assemblyPathResolver = assemblyPathResolver ?? throw new ArgumentNullException(nameof(assemblyPathResolver));
+        _testCategorizer = testCategorizer ?? throw new ArgumentNullException(nameof(testCategorizer));
     }
 
     public async Task AnalyzeAsync(string path, string? outputPath, string format, bool verbose)
@@ -279,24 +284,10 @@ public class AnalysisService : IAnalysisService
         return analysis;
     }
 
-    private Task<TestCategory> CategorizeTestMethodAsync(Core.Models.TestMethod testMethod)
+    private async Task<TestCategory> CategorizeTestMethodAsync(Core.Models.TestMethod testMethod)
     {
-        // Simplified categorization logic for CLI
-        var methodName = testMethod.MethodInfo.Name.ToLower();
-        
-        if (methodName.Contains("database") || methodName.Contains("db"))
-            return Task.FromResult(TestCategory.Database);
-        
-        if (methodName.Contains("api") || methodName.Contains("http"))
-            return Task.FromResult(TestCategory.API);
-        
-        if (methodName.Contains("integration"))
-            return Task.FromResult(TestCategory.Integration);
-        
-        if (methodName.Contains("ui") || methodName.Contains("selenium"))
-            return Task.FromResult(TestCategory.UI);
-        
-        return Task.FromResult(TestCategory.Unit);
+        var testInfo = new Core.Models.TestCategorizationInfo(testMethod);
+        return await _testCategorizer.CategorizeAsync(testInfo);
     }
 
     private List<string> ExtractTags(Core.Models.TestMethod testMethod)

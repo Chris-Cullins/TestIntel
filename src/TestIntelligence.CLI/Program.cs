@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Build.Locator;
+using TestIntelligence.Categorizer;
 using TestIntelligence.CLI.Services;
 using TestIntelligence.CLI.Models;
 using TestIntelligence.SelectionEngine.Engine;
@@ -70,6 +71,9 @@ public class Program
                     builder.AddConsole();
                     builder.SetMinimumLevel(LogLevel.Debug);
                 });
+                // Test categorization - Singleton for shared configuration
+                services.AddTestCategorizer();
+                
                 // CLI Command services - Transient for command isolation
                 services.AddTransient<IAnalysisService, RefactoredAnalysisService>();
                 services.AddTransient<ICategorizationService, CategorizationService>();

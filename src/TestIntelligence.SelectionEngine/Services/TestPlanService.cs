@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using TestIntelligence.Core.Models;
 using TestIntelligence.SelectionEngine.Models;
 using TestIntelligence.ImpactAnalyzer.Models;
 
