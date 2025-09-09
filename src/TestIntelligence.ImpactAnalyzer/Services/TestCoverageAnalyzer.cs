@@ -32,17 +32,12 @@ namespace TestIntelligence.ImpactAnalyzer.Services
         private MethodCallGraph? _cachedCallGraph;
         private string? _cachedSolutionPath;
         
-        // Cache BFS path calculations to avoid redundant traversals
-        private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, string), string[]?> _pathCache = new();
+        // Cache BFS path calculations to avoid redundant traversals (LRU to bound memory)
+        private readonly TestIntelligence.Core.Caching.LruCache<(string, string), string[]?> _pathCache = new(capacity: 10000);
         
-        // Cache size management to prevent memory bloat
-        private const int MaxCacheSize = 1000; // Further reduced to prevent infinite loop
-        private const int MaxVisitedNodes = 50; // Drastically reduced from 250 to prevent cache explosion
-        private const int MaxPathDepth = 3; // Further reduced from 5 to optimize BFS
-        
-        // Cache cleanup timing to prevent thrashing
-        private DateTime _lastCacheCleanup = DateTime.MinValue;
-        private readonly TimeSpan CacheCleanupInterval = TimeSpan.FromSeconds(2);
+        // Path search limits to prevent runaway traversals
+        private const int MaxVisitedNodes = 50;
+        private const int MaxPathDepth = 5;
 
         public TestCoverageAnalyzer(
             IRoslynAnalyzer roslynAnalyzer,
@@ -253,6 +248,101 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             return result;
         }
 
+        public async Task<IReadOnlyDictionary<string, IReadOnlyList<TestCoverageInfo>>> FindTestsExercisingMethodsScopedAsync(
+            IEnumerable<string> methodIds,
+            IEnumerable<string> providedTestIds,
+            string solutionPath,
+            CancellationToken cancellationToken = default)
+        {
+            if (methodIds == null) throw new ArgumentNullException(nameof(methodIds));
+            if (providedTestIds == null) throw new ArgumentNullException(nameof(providedTestIds));
+
+            var targetMethods = methodIds.ToList();
+            var candidateTests = providedTestIds.ToList();
+            var results = new Dictionary<string, IReadOnlyList<TestCoverageInfo>>();
+
+            if (targetMethods.Count == 0 || candidateTests.Count == 0)
+                return results;
+
+            _logger.LogInformation("Scoped coverage: {Targets} methods, {Tests} candidate tests", targetMethods.Count, candidateTests.Count);
+
+            // Build a scoped incremental call graph seeded by target methods + candidate tests
+            var scope = new TestIntelligence.ImpactAnalyzer.Analysis.AnalysisScope(solutionPath)
+            {
+                MaxExpansionDepth = 5
+            };
+            foreach (var m in targetMethods) scope.ChangedMethods.Add(m);
+            foreach (var t in candidateTests) scope.TargetTests.Add(t);
+
+            MethodCallGraph? callGraph = null;
+            try
+            {
+                callGraph = await _roslynAnalyzer.BuildCallGraphAsync(scope, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Scoped call graph failed; will fall back to full coverage map");
+            }
+
+            if (callGraph == null)
+            {
+                // Fallback to full path
+                var full = await FindTestsExercisingMethodsAsync(targetMethods, solutionPath, cancellationToken);
+                // Filter to provided tests
+                foreach (var kvp in full)
+                {
+                    results[kvp.Key] = kvp.Value.Where(v => candidateTests.Contains(v.TestMethodId, StringComparer.OrdinalIgnoreCase)).ToList();
+                }
+                return results;
+            }
+
+            // Get method info lists for calculation
+            var allMethods = callGraph.GetAllMethods()
+                .Select(id => callGraph.GetMethodInfo(id))
+                .Where(info => info != null)
+                .Cast<MethodInfo>()
+                .ToList();
+
+            // Map for quick lookup
+            var methodInfoById = allMethods.ToDictionary(m => m.Id, m => m, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var target in targetMethods)
+            {
+                var list = new List<TestCoverageInfo>();
+                foreach (var testId in candidateTests)
+                {
+                    var path = FindCallPath(testId, target, callGraph);
+                    if (path != null && path.Length > 0)
+                    {
+                        methodInfoById.TryGetValue(testId, out var testInfo);
+                        methodInfoById.TryGetValue(target, out var targetInfo);
+
+                        var testMethodInfo = testInfo ?? new MethodInfo(testId, testId.Split('.').Last(), "", testId, 0, true);
+                        var targetMethodInfo = targetInfo ?? new MethodInfo(target, target.Split('.').Last(), "", target, 0, false);
+
+                        var conf = CalculateConfidence(path, testMethodInfo, targetMethodInfo);
+                        var ttype = _testClassifier.ClassifyTestType(testMethodInfo);
+
+                        list.Add(new TestCoverageInfo(
+                            testMethodInfo.Id,
+                            testMethodInfo.Name,
+                            testMethodInfo.ContainingType,
+                            System.IO.Path.GetFileName(testMethodInfo.FilePath),
+                            path,
+                            conf,
+                            ttype));
+                    }
+                    else
+                    {
+                        _logger.LogDebug("No path found from test '{TestId}' to target '{TargetId}' in scoped graph", testId, target);
+                    }
+                }
+                results[target] = list;
+            }
+
+            return results;
+        }
+
         public async Task<TestCoverageStatistics> GetCoverageStatisticsAsync(
             string solutionPath,
             CancellationToken cancellationToken = default)
@@ -306,6 +396,8 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             // Use parallel processing for path finding when we have many test methods
             var coverageInfos = new List<TestCoverageInfo>();
             
+            // LRU cache bounds memory; no additional throttling needed here.
+            
             if (testMethods.Count > 50) // Use parallel for large test suites
             {
                 var parallelOptions = new ParallelOptions 
@@ -314,9 +406,18 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 };
                 
                 var threadSafeCoverageInfos = new System.Collections.Concurrent.ConcurrentBag<TestCoverageInfo>();
+                var processedCount = 0;
                 
-                Parallel.ForEach(testMethods, parallelOptions, testMethod =>
+                Parallel.ForEach(testMethods, parallelOptions, (testMethod, parallelLoopState) =>
                 {
+                    // Safety check: limit number of processed tests to prevent runaway analysis
+                    if (Interlocked.Increment(ref processedCount) > 500)
+                    {
+                        _logger.LogWarning("Processed 500+ tests, stopping parallel analysis to prevent performance issues");
+                        parallelLoopState.Stop();
+                        return;
+                    }
+                    
                     var callPath = FindCallPath(testMethod.Id, targetMethod.Id, callGraph);
                     if (callPath != null && callPath.Any())
                     {
@@ -341,8 +442,16 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             else
             {
                 // Use sequential processing for smaller test suites
+                var processedCount = 0;
                 foreach (var testMethod in testMethods)
                 {
+                    // Safety check: limit sequential processing as well
+                    if (processedCount++ > 200)
+                    {
+                        _logger.LogWarning("Processed 200+ tests sequentially, stopping to prevent performance issues");
+                        break;
+                    }
+                    
                     var callPath = FindCallPath(testMethod.Id, targetMethod.Id, callGraph);
                     if (callPath != null && callPath.Any())
                     {
@@ -368,54 +477,16 @@ namespace TestIntelligence.ImpactAnalyzer.Services
 
         private string[]? FindCallPath(string testMethodId, string targetMethodId, MethodCallGraph callGraph)
         {
-            // Check cache first
+            // Check LRU cache first
             var cacheKey = (testMethodId, targetMethodId);
             if (_pathCache.TryGetValue(cacheKey, out var cachedPath))
-            {
                 return cachedPath;
-            }
-
-            // CRITICAL: Emergency cache size protection
-            if (_pathCache.Count >= MaxCacheSize)
-            {
-                // If cache is too large, clear most of it immediately
-                if (_pathCache.Count > MaxCacheSize * 10) // If cache is 10x over limit
-                {
-                    _pathCache.Clear();
-                    _logger.LogWarning("Emergency cache clear: cache size was {Size}, cleared completely", _pathCache.Count);
-                }
-                else if (DateTime.UtcNow - _lastCacheCleanup > CacheCleanupInterval)
-                {
-                    // Aggressive cleanup: remove 75% instead of 50%
-                    var keysToRemove = _pathCache.Keys.Take(_pathCache.Count * 3 / 4).ToList();
-                    foreach (var key in keysToRemove)
-                    {
-                        _pathCache.TryRemove(key, out _);
-                    }
-                    
-                    _lastCacheCleanup = DateTime.UtcNow;
-                    _logger.LogDebug("Aggressive cache cleanup: removed {Count} entries, cache size now {NewSize}", 
-                        keysToRemove.Count, _pathCache.Count);
-                    
-                    // If still too large after cleanup, exit early
-                    if (_pathCache.Count > MaxCacheSize * 2)
-                    {
-                        _logger.LogWarning("Cache still too large after cleanup ({Size}), returning early", _pathCache.Count);
-                        return null; // Give up on this path search to prevent infinite loop
-                    }
-                }
-                else
-                {
-                    // Too soon since last cleanup, give up to prevent infinite loop
-                    return null;
-                }
-            }
             
             // Early termination: if the test and target method are the same, return direct path
             if (testMethodId == targetMethodId)
             {
                 var directPath = new[] { testMethodId };
-                _pathCache.TryAdd(cacheKey, directPath);
+                _pathCache.Set(cacheKey, directPath);
                 return directPath;
             }
             
@@ -436,7 +507,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 if (currentMethod == targetMethodId)
                 {
                     var path = currentPath.ToArray();
-                    _pathCache.TryAdd(cacheKey, path);
+                    _pathCache.Set(cacheKey, path);
                     return path;
                 }
 
@@ -459,7 +530,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             }
 
             // Cache negative results too
-            _pathCache.TryAdd(cacheKey, null);
+            _pathCache.Set(cacheKey, null);
             return null; // No path found
         }
 
@@ -695,6 +766,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 }
             }
             
+            _logger.LogDebug("Method pattern resolution: pattern='{Pattern}' matched {Count} methods", pattern, matchingIds.Count);
             return matchingIds;
         }
 

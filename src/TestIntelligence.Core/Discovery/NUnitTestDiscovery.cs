@@ -251,12 +251,21 @@ namespace TestIntelligence.Core.Discovery
         /// </summary>
         protected virtual void OnDiscoveryError(string assemblyPath, Exception exception)
         {
-            // Added for coverage analysis testing
             if (exception == null)
                 throw new ArgumentNullException(nameof(exception));
             
+            // Add error logging for better diagnostics
+            LogDiscoveryError(assemblyPath, exception);
+            
             DiscoveryError?.Invoke(this, new TestDiscoveryErrorEventArgs(assemblyPath, exception));
         }
+
+        /// <summary>
+        /// Logs discovery error for diagnostics
+        /// </summary>
+        private void LogDiscoveryError(string assemblyPath, Exception exception)
+        {
+            System.Diagnostics.Debug.WriteLine($"Test discovery error in {assemblyPath}: {exception.Message}");
+        }
     }
-}// Test change for coverage analysis
-// Test change for coverage analysis
+}

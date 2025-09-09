@@ -26,6 +26,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         private readonly ConcurrentDictionary<string, HashSet<string>> _typeToFiles = new();
         private readonly ConcurrentDictionary<string, HashSet<string>> _namespaceToFiles = new();
         private readonly ConcurrentDictionary<string, ProjectInfo> _fileToProject = new();
+        private readonly HashSet<string> _indexedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         
         // Pattern matching for common method signatures without full parsing
         private static readonly Regex MethodDeclarationPattern = new Regex(
@@ -82,6 +83,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                     try
                     {
                         await IndexFileAsync(filePath, cancellationToken);
+                        lock (_indexedFiles) _indexedFiles.Add(filePath);
                     }
                     catch (Exception ex)
                     {
@@ -111,6 +113,103 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             {
                 _logger.LogError(ex, "Failed to build symbol index for solution: {SolutionPath}", solutionPath);
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// Builds a symbol index limited to the provided analysis scope. This avoids scanning the entire solution
+        /// when a small set of files or projects is sufficient.
+        /// </summary>
+        public async Task BuildIndexForScopeAsync(AnalysisScope scope, CancellationToken cancellationToken = default)
+        {
+            if (scope == null) throw new ArgumentNullException(nameof(scope));
+
+            if (_isIndexBuilt)
+            {
+                _logger.LogDebug("Symbol index already built; skipping scoped build");
+                return;
+            }
+
+            lock (_indexLock)
+            {
+                if (_isIndexBuilt) return;
+            }
+
+            _logger.LogInformation("Building scoped symbol index: files={FileCount}, projects={ProjectCount}",
+                scope.ChangedFiles?.Count ?? 0, scope.RelevantProjects?.Count ?? 0);
+
+            try
+            {
+                var indexedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                // Index specified projects, if any
+                if (scope.RelevantProjects != null && scope.RelevantProjects.Count > 0)
+                {
+                    foreach (var proj in scope.RelevantProjects)
+                    {
+                        var files = await GetSourceFilesFromProjectAsync(proj, cancellationToken);
+                        foreach (var f in files)
+                        {
+                            if (indexedFiles.Add(f))
+                            {
+                                await IndexFileAsync(f, cancellationToken);
+                                lock (_indexedFiles) _indexedFiles.Add(f);
+                            }
+                        }
+                    }
+                }
+
+                // Index changed files directly
+                if (scope.ChangedFiles != null && scope.ChangedFiles.Count > 0)
+                {
+                    foreach (var file in scope.ChangedFiles)
+                    {
+                        var path = file;
+                        if (!Path.IsPathRooted(path))
+                        {
+                            // Try resolve relative to solution
+                            var baseDir = Path.GetDirectoryName(scope.SolutionPath) ?? string.Empty;
+                            path = Path.Combine(baseDir, file);
+                        }
+
+                        if (File.Exists(path) && indexedFiles.Add(path))
+                        {
+                            await IndexFileAsync(path, cancellationToken);
+                            lock (_indexedFiles) _indexedFiles.Add(path);
+                        }
+                    }
+                }
+
+                // If nothing was indexed (empty scope), fall back to full index
+                if (indexedFiles.Count == 0)
+                {
+                    _logger.LogDebug("Scoped index had no inputs; building full index as fallback");
+                    await BuildIndexAsync(scope.SolutionPath, cancellationToken);
+                    return;
+                }
+
+                lock (_indexLock)
+                {
+                    _isIndexBuilt = true;
+                }
+
+                _logger.LogInformation("Scoped symbol index built: {FileCount} files indexed", indexedFiles.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to build scoped symbol index; falling back to full index");
+                await BuildIndexAsync(scope.SolutionPath, cancellationToken);
+            }
+        }
+
+        /// <summary>
+        /// Returns all files indexed in the most recent build.
+        /// </summary>
+        public IReadOnlyCollection<string> GetIndexedFiles()
+        {
+            lock (_indexedFiles)
+            {
+                return _indexedFiles.ToList().AsReadOnly();
             }
         }
 

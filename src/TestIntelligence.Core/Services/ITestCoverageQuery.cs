@@ -36,5 +36,19 @@ namespace TestIntelligence.Core.Services
             IEnumerable<string> methodIds,
             string solutionPath,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Finds tests that exercise the specified methods using a scoped incremental analysis.
+        /// Only the provided test IDs are considered as candidates, enabling a minimal call graph.
+        /// </summary>
+        /// <param name="methodIds">Changed/target method identifiers</param>
+        /// <param name="providedTestIds">Test method identifiers to consider as candidates</param>
+        /// <param name="solutionPath">Solution path</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        Task<IReadOnlyDictionary<string, IReadOnlyList<TestCoverageInfo>>> FindTestsExercisingMethodsScopedAsync(
+            IEnumerable<string> methodIds,
+            IEnumerable<string> providedTestIds,
+            string solutionPath,
+            CancellationToken cancellationToken = default);
     }
 }

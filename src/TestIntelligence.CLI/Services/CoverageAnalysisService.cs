@@ -110,12 +110,18 @@ namespace TestIntelligence.CLI.Services
             List<string> testIds,
             string solutionPath)
         {
-            Console.WriteLine("Analyzing code changes and test coverage...");
+            Console.WriteLine("Analyzing code changes and test coverage using optimized incremental analysis...");
+
+            // Create progress reporter
+            var progress = new Progress<string>(message =>
+            {
+                Console.WriteLine($"[Progress] {message}");
+            });
 
             if (!string.IsNullOrWhiteSpace(diffContent))
             {
-                Console.WriteLine("Using provided diff content");
-                return await _coverageAnalyzer.AnalyzeCoverageAsync(diffContent, testIds, solutionPath);
+                Console.WriteLine("Using provided diff content with incremental analysis");
+                return await _coverageAnalyzer.AnalyzeCoverageIncrementalAsync(diffContent, testIds, solutionPath, progress);
             }
             else if (!string.IsNullOrWhiteSpace(diffFile))
             {
@@ -212,6 +218,16 @@ namespace TestIntelligence.CLI.Services
             output.AppendLine($"Changed Methods: {result.CoveredChangedMethods}/{result.TotalChangedMethods} covered");
             output.AppendLine($"Provided Tests: {result.ProvidedTests.Count}");
             output.AppendLine();
+
+            // Hint when coverage is 0% but changes and tests are present
+            if (result.TotalChangedMethods > 0 && result.ProvidedTests.Count > 0 && Math.Abs(result.CoveragePercentage) < 0.0001)
+            {
+                output.AppendLine("Note: 0% coverage likely indicates the selected tests do not exercise the changed areas.");
+                output.AppendLine("- Pick CLI integration tests for CLI changes");
+                output.AppendLine("- Pick TestCoverageAnalyzer tests for analyzer changes");
+                output.AppendLine("- Pick TestValidationService tests for validation changes");
+                output.AppendLine();
+            }
 
             // Confidence breakdown
             if (result.ConfidenceBreakdown.HighConfidence + result.ConfidenceBreakdown.MediumConfidence + result.ConfidenceBreakdown.LowConfidence > 0)

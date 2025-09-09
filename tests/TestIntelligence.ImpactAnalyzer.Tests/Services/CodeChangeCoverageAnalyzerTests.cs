@@ -42,10 +42,27 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
             var solutionPath = "/test/solution.sln";
 
             var codeChanges = CreateTestCodeChangeSet();
-            var testCoverageMap = CreateTestCoverageMap();
+            
+            // Create test coverage info for the mock
+            var testCoverageInfo = new TestCoverageInfo(
+                "MyNamespace.MyTestClass.TestMyMethod",
+                "TestMyMethod",
+                "MyTestClass",
+                "MyTestAssembly.dll",
+                new[] { "MyTestClass.TestMyMethod", "MyClass.MyMethod" },
+                0.9,
+                TestType.Unit);
 
             _gitDiffParser.ParseDiffAsync(diffContent).Returns(codeChanges);
-            _testCoverageAnalyzer.BuildTestCoverageMapAsync(solutionPath, Arg.Any<CancellationToken>()).Returns(testCoverageMap);
+            // Mock the new batch lookup method used by incremental analysis
+            var coverageResults = new Dictionary<string, IReadOnlyList<TestCoverageInfo>>
+            {
+                { "MyMethod", new List<TestCoverageInfo> { testCoverageInfo }.AsReadOnly() }
+            };
+            _testCoverageAnalyzer.FindTestsExercisingMethodsAsync(
+                Arg.Any<IEnumerable<string>>(), 
+                solutionPath, 
+                Arg.Any<CancellationToken>()).Returns(coverageResults);
 
             // Act
             var result = await _analyzer.AnalyzeCoverageAsync(diffContent, testMethodIds, solutionPath);
@@ -136,16 +153,16 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
                 0.9,
                 TestType.Unit);
 
-            var testCoverageMap = new TestCoverageMap(
-                new Dictionary<string, List<TestCoverageInfo>>
-                {
-                    { "MyMethod", new List<TestCoverageInfo> { testCoverageInfo } }
-                },
-                DateTime.UtcNow,
-                solutionPath);
-
             _gitDiffParser.ParseDiffAsync(diffContent).Returns(codeChanges);
-            _testCoverageAnalyzer.BuildTestCoverageMapAsync(solutionPath, Arg.Any<CancellationToken>()).Returns(testCoverageMap);
+            // Mock the new batch lookup method used by incremental analysis
+            var coverageResults = new Dictionary<string, IReadOnlyList<TestCoverageInfo>>
+            {
+                { "MyMethod", new List<TestCoverageInfo> { testCoverageInfo }.AsReadOnly() }
+            };
+            _testCoverageAnalyzer.FindTestsExercisingMethodsAsync(
+                Arg.Any<IEnumerable<string>>(), 
+                solutionPath, 
+                Arg.Any<CancellationToken>()).Returns(coverageResults);
 
             // Act
             var result = await _analyzer.AnalyzeCoverageAsync(diffContent, testMethodIds, solutionPath);
@@ -186,17 +203,17 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
                 0.8,
                 TestType.Unit);
 
-            var testCoverageMap = new TestCoverageMap(
-                new Dictionary<string, List<TestCoverageInfo>>
-                {
-                    { "MethodOne", new List<TestCoverageInfo> { testCoverageInfo } }
-                    // MethodTwo is not covered
-                },
-                DateTime.UtcNow,
-                solutionPath);
-
             _gitDiffParser.ParseDiffAsync(diffContent).Returns(codeChanges);
-            _testCoverageAnalyzer.BuildTestCoverageMapAsync(solutionPath, Arg.Any<CancellationToken>()).Returns(testCoverageMap);
+            // Mock the new batch lookup method used by incremental analysis
+            var coverageResults = new Dictionary<string, IReadOnlyList<TestCoverageInfo>>
+            {
+                { "MethodOne", new List<TestCoverageInfo> { testCoverageInfo }.AsReadOnly() }
+                // MethodTwo is not covered (not in the dictionary)
+            };
+            _testCoverageAnalyzer.FindTestsExercisingMethodsAsync(
+                Arg.Any<IEnumerable<string>>(), 
+                solutionPath, 
+                Arg.Any<CancellationToken>()).Returns(coverageResults);
 
             // Act
             var result = await _analyzer.AnalyzeCoverageAsync(diffContent, testMethodIds, solutionPath);
@@ -269,9 +286,26 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
             var codeChanges = CreateTestCodeChangeSet();
             var testMethodId = "MyTestClass.TestMyMethod";
             var solutionPath = "/test/solution.sln";
-            var testCoverageMap = CreateTestCoverageMap();
+            
+            // Create test coverage info for the single test case
+            var testCoverageInfo = new TestCoverageInfo(
+                "MyTestClass.TestMyMethod",
+                "TestMyMethod",
+                "MyTestClass",
+                "MyTestAssembly.dll",
+                new[] { "MyTestClass.TestMyMethod", "MyClass.MyMethod" },
+                0.9,
+                TestType.Unit);
 
-            _testCoverageAnalyzer.BuildTestCoverageMapAsync(solutionPath, Arg.Any<CancellationToken>()).Returns(testCoverageMap);
+            // Mock the new batch lookup method used by incremental analysis
+            var coverageResults = new Dictionary<string, IReadOnlyList<TestCoverageInfo>>
+            {
+                { "MyMethod", new List<TestCoverageInfo> { testCoverageInfo }.AsReadOnly() }
+            };
+            _testCoverageAnalyzer.FindTestsExercisingMethodsAsync(
+                Arg.Any<IEnumerable<string>>(), 
+                solutionPath, 
+                Arg.Any<CancellationToken>()).Returns(coverageResults);
 
             // Act
             var result = await _analyzer.AnalyzeSingleTestCoverageAsync(codeChanges, testMethodId, solutionPath);
