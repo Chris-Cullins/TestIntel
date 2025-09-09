@@ -146,6 +146,10 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             var providedTestCoverage = new List<TestCoverageInfo>();
             var methodCoverageMap = new Dictionary<string, List<TestCoverageInfo>>();
             
+            // Optimize lookups with HashSets for O(1) performance instead of O(n) linear searches
+            var testMethodIdSet = new HashSet<string>(testMethodIdList, StringComparer.OrdinalIgnoreCase);
+            var addedTestIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase); // Track already added tests
+            
             // Initialize method coverage map
             foreach (var method in changedMethods)
             {
@@ -167,14 +171,18 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                     // Check if any of these covering tests match our provided test IDs
                     foreach (var coverageInfo in coveringTests)
                     {
-                        if (testMethodIdList.Any(testId => 
-                            string.Equals(testId, coverageInfo.TestMethodId, StringComparison.OrdinalIgnoreCase) ||
-                            coverageInfo.TestMethodId.EndsWith("." + testId, StringComparison.OrdinalIgnoreCase) ||
-                            coverageInfo.TestMethodName.Equals(testId, StringComparison.OrdinalIgnoreCase)))
+                        // Use O(1) HashSet lookups instead of O(n) Any() operations
+                        if (testMethodIdSet.Contains(coverageInfo.TestMethodId) ||
+                            testMethodIdSet.Any(testId => 
+                                coverageInfo.TestMethodId.EndsWith("." + testId, StringComparison.OrdinalIgnoreCase) ||
+                                coverageInfo.TestMethodName.Equals(testId, StringComparison.OrdinalIgnoreCase)))
                         {
                             methodCoverageMap[changedMethod].Add(coverageInfo);
-                            if (!providedTestCoverage.Any(c => c.TestMethodId == coverageInfo.TestMethodId))
+                            
+                            // Use O(1) HashSet check instead of O(n) Any() operation for duplicates
+                            if (!addedTestIds.Contains(coverageInfo.TestMethodId))
                             {
+                                addedTestIds.Add(coverageInfo.TestMethodId);
                                 providedTestCoverage.Add(coverageInfo);
                             }
                         }
