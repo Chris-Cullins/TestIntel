@@ -253,6 +253,97 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             return result;
         }
 
+        public async Task<IReadOnlyDictionary<string, IReadOnlyList<TestCoverageInfo>>> FindTestsExercisingMethodsScopedAsync(
+            IEnumerable<string> methodIds,
+            IEnumerable<string> providedTestIds,
+            string solutionPath,
+            CancellationToken cancellationToken = default)
+        {
+            if (methodIds == null) throw new ArgumentNullException(nameof(methodIds));
+            if (providedTestIds == null) throw new ArgumentNullException(nameof(providedTestIds));
+
+            var targetMethods = methodIds.ToList();
+            var candidateTests = providedTestIds.ToList();
+            var results = new Dictionary<string, IReadOnlyList<TestCoverageInfo>>();
+
+            if (targetMethods.Count == 0 || candidateTests.Count == 0)
+                return results;
+
+            _logger.LogInformation("Scoped coverage: {Targets} methods, {Tests} candidate tests", targetMethods.Count, candidateTests.Count);
+
+            // Build a scoped incremental call graph seeded by target methods + candidate tests
+            var scope = new TestIntelligence.ImpactAnalyzer.Analysis.AnalysisScope(solutionPath)
+            {
+                MaxExpansionDepth = 5
+            };
+            foreach (var m in targetMethods) scope.ChangedMethods.Add(m);
+            foreach (var t in candidateTests) scope.TargetTests.Add(t);
+
+            MethodCallGraph? callGraph = null;
+            try
+            {
+                callGraph = await _roslynAnalyzer.BuildCallGraphAsync(scope, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Scoped call graph failed; will fall back to full coverage map");
+            }
+
+            if (callGraph == null)
+            {
+                // Fallback to full path
+                var full = await FindTestsExercisingMethodsAsync(targetMethods, solutionPath, cancellationToken);
+                // Filter to provided tests
+                foreach (var kvp in full)
+                {
+                    results[kvp.Key] = kvp.Value.Where(v => candidateTests.Contains(v.TestMethodId, StringComparer.OrdinalIgnoreCase)).ToList();
+                }
+                return results;
+            }
+
+            // Get method info lists for calculation
+            var allMethods = callGraph.GetAllMethods()
+                .Select(id => callGraph.GetMethodInfo(id))
+                .Where(info => info != null)
+                .Cast<MethodInfo>()
+                .ToList();
+
+            // Map for quick lookup
+            var methodInfoById = allMethods.ToDictionary(m => m.Id, m => m, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var target in targetMethods)
+            {
+                var list = new List<TestCoverageInfo>();
+                foreach (var testId in candidateTests)
+                {
+                    var path = FindCallPath(testId, target, callGraph);
+                    if (path != null && path.Length > 0)
+                    {
+                        methodInfoById.TryGetValue(testId, out var testInfo);
+                        methodInfoById.TryGetValue(target, out var targetInfo);
+
+                        var testMethodInfo = testInfo ?? new MethodInfo(testId, testId.Split('.').Last(), "", testId, 0, true);
+                        var targetMethodInfo = targetInfo ?? new MethodInfo(target, target.Split('.').Last(), "", target, 0, false);
+
+                        var conf = CalculateConfidence(path, testMethodInfo, targetMethodInfo);
+                        var ttype = _testClassifier.ClassifyTestType(testMethodInfo);
+
+                        list.Add(new TestCoverageInfo(
+                            testMethodInfo.Id,
+                            testMethodInfo.Name,
+                            testMethodInfo.ContainingType,
+                            System.IO.Path.GetFileName(testMethodInfo.FilePath),
+                            path,
+                            conf,
+                            ttype));
+                    }
+                }
+                results[target] = list;
+            }
+
+            return results;
+        }
+
         public async Task<TestCoverageStatistics> GetCoverageStatisticsAsync(
             string solutionPath,
             CancellationToken cancellationToken = default)

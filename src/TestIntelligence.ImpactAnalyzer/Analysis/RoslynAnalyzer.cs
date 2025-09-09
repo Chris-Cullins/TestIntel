@@ -62,15 +62,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                 // Initialize lazy workspace for much better performance
                 await InitializeLazyWorkspaceAsync(solutionFile, cancellationToken).ConfigureAwait(false);
 
-                // TEMPORARY FIX: Disable incremental call graph builder due to placeholder implementation
-                // The GetMethodIdsFromFile method returns empty lists, causing 0 methods to be analyzed
-                if (false && _incrementalCallGraphBuilder != null)
-                {
-                    _logger.LogInformation("Using high-performance incremental call graph builder");
-                    // For full solution analysis, we still need to analyze all files, but incrementally
-                    return await _incrementalCallGraphBuilder.BuildCallGraphForMethodsAsync(
-                        solutionFiles.SelectMany(f => GetMethodIdsFromFile(f)), 10, cancellationToken).ConfigureAwait(false);
-                }
+                // Default path: use legacy full analysis for full-solution builds.
+                // Incremental path is enabled via scoped overload below.
                 
                 // Fallback to legacy full analysis
                 _logger.LogInformation("Using legacy call graph builder (incremental builder temporarily disabled)");
@@ -88,6 +81,61 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             {
                 _logger.LogError(ex, "Failed to build call graph using enhanced analyzer, falling back to file-based analysis");
                 return await BuildCallGraphFromFilesAsync(solutionFiles, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
+        /// Scoped incremental call graph build that analyzes only relevant files/methods/tests.
+        /// </summary>
+        public async Task<MethodCallGraph> BuildCallGraphAsync(AnalysisScope scope, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (scope == null) throw new ArgumentNullException(nameof(scope));
+
+            _logger.LogInformation("Building scoped call graph: changedMethods={ChangedMethods}, targetTests={TargetTests}, maxDepth={Depth}",
+                scope.ChangedMethods?.Count ?? 0, scope.TargetTests?.Count ?? 0, scope.MaxExpansionDepth);
+
+            // Initialize lazy/incremental infrastructure
+            await InitializeLazyWorkspaceAsync(scope.SolutionPath, cancellationToken).ConfigureAwait(false);
+
+            if (_incrementalCallGraphBuilder == null)
+            {
+                // As a fallback, initialize legacy workspace and continue with full analysis if needed
+                _logger.LogWarning("Incremental call graph builder unavailable; falling back to legacy call graph for scope");
+                return await BuildCallGraphAsync(new[] { scope.SolutionPath }, cancellationToken).ConfigureAwait(false);
+            }
+
+            // Determine seed methods: changed methods plus explicit target tests (if provided)
+            var seedMethods = new List<string>();
+            if (scope.ChangedMethods != null && scope.ChangedMethods.Count > 0)
+                seedMethods.AddRange(scope.ChangedMethods);
+            if (scope.TargetTests != null && scope.TargetTests.Count > 0)
+                seedMethods.AddRange(scope.TargetTests);
+
+            // If only files are available, extract method IDs from those files as seeds
+            if (seedMethods.Count == 0 && scope.ChangedFiles != null && scope.ChangedFiles.Count > 0)
+            {
+                foreach (var file in scope.ChangedFiles)
+                {
+                    seedMethods.AddRange(GetMethodIdsFromFile(file));
+                }
+            }
+
+            if (seedMethods.Count == 0)
+            {
+                _logger.LogWarning("No seeds provided in scope; returning empty call graph");
+                return new MethodCallGraph(new Dictionary<string, HashSet<string>>(), new Dictionary<string, MethodInfo>());
+            }
+
+            try
+            {
+                return await _incrementalCallGraphBuilder.BuildCallGraphForMethodsAsync(seedMethods, scope.MaxExpansionDepth, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Incremental scoped call graph build failed; falling back to legacy");
+                return await BuildCallGraphAsync(new[] { scope.SolutionPath }, cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -314,15 +362,33 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
 
         private IEnumerable<string> GetMethodIdsFromFile(string filePath)
         {
-            // This is a placeholder - in a real implementation, we'd quickly scan the file
-            // for method signatures without full compilation
-            if (_symbolIndex != null)
+            var result = new List<string>();
+            try
             {
-                // Use symbol index to quickly find methods in this file
-                return new List<string>(); // Placeholder - would return actual method IDs
+                if (!File.Exists(filePath)) return result;
+
+                // Lightweight parse: Namespace.Class.Method (ignore params)
+                var source = File.ReadAllText(filePath);
+                var tree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(source, path: filePath);
+                var root = tree.GetRoot();
+                var methodDeclarations = root.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>();
+
+                foreach (var method in methodDeclarations)
+                {
+                    var name = method.Identifier.ValueText;
+                    var ns = method.Ancestors().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.NamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString();
+                    var cls = method.Ancestors().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax>().FirstOrDefault()?.Identifier.ValueText;
+                    var id = string.IsNullOrEmpty(ns) ?
+                        (string.IsNullOrEmpty(cls) ? name : $"{cls}.{name}") :
+                        (string.IsNullOrEmpty(cls) ? $"{ns}.{name}" : $"{ns}.{cls}.{name}");
+                    result.Add(id);
+                }
             }
-            
-            return new List<string>();
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to enumerate methods from file: {File}", filePath);
+            }
+            return result;
         }
 
         private string? FindSolutionFile(string[] files)

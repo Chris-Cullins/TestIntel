@@ -168,8 +168,17 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 IReadOnlyDictionary<string, IReadOnlyList<TestCoverageInfo>> coverageResults;
                 try
                 {
-                    coverageResults = await _testCoverageAnalyzer.FindTestsExercisingMethodsAsync(
-                        changedMethods, solutionPath, timeoutCts.Token);
+                    // Prefer scoped incremental lookup seeded by changed methods and provided tests
+                    if (testMethodIdList.Any())
+                    {
+                        coverageResults = await _testCoverageAnalyzer.FindTestsExercisingMethodsScopedAsync(
+                            changedMethods, testMethodIdList, solutionPath, timeoutCts.Token);
+                    }
+                    else
+                    {
+                        coverageResults = await _testCoverageAnalyzer.FindTestsExercisingMethodsAsync(
+                            changedMethods, solutionPath, timeoutCts.Token);
+                    }
                 }
                 catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
                 {
