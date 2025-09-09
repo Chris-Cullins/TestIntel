@@ -1,3 +1,8 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using TestIntelligence.Core.Utilities;
 
@@ -92,7 +97,10 @@ public class ProjectAnalysisService : IProjectAnalysisService
             foreach (var line in lines)
             {
                 var trimmedLine = line.Trim();
-                if (trimmedLine.StartsWith("Project(") && trimmedLine.Contains(".csproj"))
+                if (trimmedLine.StartsWith("Project(") && 
+                    (trimmedLine.Contains(".csproj", StringComparison.OrdinalIgnoreCase) ||
+                     trimmedLine.Contains(".vbproj", StringComparison.OrdinalIgnoreCase) ||
+                     trimmedLine.Contains(".fsproj", StringComparison.OrdinalIgnoreCase)))
                 {
                     var projectPath = ExtractProjectPathFromSolutionLine(trimmedLine, solutionDir);
                     if (!string.IsNullOrEmpty(projectPath) && File.Exists(projectPath))

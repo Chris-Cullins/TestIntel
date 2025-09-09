@@ -279,6 +279,20 @@ namespace TestIntelligence.CLI.Tests.Commands
         {
             _output?.Dispose();
             _error?.Dispose();
+            
+            // Clean up any configuration files created during tests
+            var configPath = Path.Combine(Environment.CurrentDirectory, "testintel.config");
+            if (File.Exists(configPath))
+            {
+                try
+                {
+                    File.Delete(configPath);
+                }
+                catch
+                {
+                    // Ignore cleanup failures
+                }
+            }
         }
     }
 }
