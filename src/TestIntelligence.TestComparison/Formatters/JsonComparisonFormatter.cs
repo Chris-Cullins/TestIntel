@@ -178,7 +178,7 @@ public class JsonComparisonFormatter : IComparisonFormatter
     private class RecommendationJson
     {
         public string Type { get; set; } = string.Empty;
-        public string EstimatedEffortLevel { get; set; } = string.Empty;
+        public EstimatedEffortLevel EstimatedEffortLevel { get; set; }
         public string Description { get; set; } = string.Empty;
         public string? Rationale { get; set; }
         public double ConfidenceScore { get; set; }
