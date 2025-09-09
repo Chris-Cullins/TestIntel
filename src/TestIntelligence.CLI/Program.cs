@@ -136,6 +136,7 @@ public class Program
                 
                 // Test Comparison services
                 services.AddScoped<ITestComparisonService, TestComparisonService>();
+                services.AddScoped<ITestValidationService, TestValidationService>();
                 services.AddScoped<TestCoverageComparisonService>();
                 services.AddScoped<ISimilarityCalculator, SimilarityCalculator>();
                 services.AddScoped<OptimizationRecommendationEngine>();
