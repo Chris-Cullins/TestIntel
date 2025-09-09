@@ -16,6 +16,8 @@ using TestIntelligence.Core.Services;
 using TestIntelligence.ImpactAnalyzer.Services;
 using TestIntelligence.ImpactAnalyzer.Analysis;
 using TestIntelligence.SelectionEngine.Interfaces;
+using TestIntelligence.TestComparison.Services;
+using TestIntelligence.CLI.Progress;
 using Xunit;
 
 namespace TestIntelligence.CLI.Tests.Commands
@@ -511,6 +513,7 @@ namespace TestIntelligence.CLI.Tests.Commands
             output.Should().Contain("cache");
             output.Should().Contain("config");
             output.Should().Contain("version");
+            output.Should().Contain("compare-tests");
         }
 
         [Fact]
@@ -580,6 +583,7 @@ namespace TestIntelligence.CLI.Tests.Commands
             host.Services.GetService<ConfigCommandHandler>().Should().NotBeNull();
             host.Services.GetService<CacheCommandHandler>().Should().NotBeNull();
             host.Services.GetService<VersionCommandHandler>().Should().NotBeNull();
+            host.Services.GetService<CompareTestsCommandHandler>().Should().NotBeNull();
             host.Services.GetService<ICommandFactory>().Should().NotBeNull();
         }
 
@@ -613,6 +617,7 @@ namespace TestIntelligence.CLI.Tests.Commands
                     services.AddTransient<ConfigCommandHandler>();
                     services.AddTransient<CacheCommandHandler>();
                     services.AddTransient<VersionCommandHandler>();
+                    services.AddTransient<CompareTestsCommandHandler>();
                     services.AddTransient<ICommandFactory, CommandFactory>();
                     
                     // Add mock services to avoid external dependencies
@@ -629,6 +634,8 @@ namespace TestIntelligence.CLI.Tests.Commands
                     services.AddSingleton(Substitute.For<IRoslynAnalyzer>());
                     services.AddSingleton(Substitute.For<IGitDiffParser>());
                     services.AddSingleton(Substitute.For<IOutputFormatter>());
+                    services.AddSingleton(Substitute.For<ITestComparisonService>());
+                    services.AddSingleton(Substitute.For<IProgressReporter>());
                 });
 
             var host = hostBuilder.Build();

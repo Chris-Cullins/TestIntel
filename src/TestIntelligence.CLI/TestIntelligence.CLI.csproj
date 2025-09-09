@@ -37,6 +37,7 @@
     <ProjectReference Include="..\TestIntelligence.DataTracker\TestIntelligence.DataTracker.csproj" />
     <ProjectReference Include="..\TestIntelligence.ImpactAnalyzer\TestIntelligence.ImpactAnalyzer.csproj" />
     <ProjectReference Include="..\TestIntelligence.SelectionEngine\TestIntelligence.SelectionEngine.csproj" />
+    <ProjectReference Include="..\TestIntelligence.TestComparison\TestIntelligence.TestComparison.csproj" />
   </ItemGroup>
 
 </Project>
