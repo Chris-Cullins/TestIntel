@@ -1,0 +1,334 @@
+name: TestIntel CI (Smart Test Selection)
+
+on:
+  pull_request:
+    branches: ["**"]
+  push:
+    branches: [main, develop]
+
+jobs:
+  smart-test-selection:
+    runs-on: ubuntu-latest
+    
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+      TESTINTEL_CONFIDENCE_THRESHOLD: 70
+      TESTINTEL_CACHE_DIR: ~/.testintel/cache
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for accurate diff analysis
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore TestIntelligence.sln
+
+      - name: Build solution (Release)
+        run: dotnet build TestIntelligence.sln --configuration Release --no-restore
+
+      - name: Build and install TestIntel CLI tool
+        run: |
+          echo "📦 Building TestIntel CLI tool..."
+          dotnet pack src/TestIntelligence.CLI/TestIntelligence.CLI.csproj --configuration Release --output ./nupkg
+          dotnet tool install --global --add-source ./nupkg TestIntelligence.CLI
+          echo "✅ TestIntel CLI installed successfully"
+
+      - name: Initialize TestIntel caches
+        run: |
+          echo "🔧 Setting up TestIntel caches..."
+          mkdir -p "$TESTINTEL_CACHE_DIR"
+          test-intel config --cache-dir "$TESTINTEL_CACHE_DIR"
+          echo "✅ Cache directory initialized: $TESTINTEL_CACHE_DIR"
+
+      - name: Analyze git changes and select tests
+        id: test-selection
+        run: |
+          echo "🔍 Analyzing git changes for smart test selection..."
+          
+          # Determine comparison target based on event type
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE_REF="${{ github.event.pull_request.base.sha }}"
+            HEAD_REF="${{ github.event.pull_request.head.sha }}"
+            echo "PR detected: comparing $HEAD_REF against $BASE_REF"
+          else
+            # For pushes to main/develop, compare against previous commit
+            BASE_REF="${{ github.event.before }}"
+            HEAD_REF="${{ github.sha }}"
+            echo "Push detected: comparing $HEAD_REF against $BASE_REF"
+          fi
+          
+          # Get git diff for analysis
+          echo "📋 Generating git diff..."
+          git diff --name-only "$BASE_REF" "$HEAD_REF" > changed_files.txt
+          if [[ ! -s changed_files.txt ]]; then
+            echo "⚠️  No file changes detected, will run fallback strategy"
+            echo "run_all_tests=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "📁 Changed files:"
+          cat changed_files.txt | head -20  # Show first 20 files
+          [[ $(wc -l < changed_files.txt) -gt 20 ]] && echo "... and $(( $(wc -l < changed_files.txt) - 20 )) more files"
+          
+          # Use TestIntel diff analysis to identify impacted tests
+          echo "🧠 Running TestIntel diff analysis..."
+          test-intel diff \
+            --solution TestIntelligence.sln \
+            --git-command "git diff --unified=3 $BASE_REF $HEAD_REF" \
+            --format json \
+            --output diff-analysis.json \
+            --verbose || {
+              echo "❌ TestIntel diff analysis failed, falling back to full test suite"
+              echo "run_all_tests=true" >> $GITHUB_OUTPUT
+              exit 0
+            }
+          
+          # Select high-confidence tests (≥70% confidence)
+          echo "⚡ Selecting high-confidence tests..."
+          test-intel select \
+            --path TestIntelligence.sln \
+            --confidence High \
+            --max-tests 100 \
+            --output selected-tests.json || {
+              echo "❌ TestIntel test selection failed, falling back to full test suite"
+              echo "run_all_tests=true" >> $GITHUB_OUTPUT
+              exit 0
+            }
+          
+          # Validate that we have sufficient test coverage
+          if [[ -f selected-tests.json ]]; then
+            selected_count=$(jq -r '.selectedTests | length // 0' selected-tests.json 2>/dev/null || echo "0")
+            echo "📊 Selected $selected_count high-confidence tests"
+            
+            if [[ $selected_count -ge 5 ]]; then
+              echo "✅ Sufficient test coverage with smart selection ($selected_count tests)"
+              echo "run_all_tests=false" >> $GITHUB_OUTPUT
+              echo "selected_test_count=$selected_count" >> $GITHUB_OUTPUT
+            else
+              echo "⚠️  Insufficient high-confidence tests ($selected_count), running full suite for safety"
+              echo "run_all_tests=true" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "❌ No test selection results, falling back to full test suite"
+            echo "run_all_tests=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run selected tests (Smart Selection)
+        if: steps.test-selection.outputs.run_all_tests == 'false'
+        run: |
+          echo "🚀 Running ${{ steps.test-selection.outputs.selected_test_count }} selected tests with high confidence..."
+          mkdir -p TestResults
+          
+          # Extract selected test projects and run them
+          if [[ -f selected-tests.json ]]; then
+            # Parse selected tests and group by project
+            jq -r '.selectedTests[].testProject // .selectedTests[].project // empty' selected-tests.json | sort -u > selected-projects.txt 2>/dev/null || {
+              echo "Could not parse selected test projects, running all non-E2E tests"
+              mapfile -t projects < <(grep -rl --include="*.csproj" "<IsTestProject>true</IsTestProject>" tests | grep -v -E "/(TestIntelligence\.E2E\.Tests|.*\.Performance\.Tests)/")
+            }
+            
+            if [[ -s selected-projects.txt ]]; then
+              echo "📋 Selected test projects:"
+              cat selected-projects.txt
+              mapfile -t projects < selected-projects.txt
+            else
+              echo "📋 Falling back to all non-E2E test projects"
+              mapfile -t projects < <(grep -rl --include="*.csproj" "<IsTestProject>true</IsTestProject>" tests | grep -v -E "/(TestIntelligence\.E2E\.Tests|.*\.Performance\.Tests)/")
+            fi
+          else
+            echo "📋 No selection data, using all non-E2E test projects"
+            mapfile -t projects < <(grep -rl --include="*.csproj" "<IsTestProject>true</IsTestProject>" tests | grep -v -E "/(TestIntelligence\.E2E\.Tests|.*\.Performance\.Tests)/")
+          fi
+          
+          # Run selected test projects
+          failed_projects=()
+          total_tests=0
+          passed_tests=0
+          
+          for proj in "${projects[@]}"; do
+            echo "🧪 Running tests for: $proj"
+            safe_name=$(echo "$proj" | tr '/\\' '__')
+            
+            if dotnet test "$proj" \
+              --configuration Release \
+              --logger "trx;LogFileName=${safe_name}.trx" \
+              --logger "console;verbosity=normal" \
+              --results-directory "$GITHUB_WORKSPACE/TestResults"; then
+              echo "✅ Tests passed for $proj"
+            else
+              echo "❌ Tests failed for $proj"
+              failed_projects+=("$proj")
+            fi
+            
+            # Extract test counts
+            trx_file="$GITHUB_WORKSPACE/TestResults/${safe_name}.trx"
+            if [[ -f "$trx_file" ]]; then
+              proj_total=$(grep -o 'total="[0-9]*"' "$trx_file" | grep -o '[0-9]*' || echo "0")
+              proj_passed=$(grep -o 'passed="[0-9]*"' "$trx_file" | grep -o '[0-9]*' || echo "0")
+              
+              if [[ "$proj_total" -gt 0 ]]; then
+                total_tests=$((total_tests + proj_total))
+                passed_tests=$((passed_tests + proj_passed))
+                echo "📊 Project stats: $proj_passed/$proj_total tests passed"
+              fi
+            fi
+          done
+          
+          # Report results
+          if [[ "$total_tests" -gt 0 ]]; then
+            pass_percentage=$(( (passed_tests * 100) / total_tests ))
+            echo "📈 Smart Selection Results:"
+            echo "Total tests run: $total_tests"
+            echo "Passed tests: $passed_tests"
+            echo "Pass percentage: ${pass_percentage}%"
+            echo "Required threshold: 90%"
+            
+            if [[ "$pass_percentage" -ge 90 ]]; then
+              echo "✅ Smart test selection SUCCEEDED (${pass_percentage}% >= 90%)"
+              if [[ ${#failed_projects[@]} -gt 0 ]]; then
+                echo "⚠️  Note: Some projects had failures but overall threshold was met"
+              fi
+            else
+              echo "❌ Smart test selection FAILED (${pass_percentage}% < 90%)"
+              echo "Failed projects:"
+              printf '   - %s\n' "${failed_projects[@]}"
+              exit 1
+            fi
+          else
+            echo "❌ No test results found from smart selection"
+            exit 1
+          fi
+
+      - name: Run full test suite (Fallback)
+        if: steps.test-selection.outputs.run_all_tests == 'true'
+        run: |
+          echo "🔄 Running full test suite as fallback..."
+          mkdir -p TestResults
+          
+          # Use the same logic as the existing CI
+          mapfile -t projects < <(grep -rl --include="*.csproj" "<IsTestProject>true</IsTestProject>" tests | grep -v -E "/(TestIntelligence\.E2E\.Tests|.*\.Performance\.Tests)/")
+          echo "📋 Running all non-E2E test projects:"
+          printf ' - %s\n' "${projects[@]}"
+          
+          total_tests=0
+          passed_tests=0
+          failed_projects=()
+          
+          for proj in "${projects[@]}"; do
+            echo "🧪 Running tests for: $proj"
+            safe_name=$(echo "$proj" | tr '/\\' '__')
+            
+            if dotnet test "$proj" \
+              --configuration Release \
+              --logger "trx;LogFileName=${safe_name}.trx" \
+              --logger "console;verbosity=normal" \
+              --results-directory "$GITHUB_WORKSPACE/TestResults"; then
+              echo "✅ Tests passed for $proj"
+            else
+              echo "❌ Tests failed for $proj"
+              failed_projects+=("$proj")
+            fi
+            
+            # Extract test counts
+            trx_file="$GITHUB_WORKSPACE/TestResults/${safe_name}.trx"
+            if [[ -f "$trx_file" ]]; then
+              proj_total=$(grep -o 'total="[0-9]*"' "$trx_file" | grep -o '[0-9]*' || echo "0")
+              proj_passed=$(grep -o 'passed="[0-9]*"' "$trx_file" | grep -o '[0-9]*' || echo "0")
+              
+              if [[ "$proj_total" -gt 0 ]]; then
+                total_tests=$((total_tests + proj_total))
+                passed_tests=$((passed_tests + proj_passed))
+                echo "📊 Project stats: $proj_passed/$proj_total tests passed"
+              fi
+            fi
+          done
+          
+          # Calculate and validate results
+          if [[ "$total_tests" -gt 0 ]]; then
+            pass_percentage=$(( (passed_tests * 100) / total_tests ))
+            echo "📈 Full Suite Results:"
+            echo "Total tests: $total_tests"
+            echo "Passed tests: $passed_tests"
+            echo "Pass percentage: ${pass_percentage}%"
+            echo "Required threshold: 90%"
+            
+            if [[ "$pass_percentage" -ge 90 ]]; then
+              echo "✅ Full test suite PASSED (${pass_percentage}% >= 90%)"
+              if [[ ${#failed_projects[@]} -gt 0 ]]; then
+                echo "⚠️  Note: Some projects had failures but overall threshold was met:"
+                printf '   - %s\n' "${failed_projects[@]}"
+              fi
+            else
+              echo "❌ Full test suite FAILED (${pass_percentage}% < 90%)"
+              echo "Failed projects:"
+              printf '   - %s\n' "${failed_projects[@]}"
+              exit 1
+            fi
+          else
+            echo "❌ No test results found - this indicates a build or discovery issue"
+            exit 1
+          fi
+
+      - name: Generate TestIntel analysis report
+        if: always()
+        run: |
+          echo "📊 Generating TestIntel analysis report..."
+          
+          # Generate a summary report
+          cat > testintel-summary.md << 'EOF'
+          # TestIntel CI Analysis Report
+          
+          ## Workflow Summary
+          - **Event**: ${{ github.event_name }}
+          - **Branch**: ${{ github.ref_name }}
+          - **Commit**: ${{ github.sha }}
+          - **Strategy Used**: ${{ steps.test-selection.outputs.run_all_tests == 'true' && 'Full Test Suite (Fallback)' || 'Smart Test Selection' }}
+          
+          ## Test Selection Details
+          EOF
+          
+          if [[ "${{ steps.test-selection.outputs.run_all_tests }}" == "false" ]]; then
+            cat >> testintel-summary.md << EOF
+          - **Selected Tests**: ${{ steps.test-selection.outputs.selected_test_count }}
+          - **Confidence Threshold**: ≥${TESTINTEL_CONFIDENCE_THRESHOLD}%
+          - **Analysis Method**: TestIntel diff analysis with git changes
+          EOF
+          else
+            cat >> testintel-summary.md << 'EOF'
+          - **Reason for Fallback**: Insufficient high-confidence tests or analysis failure
+          - **Tests Run**: All non-E2E test projects
+          EOF
+          fi
+          
+          echo "📋 TestIntel Summary Report:"
+          cat testintel-summary.md
+
+      - name: Upload test results and artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testintel-ci-results
+          path: |
+            TestResults/*.trx
+            diff-analysis.json
+            selected-tests.json
+            changed_files.txt
+            testintel-summary.md
+          if-no-files-found: warn
+
+      - name: Cache TestIntel data
+        uses: actions/cache@v4
+        if: always()
+        with:
+          path: ${{ env.TESTINTEL_CACHE_DIR }}
+          key: testintel-cache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            testintel-cache-${{ runner.os }}-
+            testintel-cache-
