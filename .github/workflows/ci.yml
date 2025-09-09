@@ -35,15 +35,69 @@ jobs:
           mapfile -t projects < <(grep -rl --include="*.csproj" "<IsTestProject>true</IsTestProject>" tests | grep -v -E "/(TestIntelligence\.E2E\.Tests|.*\.Performance\.Tests)/")
           echo "Discovered test projects:" 
           printf ' - %s\n' "${projects[@]}"
+          
+          # Initialize counters for pass percentage calculation
+          total_tests=0
+          passed_tests=0
+          failed_projects=()
+          
           # Run tests project-by-project to keep failures isolated and results separate
           for proj in "${projects[@]}"; do
             echo "\n=== Running tests for: $proj ==="
             safe_name=$(echo "$proj" | tr '/\\' '__')
-            dotnet test "$proj" \
+            
+            # Run tests and capture detailed output
+            if dotnet test "$proj" \
               --configuration Release \
               --logger "trx;LogFileName=${safe_name}.trx" \
-              --results-directory "$GITHUB_WORKSPACE/TestResults" || echo "Tests failed for $proj but continuing..."
+              --logger "console;verbosity=normal" \
+              --results-directory "$GITHUB_WORKSPACE/TestResults"; then
+              echo "✅ Tests passed for $proj"
+            else
+              echo "❌ Tests failed for $proj"
+              failed_projects+=("$proj")
+            fi
+            
+            # Extract test counts from TRX file if it exists
+            trx_file="$GITHUB_WORKSPACE/TestResults/${safe_name}.trx"
+            if [ -f "$trx_file" ]; then
+              # Parse TRX file for test counts (simplified parsing)
+              proj_total=$(grep -o 'total="[0-9]*"' "$trx_file" | grep -o '[0-9]*' || echo "0")
+              proj_passed=$(grep -o 'passed="[0-9]*"' "$trx_file" | grep -o '[0-9]*' || echo "0")
+              
+              if [ "$proj_total" -gt 0 ]; then
+                total_tests=$((total_tests + proj_total))
+                passed_tests=$((passed_tests + proj_passed))
+                echo "Project stats: $proj_passed/$proj_total tests passed"
+              fi
+            fi
           done
+          
+          # Calculate pass percentage
+          if [ "$total_tests" -gt 0 ]; then
+            pass_percentage=$(( (passed_tests * 100) / total_tests ))
+            echo "\n📊 Overall Test Results:"
+            echo "Total tests: $total_tests"
+            echo "Passed tests: $passed_tests" 
+            echo "Pass percentage: ${pass_percentage}%"
+            echo "Required threshold: 90%"
+            
+            if [ "$pass_percentage" -ge 90 ]; then
+              echo "✅ Test suite PASSED (${pass_percentage}% >= 90%)"
+              if [ ${#failed_projects[@]} -gt 0 ]; then
+                echo "⚠️  Note: Some projects had failures but overall threshold was met:"
+                printf '   - %s\n' "${failed_projects[@]}"
+              fi
+            else
+              echo "❌ Test suite FAILED (${pass_percentage}% < 90%)"
+              echo "Failed projects:"
+              printf '   - %s\n' "${failed_projects[@]}"
+              exit 1
+            fi
+          else
+            echo "⚠️  No test results found - this may indicate a build or discovery issue"
+            exit 1
+          fi
 
       - name: Upload test results
         if: always()
