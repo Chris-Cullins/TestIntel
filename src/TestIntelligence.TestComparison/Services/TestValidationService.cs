@@ -51,20 +51,20 @@ public class TestValidationService : ITestValidationService
     /// <inheritdoc />
     public async Task<TestValidationResult> ValidateTestAsync(
         string testMethodId,
-        string solutionPath,
+        string solutionOrDirectoryPath,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(testMethodId))
             throw new ArgumentException("Test method ID cannot be null or empty", nameof(testMethodId));
-        if (string.IsNullOrEmpty(solutionPath))
-            throw new ArgumentException("Solution path cannot be null or empty", nameof(solutionPath));
+        if (string.IsNullOrEmpty(solutionOrDirectoryPath))
+            throw new ArgumentException("Solution or directory path cannot be null or empty", nameof(solutionOrDirectoryPath));
 
         var stopwatch = Stopwatch.StartNew();
         
         try
         {
             // Get or discover available tests
-            var cachedDiscovery = await GetOrDiscoverTestsAsync(solutionPath, cancellationToken);
+            var cachedDiscovery = await GetOrDiscoverTestsAsync(solutionOrDirectoryPath, cancellationToken);
             
             // Check if the test exists
             var isValid = cachedDiscovery.TestIds.Contains(testMethodId, StringComparer.OrdinalIgnoreCase);
@@ -90,7 +90,7 @@ public class TestValidationService : ITestValidationService
                 {
                     TestMethodId = testMethodId,
                     IsValid = false,
-                    ErrorMessage = $"Test method '{testMethodId}' not found in solution",
+                    ErrorMessage = $"Test method '{testMethodId}' not found in solution or directory",
                     Suggestions = suggestions,
                     ValidationDuration = stopwatch.Elapsed
                 };
@@ -122,7 +122,7 @@ public class TestValidationService : ITestValidationService
     /// <inheritdoc />
     public async Task<BatchTestValidationResult> ValidateTestsAsync(
         IEnumerable<string> testMethodIds,
-        string solutionPath,
+        string solutionOrDirectoryPath,
         CancellationToken cancellationToken = default)
     {
         if (testMethodIds == null)
@@ -143,7 +143,7 @@ public class TestValidationService : ITestValidationService
                 await semaphore.WaitAsync(cancellationToken);
                 try
                 {
-                    return await ValidateTestAsync(testId, solutionPath, cancellationToken);
+                    return await ValidateTestAsync(testId, solutionOrDirectoryPath, cancellationToken);
                 }
                 finally
                 {
@@ -177,32 +177,32 @@ public class TestValidationService : ITestValidationService
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<string>> DiscoverAvailableTestsAsync(
-        string solutionPath,
+        string solutionOrDirectoryPath,
         CancellationToken cancellationToken = default)
     {
-        var cachedDiscovery = await GetOrDiscoverTestsAsync(solutionPath, cancellationToken);
+        var cachedDiscovery = await GetOrDiscoverTestsAsync(solutionOrDirectoryPath, cancellationToken);
         return cachedDiscovery.TestIds;
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<string>> SuggestSimilarTestsAsync(
         string invalidTestMethodId,
-        string solutionPath,
+        string solutionOrDirectoryPath,
         int maxSuggestions = 5,
         CancellationToken cancellationToken = default)
     {
-        var availableTests = await DiscoverAvailableTestsAsync(solutionPath, cancellationToken);
+        var availableTests = await DiscoverAvailableTestsAsync(solutionOrDirectoryPath, cancellationToken);
         return GenerateSuggestions(invalidTestMethodId, availableTests, maxSuggestions);
     }
 
     private async Task<CachedTestDiscovery> GetOrDiscoverTestsAsync(
-        string solutionPath,
+        string solutionOrDirectoryPath,
         CancellationToken cancellationToken)
     {
         // Check cache first
-        if (_discoveryCache.TryGetValue(solutionPath, out var cached) && !cached.IsExpired)
+        if (_discoveryCache.TryGetValue(solutionOrDirectoryPath, out var cached) && !cached.IsExpired)
         {
-            _logger.LogDebug("Using cached test discovery for solution: {SolutionPath}", solutionPath);
+            _logger.LogDebug("Using cached test discovery for path: {Path}", solutionOrDirectoryPath);
             return cached;
         }
 
@@ -211,23 +211,23 @@ public class TestValidationService : ITestValidationService
         try
         {
             // Double-check after acquiring lock
-            if (_discoveryCache.TryGetValue(solutionPath, out cached) && !cached.IsExpired)
+            if (_discoveryCache.TryGetValue(solutionOrDirectoryPath, out cached) && !cached.IsExpired)
             {
                 return cached;
             }
 
-            _logger.LogInformation("Discovering tests for validation in solution: {SolutionPath}", solutionPath);
+            _logger.LogInformation("Discovering tests for validation in path: {Path}", solutionOrDirectoryPath);
             var stopwatch = Stopwatch.StartNew();
 
             // Perform fast test discovery
-            var discoveryResult = await DiscoverTestsForValidationAsync(solutionPath, cancellationToken);
+            var discoveryResult = await DiscoverTestsForValidationAsync(solutionOrDirectoryPath, cancellationToken);
             
             var newCached = new CachedTestDiscovery(
                 discoveryResult.TestIds,
                 discoveryResult.Metadata,
                 DateTime.UtcNow);
 
-            _discoveryCache[solutionPath] = newCached;
+            _discoveryCache[solutionOrDirectoryPath] = newCached;
 
             _logger.LogInformation("Discovered {TestCount} tests for validation in {Duration:F1}s",
                 discoveryResult.TestIds.Count, stopwatch.Elapsed.TotalSeconds);
@@ -241,21 +241,21 @@ public class TestValidationService : ITestValidationService
     }
 
     private async Task<(IReadOnlyList<string> TestIds, IReadOnlyDictionary<string, TestMethodMetadata> Metadata)> 
-        DiscoverTestsForValidationAsync(string solutionPath, CancellationToken cancellationToken)
+        DiscoverTestsForValidationAsync(string solutionOrDirectoryPath, CancellationToken cancellationToken)
     {
         var testIds = new List<string>();
         var metadata = new Dictionary<string, TestMethodMetadata>();
 
         try
         {
-            _logger.LogDebug("Starting test discovery for validation in solution: {SolutionPath}", solutionPath);
+            _logger.LogDebug("Starting test discovery for validation in path: {Path}", solutionOrDirectoryPath);
             
-            // Find test assemblies in the solution
-            var assemblyPaths = await FindTestAssembliesInSolutionAsync(solutionPath);
+            // Find test assemblies in the solution or directory
+            var assemblyPaths = await FindTestAssembliesAsync(solutionOrDirectoryPath);
             
             if (assemblyPaths.Count == 0)
             {
-                _logger.LogWarning("No test assemblies found in solution: {SolutionPath}", solutionPath);
+                _logger.LogWarning("No test assemblies found in path: {Path}", solutionOrDirectoryPath);
                 return (testIds.AsReadOnly(), metadata);
             }
 
@@ -333,31 +333,56 @@ public class TestValidationService : ITestValidationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to discover tests for validation in solution: {SolutionPath}", solutionPath);
+            _logger.LogError(ex, "Failed to discover tests for validation in path: {Path}", solutionOrDirectoryPath);
             return (testIds.AsReadOnly(), metadata);
         }
     }
 
-    private async Task<IReadOnlyList<string>> FindTestAssembliesInSolutionAsync(string solutionPath)
+    private async Task<IReadOnlyList<string>> FindTestAssembliesAsync(string solutionOrDirectoryPath)
     {
         try
         {
-            // Use assembly path resolver if available, otherwise fall back to simple discovery
-            if (_assemblyPathResolver != null)
+            // Check if it's a solution file or directory
+            var isDirectory = Directory.Exists(solutionOrDirectoryPath);
+            var isSolutionFile = File.Exists(solutionOrDirectoryPath) && 
+                               (solutionOrDirectoryPath.EndsWith(".sln", StringComparison.OrdinalIgnoreCase));
+
+            if (!isDirectory && !isSolutionFile)
             {
-                return await _assemblyPathResolver.FindTestAssembliesInSolutionAsync(solutionPath);
+                _logger.LogWarning("Path is neither a valid directory nor solution file: {Path}", solutionOrDirectoryPath);
+                return Array.Empty<string>();
             }
 
-            // Fallback implementation: find test assemblies based on naming conventions
-            var solutionDir = Path.GetDirectoryName(solutionPath);
-            if (string.IsNullOrEmpty(solutionDir) || !Directory.Exists(solutionDir))
+            // Use assembly path resolver if available and it's a solution file
+            if (_assemblyPathResolver != null && isSolutionFile)
             {
-                _logger.LogWarning("Solution directory not found: {SolutionPath}", solutionPath);
+                return await _assemblyPathResolver.FindTestAssembliesInSolutionAsync(solutionOrDirectoryPath);
+            }
+
+            // Determine search directory
+            string searchDir;
+            if (isDirectory)
+            {
+                searchDir = solutionOrDirectoryPath;
+                _logger.LogInformation("Searching for test assemblies in directory: {Directory}", searchDir);
+            }
+            else
+            {
+                // It's a solution file, use its directory
+                searchDir = Path.GetDirectoryName(solutionOrDirectoryPath)!;
+                _logger.LogInformation("Searching for test assemblies in solution directory: {Directory}", searchDir);
+            }
+
+            if (string.IsNullOrEmpty(searchDir) || !Directory.Exists(searchDir))
+            {
+                _logger.LogWarning("Search directory not found: {Directory}", searchDir);
                 return Array.Empty<string>();
             }
 
             var testAssemblies = new List<string>();
-            var binDirectories = Directory.GetDirectories(solutionDir, "bin", SearchOption.AllDirectories)
+            
+            // First, try to find test assemblies in bin directories (built assemblies)
+            var binDirectories = Directory.GetDirectories(searchDir, "bin", SearchOption.AllDirectories)
                 .Where(d => !d.Contains("obj", StringComparison.OrdinalIgnoreCase));
 
             foreach (var binDir in binDirectories)
@@ -373,12 +398,28 @@ public class TestValidationService : ITestValidationService
                 testAssemblies.AddRange(dllFiles);
             }
 
-            _logger.LogInformation("Found {AssemblyCount} test assemblies using fallback discovery", testAssemblies.Count);
+            // If no assemblies found in bin directories, try direct directory search for DLLs
+            if (testAssemblies.Count == 0)
+            {
+                _logger.LogInformation("No test assemblies found in bin directories, searching directly in: {Directory}", searchDir);
+                var directDllFiles = Directory.GetFiles(searchDir, "*.dll", SearchOption.AllDirectories)
+                    .Where(f => f.Contains("test", StringComparison.OrdinalIgnoreCase) ||
+                               f.Contains("spec", StringComparison.OrdinalIgnoreCase))
+                    .Where(f => !f.Contains("obj", StringComparison.OrdinalIgnoreCase))
+                    .Where(f => !Path.GetFileName(f).StartsWith("Microsoft.") &&
+                               !Path.GetFileName(f).StartsWith("System.") &&
+                               !Path.GetFileName(f).StartsWith("NUnit.") &&
+                               !Path.GetFileName(f).StartsWith("xunit."));
+
+                testAssemblies.AddRange(directDllFiles);
+            }
+
+            _logger.LogInformation("Found {AssemblyCount} test assemblies in {Path}", testAssemblies.Count, solutionOrDirectoryPath);
             return testAssemblies.Distinct().ToList();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to find test assemblies in solution: {SolutionPath}", solutionPath);
+            _logger.LogError(ex, "Failed to find test assemblies in path: {Path}", solutionOrDirectoryPath);
             return Array.Empty<string>();
         }
     }

@@ -161,18 +161,13 @@ namespace TestIntelligence.CLI.Commands
                 Depth = ParseAnalysisDepth(command.Depth)
             };
 
-            // Create timeout cancellation token if specified
-            using var timeoutCts = command.TimeoutSeconds.HasValue
-                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
-                : null;
+            // Create timeout cancellation token with 30-second default
+            var timeoutSeconds = command.TimeoutSeconds ?? 30;
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+            Console.WriteLine($"⏱️ Analysis will timeout after {timeoutSeconds} seconds");
 
-            if (timeoutCts != null)
-            {
-                timeoutCts.CancelAfter(TimeSpan.FromSeconds(command.TimeoutSeconds!.Value));
-                Console.WriteLine($"⏱️ Analysis will timeout after {command.TimeoutSeconds.Value} seconds");
-            }
-
-            var effectiveCancellationToken = timeoutCts?.Token ?? cancellationToken;
+            var effectiveCancellationToken = timeoutCts.Token;
 
             try
             {
@@ -525,9 +520,9 @@ namespace TestIntelligence.CLI.Commands
 
             try
             {
-                // Create timeout token for validation (5 seconds max)
+                // Create timeout token for validation (2 seconds max)
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCts.CancelAfter(TimeSpan.FromSeconds(5));
+                timeoutCts.CancelAfter(TimeSpan.FromSeconds(2));
 
                 // Check if we can discover any tests at all first
                 var availableTests = await _validationService.DiscoverAvailableTestsAsync(command.Solution, timeoutCts.Token);

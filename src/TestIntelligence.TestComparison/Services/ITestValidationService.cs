@@ -16,48 +16,48 @@ public interface ITestValidationService
     /// Validates a single test method identifier exists and is a valid test method.
     /// </summary>
     /// <param name="testMethodId">Full identifier of the test method</param>
-    /// <param name="solutionPath">Path to solution file</param>
+    /// <param name="solutionOrDirectoryPath">Path to solution file or directory containing test assemblies</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Validation result with details about the test method</returns>
     Task<TestValidationResult> ValidateTestAsync(
         string testMethodId,
-        string solutionPath,
+        string solutionOrDirectoryPath,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Validates multiple test method identifiers in a batch operation.
     /// </summary>
     /// <param name="testMethodIds">Collection of test method identifiers to validate</param>
-    /// <param name="solutionPath">Path to solution file</param>
+    /// <param name="solutionOrDirectoryPath">Path to solution file or directory containing test assemblies</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Batch validation results</returns>
     Task<BatchTestValidationResult> ValidateTestsAsync(
         IEnumerable<string> testMethodIds,
-        string solutionPath,
+        string solutionOrDirectoryPath,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Discovers all available test methods in a solution for fuzzy matching suggestions.
+    /// Discovers all available test methods in a solution or directory for fuzzy matching suggestions.
     /// Uses cached results when available to avoid expensive re-discovery.
     /// </summary>
-    /// <param name="solutionPath">Path to solution file</param>
+    /// <param name="solutionOrDirectoryPath">Path to solution file or directory containing test assemblies</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Collection of available test method identifiers</returns>
     Task<IReadOnlyList<string>> DiscoverAvailableTestsAsync(
-        string solutionPath,
+        string solutionOrDirectoryPath,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Suggests similar test method names using fuzzy matching when validation fails.
     /// </summary>
     /// <param name="invalidTestMethodId">The invalid test method identifier</param>
-    /// <param name="solutionPath">Path to solution file</param>
+    /// <param name="solutionOrDirectoryPath">Path to solution file or directory containing test assemblies</param>
     /// <param name="maxSuggestions">Maximum number of suggestions to return</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Collection of suggested test method identifiers</returns>
     Task<IReadOnlyList<string>> SuggestSimilarTestsAsync(
         string invalidTestMethodId,
-        string solutionPath,
+        string solutionOrDirectoryPath,
         int maxSuggestions = 5,
         CancellationToken cancellationToken = default);
 }
