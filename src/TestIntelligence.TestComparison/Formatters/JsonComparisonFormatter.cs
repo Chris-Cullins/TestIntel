@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using TestIntelligence.TestComparison.Models;
+using TestIntelligence.TestComparison.Formatters;
 
 namespace TestIntelligence.TestComparison.Formatters;
 
@@ -91,7 +92,7 @@ public class JsonComparisonFormatter : IComparisonFormatter
                 Recommendations = result.Recommendations.Select(r => new RecommendationJson
                 {
                     Type = r.Type,
-                    EstimatedEffortLevel = r.EstimatedEffortLevel.ToString(),
+                    EstimatedEffortLevel = r.EstimatedEffortLevel,
                     Description = r.Description,
                     Rationale = options.RecommendationDetail >= RecommendationDetailLevel.Standard ? r.Rationale : null,
                     ConfidenceScore = r.ConfidenceScore,
@@ -101,7 +102,7 @@ public class JsonComparisonFormatter : IComparisonFormatter
                 
                 Options = new ComparisonOptionsJson
                 {
-                    AnalysisDepth = result.Options.Depth.ToString(),
+                    AnalysisDepth = result.Options.Depth,
                     MinimumConfidenceThreshold = result.Options.MinimumConfidenceThreshold
                 },
                 
@@ -116,7 +117,7 @@ public class JsonComparisonFormatter : IComparisonFormatter
                 IncludePerformance = options.IncludePerformance,
                 IncludeTimestamp = options.IncludeTimestamp,
                 Verbose = options.Verbose,
-                RecommendationDetail = options.RecommendationDetail.ToString(),
+                RecommendationDetail = options.RecommendationDetail,
                 GeneratedBy = "TestIntelligence.TestComparison"
             }
         });
@@ -178,7 +179,7 @@ public class JsonComparisonFormatter : IComparisonFormatter
     private class RecommendationJson
     {
         public string Type { get; set; } = string.Empty;
-        public string EstimatedEffortLevel { get; set; } = string.Empty;
+        public EstimatedEffortLevel EstimatedEffortLevel { get; set; }
         public string Description { get; set; } = string.Empty;
         public string? Rationale { get; set; }
         public double ConfidenceScore { get; set; }
@@ -188,7 +189,7 @@ public class JsonComparisonFormatter : IComparisonFormatter
 
     private class ComparisonOptionsJson
     {
-        public string AnalysisDepth { get; set; } = string.Empty;
+        public AnalysisDepth AnalysisDepth { get; set; }
         public double MinimumConfidenceThreshold { get; set; }
     }
 
@@ -197,7 +198,7 @@ public class JsonComparisonFormatter : IComparisonFormatter
         public bool IncludePerformance { get; set; }
         public bool IncludeTimestamp { get; set; }
         public bool Verbose { get; set; }
-        public string RecommendationDetail { get; set; } = string.Empty;
+        public RecommendationDetailLevel RecommendationDetail { get; set; }
         public string GeneratedBy { get; set; } = string.Empty;
     }
 

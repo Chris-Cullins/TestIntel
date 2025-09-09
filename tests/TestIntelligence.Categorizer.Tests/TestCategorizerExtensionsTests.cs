@@ -1,6 +1,11 @@
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using TestIntelligence.Categorizer;
+using TestIntelligence.Core.Models;
 using Xunit;
 
 namespace TestIntelligence.Categorizer.Tests
@@ -58,19 +63,19 @@ namespace TestIntelligence.Categorizer.Tests
 
         private class CustomTestCategorizer : ITestCategorizer
         {
-            public Task<SelectionEngine.Models.TestCategory> CategorizeAsync(
-                SelectionEngine.Models.TestInfo testInfo, 
+            public Task<TestCategory> CategorizeAsync(
+                TestCategorizationInfo testInfo, 
                 CancellationToken cancellationToken = default)
             {
-                return Task.FromResult(SelectionEngine.Models.TestCategory.Unit);
+                return Task.FromResult(TestCategory.Unit);
             }
 
-            public Task<IReadOnlyDictionary<string, SelectionEngine.Models.TestCategory>> CategorizeAsync(
-                IEnumerable<SelectionEngine.Models.TestInfo> tests, 
+            public Task<IReadOnlyDictionary<string, TestCategory>> CategorizeAsync(
+                IEnumerable<TestCategorizationInfo> tests, 
                 CancellationToken cancellationToken = default)
             {
-                var result = tests.ToDictionary(t => t.TestMethod.MethodInfo.Name, _ => SelectionEngine.Models.TestCategory.Unit);
-                return Task.FromResult<IReadOnlyDictionary<string, SelectionEngine.Models.TestCategory>>(result);
+                var result = tests.ToDictionary(t => t.MethodName, _ => TestCategory.Unit);
+                return Task.FromResult<IReadOnlyDictionary<string, TestCategory>>(result);
             }
         }
     }

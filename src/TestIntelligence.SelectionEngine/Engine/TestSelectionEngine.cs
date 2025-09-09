@@ -39,7 +39,8 @@ namespace TestIntelligence.SelectionEngine.Engine
             ITestCategorizer? testCategorizer = null,
             IImpactAnalyzer? impactAnalyzer = null,
             IAssemblyPathResolver? assemblyPathResolver = null,
-            string? solutionPath = null)
+            string? solutionPath = null,
+            ILoggerFactory? loggerFactory = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _testCategorizer = testCategorizer;
@@ -50,15 +51,20 @@ namespace TestIntelligence.SelectionEngine.Engine
             _executionHistory = new List<TestExecutionResult>();
 
             // Initialize default scoring algorithms if none provided
-            _scoringAlgorithms = new List<ITestScoringAlgorithm>(scoringAlgorithms ?? new List<ITestScoringAlgorithm>
+            _scoringAlgorithms = new List<ITestScoringAlgorithm>(scoringAlgorithms ?? CreateDefaultAlgorithms(loggerFactory));
+        }
+
+        private static List<ITestScoringAlgorithm> CreateDefaultAlgorithms(ILoggerFactory? loggerFactory)
+        {
+            return new List<ITestScoringAlgorithm>
             {
-                new ImpactBasedScoringAlgorithm(_logger as ILogger<ImpactBasedScoringAlgorithm> ?? 
+                new ImpactBasedScoringAlgorithm(loggerFactory?.CreateLogger<ImpactBasedScoringAlgorithm>() ?? 
                     new NullLogger<ImpactBasedScoringAlgorithm>()),
-                new ExecutionTimeScoringAlgorithm(_logger as ILogger<ExecutionTimeScoringAlgorithm> ?? 
+                new ExecutionTimeScoringAlgorithm(loggerFactory?.CreateLogger<ExecutionTimeScoringAlgorithm>() ?? 
                     new NullLogger<ExecutionTimeScoringAlgorithm>()),
-                new HistoricalScoringAlgorithm(_logger as ILogger<HistoricalScoringAlgorithm> ?? 
+                new HistoricalScoringAlgorithm(loggerFactory?.CreateLogger<HistoricalScoringAlgorithm>() ?? 
                     new NullLogger<HistoricalScoringAlgorithm>())
-            });
+            };
         }
 
         public async Task<TestExecutionPlan> GetOptimalTestPlanAsync(

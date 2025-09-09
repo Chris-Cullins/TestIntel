@@ -379,13 +379,62 @@ namespace TestIntelligence.TestUtilities
                 {
                     if (Directory.Exists(directory))
                     {
+                        // Ensure files are not read-only before deletion
+                        SetDirectoryAccessible(directory);
                         Directory.Delete(directory, recursive: true);
+                    }
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Retry once after removing read-only attributes
+                    try
+                    {
+                        SetDirectoryAccessible(directory);
+                        Directory.Delete(directory, recursive: true);
+                    }
+                    catch
+                    {
+                        // Best effort cleanup - log but don't throw
                     }
                 }
                 catch
                 {
-                    // Best effort cleanup
+                    // Best effort cleanup - log but don't throw
                 }
+            }
+        }
+
+        private static void SetDirectoryAccessible(string directoryPath)
+        {
+            if (!Directory.Exists(directoryPath)) return;
+
+            try
+            {
+                // Remove read-only attributes from all files
+                var files = Directory.GetFiles(directoryPath, "*", SearchOption.AllDirectories);
+                foreach (var file in files)
+                {
+                    var attributes = File.GetAttributes(file);
+                    if ((attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly)
+                    {
+                        File.SetAttributes(file, attributes & ~FileAttributes.ReadOnly);
+                    }
+                }
+
+                // Remove read-only attributes from directories
+                var directories = Directory.GetDirectories(directoryPath, "*", SearchOption.AllDirectories);
+                foreach (var dir in directories.Reverse())
+                {
+                    var attributes = File.GetAttributes(dir);
+                    if ((attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly)
+                    {
+                        File.SetAttributes(dir, attributes & ~FileAttributes.ReadOnly);
+                    }
+                }
+            }
+            catch
+            {
+                // Best effort - continue with deletion attempt
             }
         }
     }

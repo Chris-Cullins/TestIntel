@@ -1,5 +1,6 @@
 using FluentAssertions;
 using TestIntelligence.Categorizer.Models;
+using TestIntelligence.Core.Models;
 using TestIntelligence.SelectionEngine.Models;
 using Xunit;
 

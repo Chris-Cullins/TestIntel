@@ -117,12 +117,6 @@ namespace TestIntelligence.CLI.Commands
 
             if (isTwoTestComparison)
             {
-                if (string.IsNullOrWhiteSpace(Test1))
-                    errors.Add("Test1 identifier is required for pairwise comparison");
-
-                if (string.IsNullOrWhiteSpace(Test2))
-                    errors.Add("Test2 identifier is required for pairwise comparison");
-
                 if (Test1.Equals(Test2, StringComparison.OrdinalIgnoreCase))
                     errors.Add("Cannot compare a test method with itself");
             }
