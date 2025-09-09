@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+          cache: true
+
+      - name: Restore
+        run: dotnet restore TestIntelligence.sln
+
+      - name: Build
+        run: dotnet build TestIntelligence.sln --configuration Release --no-restore
+
+      - name: Run non-E2E tests
+        run: |
+          set -euo pipefail
+          mkdir -p TestResults
+          # Find all test projects (IsTestProject=true) excluding the E2E test project
+          mapfile -t projects < <(grep -rl --include="*.csproj" "<IsTestProject>true</IsTestProject>" tests | grep -v "/TestIntelligence.E2E.Tests/")
+          echo "Discovered test projects:" 
+          printf ' - %s\n' "${projects[@]}"
+          # Run tests project-by-project to keep failures isolated and results separate
+          for proj in "${projects[@]}"; do
+            echo "\n=== Running tests for: $proj ==="
+            safe_name=$(echo "$proj" | tr '/\\' '__')
+            dotnet test "$proj" \
+              --configuration Release \
+              --no-build \
+              --logger "trx;LogFileName=${safe_name}.trx" \
+              --results-directory "$GITHUB_WORKSPACE/TestResults"
+          done
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-trx
+          path: TestResults/*.trx
+          if-no-files-found: warn
