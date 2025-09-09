@@ -97,7 +97,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                 scope.ChangedMethods?.Count ?? 0, scope.TargetTests?.Count ?? 0, scope.MaxExpansionDepth);
 
             // Initialize lazy/incremental infrastructure
-            await InitializeLazyWorkspaceAsync(scope.SolutionPath, cancellationToken).ConfigureAwait(false);
+            await InitializeLazyWorkspaceAsync(scope, cancellationToken).ConfigureAwait(false);
 
             if (_incrementalCallGraphBuilder == null)
             {
@@ -356,6 +356,58 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to initialize lazy workspace: {SolutionPath}", solutionPath);
+                throw;
+            }
+        }
+
+        private async Task InitializeLazyWorkspaceAsync(AnalysisScope scope, CancellationToken cancellationToken)
+        {
+            if (_lazyWorkspaceBuilder != null && _symbolIndex != null && _incrementalCallGraphBuilder != null)
+            {
+                _logger.LogDebug("Lazy workspace already initialized");
+                return;
+            }
+
+            _logger.LogInformation("Initializing high-performance lazy workspace (scoped): {SolutionPath}", scope.SolutionPath);
+            var startTime = DateTime.UtcNow;
+
+            try
+            {
+                // Initialize symbol index scoped to changes
+                _symbolIndex = new SymbolIndex(_loggerFactory.CreateLogger<SymbolIndex>());
+                await _symbolIndex.BuildIndexForScopeAsync(scope, cancellationToken);
+
+                _lazyWorkspaceBuilder = new LazyWorkspaceBuilder(_symbolIndex, _loggerFactory.CreateLogger<LazyWorkspaceBuilder>());
+                await _lazyWorkspaceBuilder.InitializeAsync(scope.SolutionPath, cancellationToken);
+
+                // Ensure we have minimal compilation services for incremental builder
+                if (_compilationManager == null)
+                {
+                    await InitializeWorkspaceAsync(scope.SolutionPath, cancellationToken);
+                }
+
+                if (_compilationManager != null)
+                {
+                    if (_symbolResolver == null)
+                    {
+                        _symbolResolver = new SymbolResolutionEngine(
+                            _compilationManager, _loggerFactory.CreateLogger<SymbolResolutionEngine>());
+                    }
+
+                    _incrementalCallGraphBuilder = new IncrementalCallGraphBuilder(
+                        _compilationManager,
+                        _symbolResolver,
+                        _symbolIndex,
+                        _loggerFactory.CreateLogger<IncrementalCallGraphBuilder>(),
+                        _loggerFactory);
+                }
+
+                var elapsed = DateTime.UtcNow - startTime;
+                _logger.LogInformation("Scoped lazy workspace initialized in {ElapsedMs}ms", elapsed.TotalMilliseconds);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to initialize scoped lazy workspace: {SolutionPath}", scope.SolutionPath);
                 throw;
             }
         }
