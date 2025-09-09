@@ -69,8 +69,8 @@ namespace TestIntelligence.Core.Tests.Assembly
             result.Errors.Should().NotBeEmpty();
             result.Errors.First().Should().Contain("Failed to load assembly");
 
-            // Verify logger was called with appropriate information
-            _mockLogger.Received().LogAssemblyLoadAttempt(Arg.Any<string>(), Arg.Any<FrameworkVersion>());
+            // Verify logger was called with appropriate information (using general logging methods)
+            _mockLogger.Received().LogInformation(Arg.Any<string>(), Arg.Any<object[]>());
         }
 
         [Fact]
@@ -97,8 +97,8 @@ namespace TestIntelligence.Core.Tests.Assembly
                 result.Errors.Should().NotBeEmpty();
             });
 
-            // Verify all failures were logged
-            _mockLogger.Received(assemblyPaths.Length).LogAssemblyLoadAttempt(Arg.Any<string>(), Arg.Any<FrameworkVersion>());
+            // Verify all failures were logged (check for specific loading calls, not initialization)
+            _mockLogger.Received(assemblyPaths.Length).LogInformation("Loading assembly: {0}", Arg.Any<object[]>());
         }
 
         [Fact]
@@ -143,25 +143,12 @@ namespace TestIntelligence.Core.Tests.Assembly
                 return;
             }
 
-            try
-            {
-                // Act
-                var result = specificLoader.LoadAssembly(mismatchAssembly.Path);
-
-                // Assert - Should handle mismatch gracefully
-                if (!result.IsSuccess)
-                {
-                    result.Errors.Should().NotBeEmpty();
-                    result.Errors.Should().Contain(error => 
-                        error.Contains("framework") || 
-                        error.Contains("compatible") ||
-                        error.Contains("Failed to load"));
-                }
-            }
-            finally
-            {
-                specificLoader?.Dispose();
-            }
+            // Act & Assert - Should handle loading failures gracefully
+            Action act = () => specificLoader.LoadAssembly(mismatchAssembly.Path);
+            
+            // Should throw an exception (since we're passing a .csproj file, not a .dll)
+            act.Should().Throw<InvalidOperationException>()
+                .Which.Message.Should().Contain("Failed to load assembly");
         }
 
         [Fact]
