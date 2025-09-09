@@ -44,8 +44,10 @@ jobs:
         run: |
           echo "🔧 Setting up TestIntel caches..."
           mkdir -p "$TESTINTEL_CACHE_DIR"
-          test-intel config --cache-dir "$TESTINTEL_CACHE_DIR"
-          echo "✅ Cache directory initialized: $TESTINTEL_CACHE_DIR"
+          test-intel cache --solution TestIntelligence.sln --action init --cache-dir "$TESTINTEL_CACHE_DIR" --verbose || {
+            echo "⚠️  Cache initialization failed, continuing without cache optimization"
+          }
+          echo "✅ Cache setup completed"
 
       - name: Analyze git changes and select tests
         id: test-selection
