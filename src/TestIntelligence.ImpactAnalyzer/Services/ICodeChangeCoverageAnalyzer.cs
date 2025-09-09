@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -66,6 +67,23 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             CodeChangeSet codeChanges,
             string testMethodId,
             string solutionPath,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Analyzes coverage incrementally using streaming analysis for better performance.
+        /// Only analyzes the changed files and methods rather than the entire solution.
+        /// </summary>
+        /// <param name="diffContent">Git diff content to analyze</param>
+        /// <param name="testMethodIds">Collection of test method IDs to check for coverage</param>
+        /// <param name="solutionPath">Path to the solution file</param>
+        /// <param name="progress">Optional progress reporter for long-running operations</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>Coverage analysis result with optimized incremental approach</returns>
+        Task<CodeChangeCoverageResult> AnalyzeCoverageIncrementalAsync(
+            string diffContent,
+            IEnumerable<string> testMethodIds,
+            string solutionPath,
+            IProgress<string>? progress = null,
             CancellationToken cancellationToken = default);
     }
 }

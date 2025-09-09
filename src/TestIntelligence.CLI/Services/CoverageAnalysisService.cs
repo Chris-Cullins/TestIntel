@@ -110,12 +110,18 @@ namespace TestIntelligence.CLI.Services
             List<string> testIds,
             string solutionPath)
         {
-            Console.WriteLine("Analyzing code changes and test coverage...");
+            Console.WriteLine("Analyzing code changes and test coverage using optimized incremental analysis...");
+
+            // Create progress reporter
+            var progress = new Progress<string>(message =>
+            {
+                Console.WriteLine($"[Progress] {message}");
+            });
 
             if (!string.IsNullOrWhiteSpace(diffContent))
             {
-                Console.WriteLine("Using provided diff content");
-                return await _coverageAnalyzer.AnalyzeCoverageAsync(diffContent, testIds, solutionPath);
+                Console.WriteLine("Using provided diff content with incremental analysis");
+                return await _coverageAnalyzer.AnalyzeCoverageIncrementalAsync(diffContent, testIds, solutionPath, progress);
             }
             else if (!string.IsNullOrWhiteSpace(diffFile))
             {
