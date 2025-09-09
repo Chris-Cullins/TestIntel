@@ -36,8 +36,8 @@ namespace TestIntelligence.ImpactAnalyzer.Services
         private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, string), string[]?> _pathCache = new();
         
         // Cache size management to prevent memory bloat
-        private const int MaxCacheSize = 5000; // Reasonable cache size
-        private const int MaxVisitedNodes = 25; // Further reduced to prevent cache explosion
+        private const int MaxCacheSize = 1000; // Reduced cache size for better memory management
+        private const int MaxVisitedNodes = 10; // Very conservative to prevent cache explosion
         private const int MaxPathDepth = 2; // Minimal depth for faster analysis
         
         // Cache cleanup timing to prevent thrashing
@@ -306,6 +306,14 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             // Use parallel processing for path finding when we have many test methods
             var coverageInfos = new List<TestCoverageInfo>();
             
+            // Safety check: if cache is heavily stressed, limit analysis to prevent infinite loops
+            if (_pathCache.Count > MaxCacheSize * 0.8)
+            {
+                _logger.LogWarning("Cache nearing limit ({Size}), skipping test coverage analysis for method {Method} to prevent performance issues", 
+                    _pathCache.Count, targetMethod.Name);
+                return coverageInfos; // Return empty to prevent infinite analysis
+            }
+            
             if (testMethods.Count > 50) // Use parallel for large test suites
             {
                 var parallelOptions = new ParallelOptions 
@@ -314,9 +322,18 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 };
                 
                 var threadSafeCoverageInfos = new System.Collections.Concurrent.ConcurrentBag<TestCoverageInfo>();
+                var processedCount = 0;
                 
-                Parallel.ForEach(testMethods, parallelOptions, testMethod =>
+                Parallel.ForEach(testMethods, parallelOptions, (testMethod, parallelLoopState) =>
                 {
+                    // Safety check: limit number of processed tests to prevent runaway analysis
+                    if (Interlocked.Increment(ref processedCount) > 500)
+                    {
+                        _logger.LogWarning("Processed 500+ tests, stopping parallel analysis to prevent performance issues");
+                        parallelLoopState.Stop();
+                        return;
+                    }
+                    
                     var callPath = FindCallPath(testMethod.Id, targetMethod.Id, callGraph);
                     if (callPath != null && callPath.Any())
                     {
@@ -341,8 +358,16 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             else
             {
                 // Use sequential processing for smaller test suites
+                var processedCount = 0;
                 foreach (var testMethod in testMethods)
                 {
+                    // Safety check: limit sequential processing as well
+                    if (processedCount++ > 200)
+                    {
+                        _logger.LogWarning("Processed 200+ tests sequentially, stopping to prevent performance issues");
+                        break;
+                    }
+                    
                     var callPath = FindCallPath(testMethod.Id, targetMethod.Id, callGraph);
                     if (callPath != null && callPath.Any())
                     {
@@ -375,13 +400,31 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 return cachedPath;
             }
 
-            // Strict cache size protection
+            // Smart cache size management
             if (_pathCache.Count >= MaxCacheSize)
             {
-                // Hard stop: if cache is at limit, don't add new entries
-                // This prevents infinite growth at the cost of some cache misses
-                _logger.LogDebug("Cache at limit ({Size}), skipping path analysis to prevent memory issues", _pathCache.Count);
-                return null;
+                // Clean up cache if needed and time allows
+                if (DateTime.UtcNow - _lastCacheCleanup > CacheCleanupInterval)
+                {
+                    // Remove 50% of cache entries to prevent immediate re-filling
+                    var keysToRemove = _pathCache.Keys.Take(_pathCache.Count / 2).ToList();
+                    foreach (var key in keysToRemove)
+                    {
+                        _pathCache.TryRemove(key, out _);
+                    }
+                    
+                    _lastCacheCleanup = DateTime.UtcNow;
+                    _logger.LogDebug("Cache cleanup: removed {Count} entries, cache size now {NewSize}", 
+                        keysToRemove.Count, _pathCache.Count);
+                }
+                else
+                {
+                    // Cache at limit but cleanup too recent, return empty path to prevent infinite loops
+                    _logger.LogDebug("Cache at limit ({Size}), returning empty result to prevent infinite analysis", _pathCache.Count);
+                    var emptyResult = Array.Empty<string>();
+                    _pathCache.TryAdd(cacheKey, emptyResult);
+                    return emptyResult;
+                }
             }
             
             // Early termination: if the test and target method are the same, return direct path

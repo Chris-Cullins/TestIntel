@@ -160,8 +160,22 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             {
                 // Use batch lookup for all changed methods to find covering tests (much more efficient)
                 progress?.Report("Finding tests that cover changed methods");
-                var coverageResults = await _testCoverageAnalyzer.FindTestsExercisingMethodsAsync(
-                    changedMethods, solutionPath, cancellationToken);
+                
+                // Add timeout protection to prevent infinite call graph analysis
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeoutCts.CancelAfter(TimeSpan.FromSeconds(30)); // 30 second timeout for coverage analysis
+                
+                IReadOnlyDictionary<string, IReadOnlyList<TestCoverageInfo>> coverageResults;
+                try
+                {
+                    coverageResults = await _testCoverageAnalyzer.FindTestsExercisingMethodsAsync(
+                        changedMethods, solutionPath, timeoutCts.Token);
+                }
+                catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogWarning("Test coverage analysis timed out after 30 seconds, returning partial results");
+                    coverageResults = new Dictionary<string, IReadOnlyList<TestCoverageInfo>>();
+                }
                 
                 foreach (var kvp in coverageResults)
                 {
