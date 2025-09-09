@@ -380,27 +380,23 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                 _lazyWorkspaceBuilder = new LazyWorkspaceBuilder(_symbolIndex, _loggerFactory.CreateLogger<LazyWorkspaceBuilder>());
                 await _lazyWorkspaceBuilder.InitializeAsync(scope.SolutionPath, cancellationToken);
 
-                // Ensure we have minimal compilation services for incremental builder
-                if (_compilationManager == null)
+                // Create lightweight scoped compilation manager instead of full MSBuild workspace
+                var indexedFiles = _symbolIndex.GetIndexedFiles();
+                _compilationManager = new ScopedCompilationManager(
+                    _loggerFactory.CreateLogger<ScopedCompilationManager>(), indexedFiles);
+
+                if (_symbolResolver == null)
                 {
-                    await InitializeWorkspaceAsync(scope.SolutionPath, cancellationToken);
+                    _symbolResolver = new SymbolResolutionEngine(
+                        _compilationManager, _loggerFactory.CreateLogger<SymbolResolutionEngine>());
                 }
 
-                if (_compilationManager != null)
-                {
-                    if (_symbolResolver == null)
-                    {
-                        _symbolResolver = new SymbolResolutionEngine(
-                            _compilationManager, _loggerFactory.CreateLogger<SymbolResolutionEngine>());
-                    }
-
-                    _incrementalCallGraphBuilder = new IncrementalCallGraphBuilder(
-                        _compilationManager,
-                        _symbolResolver,
-                        _symbolIndex,
-                        _loggerFactory.CreateLogger<IncrementalCallGraphBuilder>(),
-                        _loggerFactory);
-                }
+                _incrementalCallGraphBuilder = new IncrementalCallGraphBuilder(
+                    _compilationManager,
+                    _symbolResolver,
+                    _symbolIndex,
+                    _loggerFactory.CreateLogger<IncrementalCallGraphBuilder>(),
+                    _loggerFactory);
 
                 var elapsed = DateTime.UtcNow - startTime;
                 _logger.LogInformation("Scoped lazy workspace initialized in {ElapsedMs}ms", elapsed.TotalMilliseconds);

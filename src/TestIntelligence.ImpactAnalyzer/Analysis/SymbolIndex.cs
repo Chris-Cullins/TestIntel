@@ -26,6 +26,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         private readonly ConcurrentDictionary<string, HashSet<string>> _typeToFiles = new();
         private readonly ConcurrentDictionary<string, HashSet<string>> _namespaceToFiles = new();
         private readonly ConcurrentDictionary<string, ProjectInfo> _fileToProject = new();
+        private readonly HashSet<string> _indexedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         
         // Pattern matching for common method signatures without full parsing
         private static readonly Regex MethodDeclarationPattern = new Regex(
@@ -82,6 +83,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                     try
                     {
                         await IndexFileAsync(filePath, cancellationToken);
+                        lock (_indexedFiles) _indexedFiles.Add(filePath);
                     }
                     catch (Exception ex)
                     {
@@ -149,7 +151,10 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                         foreach (var f in files)
                         {
                             if (indexedFiles.Add(f))
+                            {
                                 await IndexFileAsync(f, cancellationToken);
+                                lock (_indexedFiles) _indexedFiles.Add(f);
+                            }
                         }
                     }
                 }
@@ -170,6 +175,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                         if (File.Exists(path) && indexedFiles.Add(path))
                         {
                             await IndexFileAsync(path, cancellationToken);
+                            lock (_indexedFiles) _indexedFiles.Add(path);
                         }
                     }
                 }
@@ -193,6 +199,17 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             {
                 _logger.LogError(ex, "Failed to build scoped symbol index; falling back to full index");
                 await BuildIndexAsync(scope.SolutionPath, cancellationToken);
+            }
+        }
+
+        /// <summary>
+        /// Returns all files indexed in the most recent build.
+        /// </summary>
+        public IReadOnlyCollection<string> GetIndexedFiles()
+        {
+            lock (_indexedFiles)
+            {
+                return _indexedFiles.ToList().AsReadOnly();
             }
         }
 
