@@ -2,13 +2,16 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using TestIntelligence.Core.Assembly;
 using TestIntelligence.Core.Discovery;
 using TestIntelligence.Core.Interfaces;
 using TestIntelligence.Core.Models;
+using TestIntelligence.Core.Services;
 
 namespace TestIntelligence.TestComparison.Services;
 
@@ -20,6 +23,7 @@ public class TestValidationService : ITestValidationService
 {
     private readonly ITestDiscovery _testDiscovery;
     private readonly ILogger<TestValidationService> _logger;
+    private readonly IAssemblyPathResolver? _assemblyPathResolver;
     
     // Cache for discovered tests per solution to avoid re-discovery
     private readonly ConcurrentDictionary<string, CachedTestDiscovery> _discoveryCache = new();
@@ -36,10 +40,12 @@ public class TestValidationService : ITestValidationService
 
     public TestValidationService(
         ITestDiscovery testDiscovery,
-        ILogger<TestValidationService> logger)
+        ILogger<TestValidationService> logger,
+        IAssemblyPathResolver? assemblyPathResolver = null)
     {
         _testDiscovery = testDiscovery ?? throw new ArgumentNullException(nameof(testDiscovery));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _assemblyPathResolver = assemblyPathResolver;
     }
 
     /// <inheritdoc />
@@ -234,31 +240,146 @@ public class TestValidationService : ITestValidationService
         }
     }
 
-    private Task<(IReadOnlyList<string> TestIds, IReadOnlyDictionary<string, TestMethodMetadata> Metadata)> 
+    private async Task<(IReadOnlyList<string> TestIds, IReadOnlyDictionary<string, TestMethodMetadata> Metadata)> 
         DiscoverTestsForValidationAsync(string solutionPath, CancellationToken cancellationToken)
     {
+        var testIds = new List<string>();
+        var metadata = new Dictionary<string, TestMethodMetadata>();
+
         try
         {
             _logger.LogDebug("Starting test discovery for validation in solution: {SolutionPath}", solutionPath);
             
-            // TODO: Implement proper test discovery by loading assemblies
-            // For now, we need to integrate with the assembly loading infrastructure
-            // This is a simplified implementation that provides graceful degradation
+            // Find test assemblies in the solution
+            var assemblyPaths = await FindTestAssembliesInSolutionAsync(solutionPath);
             
-            _logger.LogWarning("Test discovery for validation is not yet fully implemented - returning empty results");
-            _logger.LogInformation("Validation will be skipped, allowing analysis to proceed with its own discovery");
-            
-            var testIds = new List<string>();
-            var metadata = new Dictionary<string, TestMethodMetadata>();
+            if (assemblyPaths.Count == 0)
+            {
+                _logger.LogWarning("No test assemblies found in solution: {SolutionPath}", solutionPath);
+                return (testIds.AsReadOnly(), metadata);
+            }
 
-            return Task.FromResult<(IReadOnlyList<string> TestIds, IReadOnlyDictionary<string, TestMethodMetadata> Metadata)>(
-                (testIds.AsReadOnly(), (IReadOnlyDictionary<string, TestMethodMetadata>)metadata));
+            _logger.LogInformation("Found {AssemblyCount} test assemblies for validation", assemblyPaths.Count);
+
+            // Load assemblies and discover tests
+            using var loader = new CrossFrameworkAssemblyLoader();
+            
+            foreach (var assemblyPath in assemblyPaths)
+            {
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    
+                    var loadResult = await loader.LoadAssemblyAsync(assemblyPath);
+                    if (!loadResult.IsSuccess)
+                    {
+                        _logger.LogWarning("Failed to load assembly {AssemblyPath}: {Errors}", 
+                            assemblyPath, string.Join(", ", loadResult.Errors));
+                        continue;
+                    }
+
+                    var discoveryResult = await _testDiscovery.DiscoverTestsAsync(loadResult.Assembly!, cancellationToken);
+                    
+                    if (!discoveryResult.IsSuccessful)
+                    {
+                        _logger.LogWarning("Test discovery failed for {AssemblyPath}: {Errors}", 
+                            assemblyPath, string.Join(", ", discoveryResult.Errors));
+                        continue;
+                    }
+
+                    // Extract test IDs and metadata
+                    foreach (var fixture in discoveryResult.TestFixtures)
+                    {
+                        foreach (var testMethod in fixture.GetExecutableTests())
+                        {
+                            var testId = testMethod.GetUniqueId();
+                            testIds.Add(testId);
+                            
+                            var testMetadata = new TestMethodMetadata
+                            {
+                                TypeName = testMethod.DeclaringType.FullName ?? testMethod.DeclaringType.Name,
+                                MethodName = testMethod.MethodName,
+                                AssemblyName = Path.GetFileNameWithoutExtension(assemblyPath),
+                                TestFramework = DetermineTestFramework(testMethod),
+                                Categories = ExtractCategories(testMethod),
+                                IsParameterized = testMethod.IsTestCase
+                            };
+                            
+                            metadata[testId] = testMetadata;
+                        }
+                    }
+                    
+                    _logger.LogDebug("Discovered {TestCount} tests in {AssemblyPath}", 
+                        discoveryResult.TestMethodCount, assemblyPath);
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.LogInformation("Test discovery cancelled for {AssemblyPath}", assemblyPath);
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to discover tests in assembly {AssemblyPath}", assemblyPath);
+                }
+            }
+
+            _logger.LogInformation("Completed test discovery for validation: {TestCount} tests found", testIds.Count);
+            return (testIds.AsReadOnly(), metadata);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Test discovery for validation was cancelled");
+            throw;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to discover tests for validation in solution: {SolutionPath}", solutionPath);
-            return Task.FromResult<(IReadOnlyList<string> TestIds, IReadOnlyDictionary<string, TestMethodMetadata> Metadata)>(
-                (Array.Empty<string>(), new Dictionary<string, TestMethodMetadata>()));
+            return (testIds.AsReadOnly(), metadata);
+        }
+    }
+
+    private async Task<IReadOnlyList<string>> FindTestAssembliesInSolutionAsync(string solutionPath)
+    {
+        try
+        {
+            // Use assembly path resolver if available, otherwise fall back to simple discovery
+            if (_assemblyPathResolver != null)
+            {
+                return await _assemblyPathResolver.FindTestAssembliesInSolutionAsync(solutionPath);
+            }
+
+            // Fallback implementation: find test assemblies based on naming conventions
+            var solutionDir = Path.GetDirectoryName(solutionPath);
+            if (string.IsNullOrEmpty(solutionDir) || !Directory.Exists(solutionDir))
+            {
+                _logger.LogWarning("Solution directory not found: {SolutionPath}", solutionPath);
+                return Array.Empty<string>();
+            }
+
+            var testAssemblies = new List<string>();
+            var binDirectories = Directory.GetDirectories(solutionDir, "bin", SearchOption.AllDirectories)
+                .Where(d => !d.Contains("obj", StringComparison.OrdinalIgnoreCase));
+
+            foreach (var binDir in binDirectories)
+            {
+                var dllFiles = Directory.GetFiles(binDir, "*.dll", SearchOption.AllDirectories)
+                    .Where(f => f.Contains("test", StringComparison.OrdinalIgnoreCase) ||
+                               f.Contains("spec", StringComparison.OrdinalIgnoreCase))
+                    .Where(f => !Path.GetFileName(f).StartsWith("Microsoft.") &&
+                               !Path.GetFileName(f).StartsWith("System.") &&
+                               !Path.GetFileName(f).StartsWith("NUnit.") &&
+                               !Path.GetFileName(f).StartsWith("xunit."));
+
+                testAssemblies.AddRange(dllFiles);
+            }
+
+            _logger.LogInformation("Found {AssemblyCount} test assemblies using fallback discovery", testAssemblies.Count);
+            return testAssemblies.Distinct().ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to find test assemblies in solution: {SolutionPath}", solutionPath);
+            return Array.Empty<string>();
         }
     }
 
