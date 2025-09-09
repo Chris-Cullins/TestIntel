@@ -270,20 +270,33 @@ public class TestCoverageIntegrationTests : IDisposable
     /// </summary>
     private string GetTestSolutionPath()
     {
-        // This could be:
-        // 1. A path to the current solution for self-testing
-        // 2. A path to a dedicated test solution with known test methods
-        // 3. A dynamically created test solution for isolated testing
-        
-        var currentDirectory = Directory.GetCurrentDirectory();
-        var solutionPath = Path.Combine(currentDirectory, "..", "..", "..", "..", "..", "TestIntel-TestCompare.sln");
-        
-        if (File.Exists(solutionPath))
+        // Search upwards from the current directory for the solution file
+        var solutionFileName = "TestIntel-TestCompare.sln";
+        var solutionPath = FindSolutionFileUpwards(Directory.GetCurrentDirectory(), solutionFileName);
+        if (solutionPath != null)
         {
-            return Path.GetFullPath(solutionPath);
+            return solutionPath;
         }
-        
         // Fallback: use current directory if solution not found
-        return currentDirectory;
+        return Directory.GetCurrentDirectory();
+    }
+
+    /// <summary>
+    /// Searches upwards from the given directory for the specified solution file.
+    /// Returns the full path if found, or null if not found.
+    /// </summary>
+    private string? FindSolutionFileUpwards(string startDirectory, string solutionFileName)
+    {
+        var dir = new DirectoryInfo(startDirectory);
+        while (dir != null)
+        {
+            var candidate = Path.Combine(dir.FullName, solutionFileName);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+            dir = dir.Parent;
+        }
+        return null;
     }
 }
