@@ -36,9 +36,9 @@ namespace TestIntelligence.ImpactAnalyzer.Services
         private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, string), string[]?> _pathCache = new();
         
         // Cache size management to prevent memory bloat
-        private const int MaxCacheSize = 1000; // Further reduced to prevent infinite loop
-        private const int MaxVisitedNodes = 50; // Drastically reduced from 250 to prevent cache explosion
-        private const int MaxPathDepth = 3; // Further reduced from 5 to optimize BFS
+        private const int MaxCacheSize = 5000; // Reasonable cache size
+        private const int MaxVisitedNodes = 25; // Further reduced to prevent cache explosion
+        private const int MaxPathDepth = 2; // Minimal depth for faster analysis
         
         // Cache cleanup timing to prevent thrashing
         private DateTime _lastCacheCleanup = DateTime.MinValue;
@@ -375,40 +375,13 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 return cachedPath;
             }
 
-            // CRITICAL: Emergency cache size protection
+            // Strict cache size protection
             if (_pathCache.Count >= MaxCacheSize)
             {
-                // If cache is too large, clear most of it immediately
-                if (_pathCache.Count > MaxCacheSize * 10) // If cache is 10x over limit
-                {
-                    _pathCache.Clear();
-                    _logger.LogWarning("Emergency cache clear: cache size was {Size}, cleared completely", _pathCache.Count);
-                }
-                else if (DateTime.UtcNow - _lastCacheCleanup > CacheCleanupInterval)
-                {
-                    // Aggressive cleanup: remove 75% instead of 50%
-                    var keysToRemove = _pathCache.Keys.Take(_pathCache.Count * 3 / 4).ToList();
-                    foreach (var key in keysToRemove)
-                    {
-                        _pathCache.TryRemove(key, out _);
-                    }
-                    
-                    _lastCacheCleanup = DateTime.UtcNow;
-                    _logger.LogDebug("Aggressive cache cleanup: removed {Count} entries, cache size now {NewSize}", 
-                        keysToRemove.Count, _pathCache.Count);
-                    
-                    // If still too large after cleanup, exit early
-                    if (_pathCache.Count > MaxCacheSize * 2)
-                    {
-                        _logger.LogWarning("Cache still too large after cleanup ({Size}), returning early", _pathCache.Count);
-                        return null; // Give up on this path search to prevent infinite loop
-                    }
-                }
-                else
-                {
-                    // Too soon since last cleanup, give up to prevent infinite loop
-                    return null;
-                }
+                // Hard stop: if cache is at limit, don't add new entries
+                // This prevents infinite growth at the cost of some cache misses
+                _logger.LogDebug("Cache at limit ({Size}), skipping path analysis to prevent memory issues", _pathCache.Count);
+                return null;
             }
             
             // Early termination: if the test and target method are the same, return direct path
