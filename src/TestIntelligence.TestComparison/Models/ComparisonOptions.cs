@@ -16,6 +16,12 @@ public class ComparisonOptions
     public WeightingOptions Weighting { get; init; } = new();
 
     /// <summary>
+    /// Configuration options for execution path comparison analysis.
+    /// Used when Depth is Medium or Deep.
+    /// </summary>
+    public PathComparisonOptions PathComparison { get; init; } = new();
+
+    /// <summary>
     /// Minimum confidence threshold for generating recommendations (0.0 to 1.0).
     /// Recommendations with lower confidence will be filtered out.
     /// </summary>

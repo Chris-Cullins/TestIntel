@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using TestIntelligence.SelectionEngine.Models;
 using TestIntelligence.TestComparison.Models;
 using TestIntelligence.TestComparison.Services;
+using TestIntelligence.Core.Models;
 
 namespace TestIntelligence.TestComparison.Algorithms;
 
@@ -15,10 +17,12 @@ namespace TestIntelligence.TestComparison.Algorithms;
 public class SimilarityCalculator : ISimilarityCalculator
 {
     private readonly ILogger<SimilarityCalculator> _logger;
+    private readonly ExecutionPathAnalyzer _pathAnalyzer;
 
     public SimilarityCalculator(ILogger<SimilarityCalculator> logger)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _pathAnalyzer = new ExecutionPathAnalyzer(NullLogger<ExecutionPathAnalyzer>.Instance);
     }
 
     /// <summary>
@@ -117,6 +121,24 @@ public class SimilarityCalculator : ISimilarityCalculator
             overallSimilarity, categoryScore, namingScore, tagScore, executionTimeScore);
 
         return Math.Max(0.0, Math.Min(1.0, overallSimilarity));
+    }
+
+    /// <summary>
+    /// Calculates similarity between execution paths using graph topology analysis.
+    /// </summary>
+    public double CalculateExecutionPathSimilarity(
+        ExecutionTrace trace1, 
+        ExecutionTrace trace2, 
+        PathComparisonOptions? options = null)
+    {
+        if (trace1 == null) throw new ArgumentNullException(nameof(trace1));
+        if (trace2 == null) throw new ArgumentNullException(nameof(trace2));
+
+        _logger.LogDebug("Calculating execution path similarity between {Test1} and {Test2}", 
+            trace1.TestMethodId, trace2.TestMethodId);
+
+        var pathSimilarity = _pathAnalyzer.CalculateExecutionPathSimilarity(trace1, trace2, options);
+        return pathSimilarity.OverallPathSimilarity;
     }
 
     private double CalculateWeightedJaccardSimilarity(

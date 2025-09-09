@@ -5,8 +5,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using TestIntelligence.Core.Discovery;
 using TestIntelligence.Core.Services;
+using TestIntelligence.Core.Interfaces;
 using TestIntelligence.SelectionEngine.Models;
 using TestIntelligence.TestComparison.Algorithms;
 using TestIntelligence.TestComparison.Models;
@@ -24,21 +26,26 @@ public class TestComparisonService : ITestComparisonService
     private readonly OptimizationRecommendationEngine _recommendationEngine;
     private readonly ILogger<TestComparisonService> _logger;
 
-    // Dependencies that might need to be injected for test info retrieval
+    // Dependencies that might need to be injected for test info retrieval and execution tracing
     private readonly ITestDiscovery? _testDiscovery;
+    private readonly ITestExecutionTracer? _executionTracer;
+    private readonly TestClusteringService _clusteringService;
 
     public TestComparisonService(
         TestCoverageComparisonService coverageComparisonService,
         ISimilarityCalculator similarityCalculator,
         OptimizationRecommendationEngine recommendationEngine,
         ILogger<TestComparisonService> logger,
-        ITestDiscovery? testDiscovery = null)
+        ITestDiscovery? testDiscovery = null,
+        ITestExecutionTracer? executionTracer = null)
     {
         _coverageComparisonService = coverageComparisonService ?? throw new ArgumentNullException(nameof(coverageComparisonService));
         _similarityCalculator = similarityCalculator ?? throw new ArgumentNullException(nameof(similarityCalculator));
         _recommendationEngine = recommendationEngine ?? throw new ArgumentNullException(nameof(recommendationEngine));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _testDiscovery = testDiscovery; // Optional for test info enrichment
+        _executionTracer = executionTracer; // Optional for execution path analysis
+        _clusteringService = new TestClusteringService(this, NullLogger<TestClusteringService>.Instance);
     }
 
     /// <summary>
@@ -76,10 +83,13 @@ public class TestComparisonService : ITestComparisonService
             // Step 2: Calculate metadata similarity (if analysis depth allows)
             var metadataSimilarity = await CalculateMetadataSimilarityAsync(test1Id, test2Id, solutionPath, options, cancellationToken);
 
-            // Step 3: Calculate overall similarity score
-            var overallSimilarity = CalculateOverallSimilarity(coverageOverlap, metadataSimilarity, options);
+            // Step 3: Calculate execution path similarity (if analysis depth allows and tracer is available)
+            var executionPathSimilarity = await CalculateExecutionPathSimilarityAsync(test1Id, test2Id, solutionPath, options, cancellationToken);
 
-            // Step 4: Create preliminary comparison result
+            // Step 4: Calculate overall similarity score
+            var overallSimilarity = CalculateOverallSimilarity(coverageOverlap, metadataSimilarity, executionPathSimilarity, options);
+
+            // Step 5: Create preliminary comparison result
             var preliminaryResult = new TestComparisonResult
             {
                 Test1Id = test1Id,
@@ -87,6 +97,7 @@ public class TestComparisonService : ITestComparisonService
                 OverallSimilarity = overallSimilarity,
                 CoverageOverlap = coverageOverlap,
                 MetadataSimilarity = metadataSimilarity,
+                ExecutionPathSimilarity = executionPathSimilarity,
                 Recommendations = new List<OptimizationRecommendation>().AsReadOnly(),
                 AnalysisTimestamp = DateTime.UtcNow,
                 Options = options,
@@ -94,10 +105,10 @@ public class TestComparisonService : ITestComparisonService
                 Warnings = warnings.Count > 0 ? warnings.AsReadOnly() : null
             };
 
-            // Step 5: Generate optimization recommendations
+            // Step 6: Generate optimization recommendations
             var recommendations = _recommendationEngine.GenerateRecommendations(preliminaryResult);
 
-            // Step 6: Create final result with recommendations
+            // Step 7: Create final result with recommendations
             var finalResult = new TestComparisonResult
             {
                 Test1Id = test1Id,
@@ -105,6 +116,7 @@ public class TestComparisonService : ITestComparisonService
                 OverallSimilarity = overallSimilarity,
                 CoverageOverlap = coverageOverlap,
                 MetadataSimilarity = metadataSimilarity,
+                ExecutionPathSimilarity = executionPathSimilarity,
                 Recommendations = recommendations,
                 AnalysisTimestamp = DateTime.UtcNow,
                 Options = options,
@@ -313,26 +325,67 @@ public class TestComparisonService : ITestComparisonService
     }
 
     /// <summary>
-    /// Calculates overall similarity score combining coverage and metadata factors.
+    /// Calculates execution path similarity between two tests.
+    /// </summary>
+    private async Task<ExecutionPathSimilarity?> CalculateExecutionPathSimilarityAsync(
+        string test1Id, 
+        string test2Id, 
+        string solutionPath, 
+        ComparisonOptions options, 
+        CancellationToken cancellationToken)
+    {
+        if (_executionTracer == null || options.Depth == AnalysisDepth.Shallow)
+        {
+            _logger.LogDebug("Execution path analysis skipped - tracer not available or shallow analysis requested");
+            return null;
+        }
+
+        _logger.LogDebug("Calculating execution path similarity between {Test1Id} and {Test2Id}", test1Id, test2Id);
+
+        try
+        {
+            var trace1 = await _executionTracer.TraceTestExecutionAsync(test1Id, solutionPath, cancellationToken);
+            var trace2 = await _executionTracer.TraceTestExecutionAsync(test2Id, solutionPath, cancellationToken);
+
+            var pathAnalyzer = new ExecutionPathAnalyzer(NullLogger<ExecutionPathAnalyzer>.Instance);
+            return pathAnalyzer.CalculateExecutionPathSimilarity(trace1, trace2, options.PathComparison);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to calculate execution path similarity between {Test1Id} and {Test2Id}", test1Id, test2Id);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Calculates overall similarity score combining coverage, metadata, and execution path factors.
     /// </summary>
     private double CalculateOverallSimilarity(
         CoverageOverlapAnalysis coverageOverlap, 
         MetadataSimilarity metadataSimilarity, 
+        ExecutionPathSimilarity? executionPathSimilarity,
         ComparisonOptions options)
     {
-        // Weight factors based on analysis depth
-        var (coverageWeight, metadataWeight) = options.Depth switch
+        // Weight factors based on analysis depth and available data
+        var (coverageWeight, metadataWeight, pathWeight) = options.Depth switch
         {
-            AnalysisDepth.Shallow => (1.0, 0.0),     // Coverage only
-            AnalysisDepth.Medium => (0.7, 0.3),      // Mostly coverage with some metadata
-            AnalysisDepth.Deep => (0.6, 0.4),        // Balanced coverage and metadata
-            _ => (0.7, 0.3)
+            AnalysisDepth.Shallow => (1.0, 0.0, 0.0),        // Coverage only
+            AnalysisDepth.Medium => executionPathSimilarity != null 
+                ? (0.5, 0.2, 0.3)    // Coverage, metadata, and execution path
+                : (0.7, 0.3, 0.0),   // Coverage and metadata only
+            AnalysisDepth.Deep => executionPathSimilarity != null 
+                ? (0.4, 0.3, 0.3)    // Balanced coverage, metadata, and execution path
+                : (0.6, 0.4, 0.0),   // Coverage and metadata only
+            _ => (0.7, 0.3, 0.0)
         };
 
         var coverageScore = coverageOverlap.OverlapPercentage / 100.0;
         var metadataScore = metadataSimilarity.OverallScore;
+        var pathScore = executionPathSimilarity?.OverallPathSimilarity ?? 0.0;
 
-        var overallSimilarity = (coverageScore * coverageWeight) + (metadataScore * metadataWeight);
+        var overallSimilarity = (coverageScore * coverageWeight) + 
+                               (metadataScore * metadataWeight) + 
+                               (pathScore * pathWeight);
         
         return Math.Max(0.0, Math.Min(1.0, overallSimilarity));
     }
@@ -394,4 +447,22 @@ public class TestComparisonService : ITestComparisonService
     }
 
     #endregion
+
+    /// <summary>
+    /// Analyzes multiple tests to identify clusters of similar tests.
+    /// </summary>
+    public async Task<TestClusterAnalysis> AnalyzeTestClustersAsync(
+        IEnumerable<string> testIds, 
+        string solutionPath, 
+        ClusteringOptions options, 
+        CancellationToken cancellationToken = default)
+    {
+        if (testIds == null) throw new ArgumentNullException(nameof(testIds));
+        if (string.IsNullOrEmpty(solutionPath)) throw new ArgumentException("Solution path cannot be null or empty", nameof(solutionPath));
+        if (options == null) throw new ArgumentNullException(nameof(options));
+
+        _logger.LogInformation("Starting cluster analysis for multiple tests with {Algorithm} algorithm", options.Algorithm);
+
+        return await _clusteringService.PerformHierarchicalClusteringAsync(testIds, solutionPath, options, cancellationToken);
+    }
 }

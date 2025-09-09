@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using TestIntelligence.TestComparison.Models;
@@ -23,5 +24,19 @@ public interface ITestComparisonService
         string test2Id, 
         string solutionPath, 
         ComparisonOptions options, 
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Analyzes multiple tests to identify clusters of similar tests.
+    /// </summary>
+    /// <param name="testIds">Collection of test method identifiers</param>
+    /// <param name="solutionPath">Path to solution file</param>
+    /// <param name="options">Clustering configuration options</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Test cluster analysis with groupings and statistics</returns>
+    Task<TestClusterAnalysis> AnalyzeTestClustersAsync(
+        IEnumerable<string> testIds, 
+        string solutionPath, 
+        ClusteringOptions options, 
         CancellationToken cancellationToken = default);
 }

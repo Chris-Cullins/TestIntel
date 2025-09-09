@@ -35,6 +35,12 @@ public class TestComparisonResult
     public required MetadataSimilarity MetadataSimilarity { get; init; }
 
     /// <summary>
+    /// Gets or sets the execution path similarity analysis.
+    /// Available when analysis depth is Medium or Deep.
+    /// </summary>
+    public ExecutionPathSimilarity? ExecutionPathSimilarity { get; init; }
+
+    /// <summary>
     /// Gets or sets the optimization recommendations based on the comparison analysis.
     /// </summary>
     public required IReadOnlyList<OptimizationRecommendation> Recommendations { get; init; }

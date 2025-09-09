@@ -91,7 +91,7 @@ public class JsonComparisonFormatter : IComparisonFormatter
                 Recommendations = result.Recommendations.Select(r => new RecommendationJson
                 {
                     Type = r.Type,
-                    EstimatedEffortLevel = r.EstimatedEffortLevel,
+                    EstimatedEffortLevel = r.EstimatedEffortLevel.ToString(),
                     Description = r.Description,
                     Rationale = options.RecommendationDetail >= RecommendationDetailLevel.Standard ? r.Rationale : null,
                     ConfidenceScore = r.ConfidenceScore,
