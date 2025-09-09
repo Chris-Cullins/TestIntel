@@ -37,4 +37,9 @@
     <ProjectReference Include="..\TestIntelligence.DataTracker\TestIntelligence.DataTracker.csproj" />
   </ItemGroup>
 
+  <!-- Exclude backup files from compilation to avoid duplicate/old interface definitions -->
+  <ItemGroup>
+    <Compile Remove="Analysis/RoslynAnalyzer.cs.backup" />
+  </ItemGroup>
+
 </Project>
