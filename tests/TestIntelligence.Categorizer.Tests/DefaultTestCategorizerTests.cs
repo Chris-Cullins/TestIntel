@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using FluentAssertions;
 using TestIntelligence.Categorizer;
@@ -182,7 +184,7 @@ namespace TestIntelligence.Categorizer.Tests
             };
 
             // Act
-            var results = await _categorizer.CategorizeAsync(tests);
+            var results = await _categorizer.CategorizeAsync((IEnumerable<TestCategorizationInfo>)tests);
 
             // Assert
             results.Should().HaveCount(3);
@@ -198,7 +200,7 @@ namespace TestIntelligence.Categorizer.Tests
             var tests = Array.Empty<TestCategorizationInfo>();
 
             // Act
-            var results = await _categorizer.CategorizeAsync(tests);
+            var results = await _categorizer.CategorizeAsync((IEnumerable<TestCategorizationInfo>)tests);
 
             // Assert
             results.Should().BeEmpty();
@@ -222,6 +224,7 @@ namespace TestIntelligence.Categorizer.Tests
 
         private TestCategorizationInfo CreateTestInfo(string methodName, string className, string namespaceName, string assemblyName)
         {
+            // For unit tests, we can use the simplified constructor
             return new TestCategorizationInfo(methodName, className, namespaceName, assemblyName);
         }
     }

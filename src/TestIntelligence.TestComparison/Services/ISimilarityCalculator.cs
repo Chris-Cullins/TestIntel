@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using TestIntelligence.SelectionEngine.Models;
 using TestIntelligence.TestComparison.Models;
+using TestIntelligence.Core.Models;
 
 namespace TestIntelligence.TestComparison.Services;
 
@@ -28,4 +29,16 @@ public interface ISimilarityCalculator
     /// <param name="test2">Information about the second test</param>
     /// <returns>Similarity score from 0.0 (completely different) to 1.0 (identical metadata)</returns>
     double CalculateMetadataSimilarity(TestInfo test1, TestInfo test2);
+
+    /// <summary>
+    /// Calculates similarity between execution paths using graph topology analysis.
+    /// </summary>
+    /// <param name="trace1">Execution trace from first test</param>
+    /// <param name="trace2">Execution trace from second test</param>
+    /// <param name="options">Path comparison configuration</param>
+    /// <returns>Similarity score between 0.0 and 1.0</returns>
+    double CalculateExecutionPathSimilarity(
+        ExecutionTrace trace1, 
+        ExecutionTrace trace2, 
+        PathComparisonOptions? options = null);
 }

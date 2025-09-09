@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -29,9 +31,14 @@ namespace TestIntelligence.CLI.Commands
 
         protected override async Task<int> ExecuteInternalAsync(CommandContext context, CancellationToken cancellationToken)
         {
-            // Extract parameters from context
-            var test1 = context.GetParameter<string>("test1") ?? throw new ArgumentException("test1 parameter is required");
-            var test2 = context.GetParameter<string>("test2") ?? throw new ArgumentException("test2 parameter is required");
+            // Extract parameters from context - clustering parameters are optional
+            var test1 = context.GetParameter<string>("test1");
+            var test2 = context.GetParameter<string>("test2");
+            var tests = context.GetParameter<string>("tests");
+            var scope = context.GetParameter<string>("scope");
+            var target = context.GetParameter<string>("target");
+            var similarityThreshold = context.GetParameter<double?>("similarity-threshold") ?? 0.6;
+            var clusterAlgorithm = context.GetParameter<string>("cluster-algorithm") ?? "hierarchical";
             var solution = context.GetParameter<string>("solution") ?? throw new ArgumentException("solution parameter is required");
             var format = context.GetParameter<string>("format") ?? "text";
             var output = context.GetParameter<string>("output");
@@ -43,8 +50,13 @@ namespace TestIntelligence.CLI.Commands
             // Validate inputs
             var command = new CompareTestsCommand
             {
-                Test1 = test1,
-                Test2 = test2,
+                Test1 = test1 ?? string.Empty,
+                Test2 = test2 ?? string.Empty,
+                Tests = tests,
+                Scope = scope,
+                Target = target,
+                SimilarityThreshold = similarityThreshold,
+                ClusterAlgorithm = clusterAlgorithm,
                 Solution = solution,
                 Format = format,
                 Output = output,
@@ -75,45 +87,23 @@ namespace TestIntelligence.CLI.Commands
 
             try
             {
-                // Configure comparison options based on command parameters
-                var options = new ComparisonOptions
+                // Determine operation mode
+                var isTwoTestComparison = !string.IsNullOrWhiteSpace(command.Test1) && !string.IsNullOrWhiteSpace(command.Test2);
+                var isClusterAnalysis = !string.IsNullOrWhiteSpace(command.Tests) || !string.IsNullOrWhiteSpace(command.Scope);
+
+                if (isTwoTestComparison)
                 {
-                    Depth = ParseAnalysisDepth(depth)
-                };
-
-                // Set up progress reporting for long-running operations
-                Console.WriteLine("🔍 Initializing comparison analysis...");
-                
-                // Set up cancellation token (timeout functionality temporarily removed)
-                var combinedCts = cancellationToken;
-
-                // Perform the comparison
-                Console.WriteLine("📊 Analyzing test coverage and dependencies...");
-                var result = await _comparisonService.CompareTestsAsync(
-                    test1, test2, solution, options, combinedCts);
-
-                Console.WriteLine("📝 Formatting results...");
-                
-                // Format and output results
-                await OutputResultsAsync(result, format, output, verbose, includePerformance);
-                
-                Console.WriteLine("✅ Comparison completed successfully");
-                
-                Logger.LogInformation("Test comparison completed successfully in {Duration}ms", 
-                    result.AnalysisDuration.TotalMilliseconds);
-
-                // Show warnings if any
-                if (result.Warnings?.Count > 0)
-                {
-                    Console.WriteLine();
-                    Console.WriteLine("⚠️ Warnings:");
-                    foreach (var warning in result.Warnings)
-                    {
-                        Console.WriteLine($"   • {warning}");
-                    }
+                    return await ExecutePairwiseComparisonAsync(command, cancellationToken);
                 }
-
-                return 0;
+                else if (isClusterAnalysis)
+                {
+                    return await ExecuteClusterAnalysisAsync(command, cancellationToken);
+                }
+                else
+                {
+                    Console.Error.WriteLine("❌ Invalid operation mode. This should have been caught by validation.");
+                    return 1;
+                }
             }
             catch (OperationCanceledException)
             {
@@ -148,6 +138,191 @@ namespace TestIntelligence.CLI.Commands
                 }
                 return 1;
             }
+        }
+
+        private async Task<int> ExecutePairwiseComparisonAsync(CompareTestsCommand command, CancellationToken cancellationToken)
+        {
+            // Configure comparison options based on command parameters
+            var options = new ComparisonOptions
+            {
+                Depth = ParseAnalysisDepth(command.Depth)
+            };
+
+            // Set up progress reporting for long-running operations
+            Console.WriteLine("🔍 Initializing pairwise comparison analysis...");
+            
+            // Perform the comparison
+            Console.WriteLine("📊 Analyzing test coverage and dependencies...");
+            var result = await _comparisonService.CompareTestsAsync(
+                command.Test1, command.Test2, command.Solution, options, cancellationToken);
+
+            Console.WriteLine("📝 Formatting results...");
+            
+            // Format and output results
+            await OutputResultsAsync(result, command.Format, command.Output, command.Verbose, command.IncludePerformance);
+            
+            Console.WriteLine("✅ Pairwise comparison completed successfully");
+            
+            Logger.LogInformation("Test comparison completed successfully in {Duration}ms", 
+                result.AnalysisDuration.TotalMilliseconds);
+
+            // Show warnings if any
+            if (result.Warnings?.Count > 0)
+            {
+                Console.WriteLine();
+                Console.WriteLine("⚠️ Warnings:");
+                foreach (var warning in result.Warnings)
+                {
+                    Console.WriteLine($"   • {warning}");
+                }
+            }
+
+            return 0;
+        }
+
+        private async Task<int> ExecuteClusterAnalysisAsync(CompareTestsCommand command, CancellationToken cancellationToken)
+        {
+            // Configure clustering options based on command parameters
+            var clusteringOptions = new ClusteringOptions
+            {
+                Algorithm = ParseClusteringAlgorithm(command.ClusterAlgorithm),
+                SimilarityThreshold = command.SimilarityThreshold,
+                ComparisonOptions = new ComparisonOptions
+                {
+                    Depth = ParseAnalysisDepth(command.Depth)
+                }
+            };
+
+            // Set up progress reporting for long-running operations
+            Console.WriteLine("🔍 Initializing cluster analysis...");
+            
+            // Determine test IDs based on scope or explicit list
+            var testIds = GetTestIds(command);
+            
+            // Perform the cluster analysis
+            Console.WriteLine("📊 Analyzing test clusters and similarities...");
+            var result = await _comparisonService.AnalyzeTestClustersAsync(
+                testIds, command.Solution, clusteringOptions, cancellationToken);
+
+            Console.WriteLine("📝 Formatting cluster analysis results...");
+            
+            // Format and output results (Note: this will need a different formatter for cluster results)
+            await OutputClusterResultsAsync(result, command.Format, command.Output, command.Verbose, command.IncludePerformance);
+            
+            Console.WriteLine("✅ Cluster analysis completed successfully");
+            
+            Logger.LogInformation("Cluster analysis completed successfully, found {ClusterCount} clusters", 
+                result.Clusters.Count);
+
+            return 0;
+        }
+
+        private static IEnumerable<string> GetTestIds(CompareTestsCommand command)
+        {
+            if (!string.IsNullOrWhiteSpace(command.Tests))
+            {
+                // Parse comma-separated test list
+                return command.Tests.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(t => t.Trim());
+            }
+            
+            if (!string.IsNullOrWhiteSpace(command.Scope) && !string.IsNullOrWhiteSpace(command.Target))
+            {
+                // This is a placeholder - in a real implementation, you would discover tests based on scope/target
+                // For now, return empty to let the service handle discovery
+                return Enumerable.Empty<string>();
+            }
+            
+            return Enumerable.Empty<string>();
+        }
+
+        private static ClusteringAlgorithm ParseClusteringAlgorithm(string algorithm)
+        {
+            return algorithm.ToLowerInvariant() switch
+            {
+                "hierarchical" => ClusteringAlgorithm.Hierarchical,
+                "kmeans" => ClusteringAlgorithm.KMeans,
+                "dbscan" => ClusteringAlgorithm.DBSCAN,
+                _ => ClusteringAlgorithm.Hierarchical
+            };
+        }
+
+        private async Task OutputClusterResultsAsync(TestClusterAnalysis result, string format, string? outputPath, bool verbose, bool includePerformance)
+        {
+            try
+            {
+                string content = format.ToLowerInvariant() switch
+                {
+                    "json" => await FormatClusterAsJsonAsync(result),
+                    "text" => FormatClusterAsText(result, verbose, includePerformance),
+                    _ => throw new ArgumentException($"Unsupported format for cluster analysis: {format}")
+                };
+
+                if (!string.IsNullOrWhiteSpace(outputPath))
+                {
+                    await File.WriteAllTextAsync(outputPath, content);
+                    Console.WriteLine($"✅ Cluster analysis results written to: {outputPath}");
+                }
+                else
+                {
+                    Console.WriteLine(content);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to format or write cluster analysis output");
+                throw;
+            }
+        }
+
+        private async Task<string> FormatClusterAsJsonAsync(TestClusterAnalysis result)
+        {
+            return await Task.Run(() => 
+                System.Text.Json.JsonSerializer.Serialize(result, new System.Text.Json.JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+                }));
+        }
+
+        private string FormatClusterAsText(TestClusterAnalysis result, bool verbose, bool includePerformance)
+        {
+            var output = new System.Text.StringBuilder();
+            
+            output.AppendLine("═══ Test Cluster Analysis Report ═══");
+            output.AppendLine();
+            output.AppendLine($"Analysis completed: {result.AnalysisTimestamp:yyyy-MM-dd HH:mm:ss} UTC");
+            output.AppendLine($"Total tests analyzed: {result.Statistics.TotalTests}");
+            output.AppendLine($"Clusters found: {result.Clusters.Count}");
+            output.AppendLine($"Algorithm used: {result.Options.Algorithm}");
+            output.AppendLine();
+
+            for (int i = 0; i < result.Clusters.Count; i++)
+            {
+                var cluster = result.Clusters[i];
+                output.AppendLine($"── Cluster {i + 1} ──");
+                output.AppendLine($"Tests in cluster: {cluster.TestIds.Count}");
+                output.AppendLine($"Average similarity: {cluster.IntraClusterSimilarity:P1}");
+                
+                if (verbose)
+                {
+                    output.AppendLine("Test members:");
+                    foreach (var testId in cluster.TestIds)
+                    {
+                        output.AppendLine($"  • {testId}");
+                    }
+                }
+                output.AppendLine();
+            }
+
+            if (includePerformance)
+            {
+                output.AppendLine("── Performance Metrics ──");
+                output.AppendLine($"Analysis duration: {result.AnalysisDuration:mm\\:ss\\.fff}");
+                output.AppendLine();
+            }
+
+            return output.ToString();
         }
 
         private static AnalysisDepth ParseAnalysisDepth(string depth)

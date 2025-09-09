@@ -21,20 +21,26 @@ namespace TestIntelligence.SelectionEngine.Services
 
         public TestScoringService(
             ILogger<TestScoringService> logger,
-            IEnumerable<ITestScoringAlgorithm>? scoringAlgorithms = null)
+            IEnumerable<ITestScoringAlgorithm>? scoringAlgorithms = null,
+            ILoggerFactory? loggerFactory = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             
             // Initialize default scoring algorithms if none provided
-            _scoringAlgorithms = new List<ITestScoringAlgorithm>(scoringAlgorithms ?? new List<ITestScoringAlgorithm>
+            _scoringAlgorithms = new List<ITestScoringAlgorithm>(scoringAlgorithms ?? CreateDefaultAlgorithms(loggerFactory));
+        }
+
+        private static List<ITestScoringAlgorithm> CreateDefaultAlgorithms(ILoggerFactory? loggerFactory)
+        {
+            return new List<ITestScoringAlgorithm>
             {
-                new ImpactBasedScoringAlgorithm(_logger as ILogger<ImpactBasedScoringAlgorithm> ?? 
+                new ImpactBasedScoringAlgorithm(loggerFactory?.CreateLogger<ImpactBasedScoringAlgorithm>() ?? 
                     new NullLogger<ImpactBasedScoringAlgorithm>()),
-                new ExecutionTimeScoringAlgorithm(_logger as ILogger<ExecutionTimeScoringAlgorithm> ?? 
+                new ExecutionTimeScoringAlgorithm(loggerFactory?.CreateLogger<ExecutionTimeScoringAlgorithm>() ?? 
                     new NullLogger<ExecutionTimeScoringAlgorithm>()),
-                new HistoricalScoringAlgorithm(_logger as ILogger<HistoricalScoringAlgorithm> ?? 
+                new HistoricalScoringAlgorithm(loggerFactory?.CreateLogger<HistoricalScoringAlgorithm>() ?? 
                     new NullLogger<HistoricalScoringAlgorithm>())
-            });
+            };
         }
 
         public IReadOnlyList<ITestScoringAlgorithm> ScoringAlgorithms => _scoringAlgorithms.AsReadOnly();
