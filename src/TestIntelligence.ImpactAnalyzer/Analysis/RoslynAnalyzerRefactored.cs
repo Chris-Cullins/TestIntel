@@ -53,6 +53,17 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             return await _callGraphAnalyzer.BuildCallGraphAsync(solutionFiles, cancellationToken).ConfigureAwait(false);
         }
 
+        public async Task<MethodCallGraph> BuildCallGraphAsync(AnalysisScope scope, CancellationToken cancellationToken = default)
+        {
+            if (scope == null) throw new ArgumentNullException(nameof(scope));
+            _logger.LogInformation("Building scoped call graph (refactored): methods={MethodCount}, tests={TestCount}",
+                scope.ChangedMethods?.Count ?? 0, scope.TargetTests?.Count ?? 0);
+
+            // Refactored pipeline does not yet support incremental scope; fall back to solution build for now
+            // This maintains interface compatibility while preserving behavior.
+            return await BuildCallGraphAsync(new[] { scope.SolutionPath }, cancellationToken).ConfigureAwait(false);
+        }
+
         public async Task<IReadOnlyList<string>> GetAffectedMethodsAsync(string[] changedFiles, string[] changedMethods, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Analyzing impact of {MethodCount} changed methods in {FileCount} files using refactored analyzer", 

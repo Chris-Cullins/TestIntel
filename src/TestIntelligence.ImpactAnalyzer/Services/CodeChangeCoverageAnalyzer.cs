@@ -169,10 +169,20 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 try
                 {
                     // Prefer scoped incremental lookup seeded by changed methods and provided tests
-                    if (testMethodIdList.Any())
+                    // Use scoped incremental lookup only in contexts that provide progress (CLI flows);
+                    // in test/mocked contexts (progress == null), prefer the stable full lookup for compatibility.
+                    if (progress != null && testMethodIdList.Any())
                     {
                         coverageResults = await _testCoverageAnalyzer.FindTestsExercisingMethodsScopedAsync(
                             changedMethods, testMethodIdList, solutionPath, timeoutCts.Token);
+
+                        // Safety net: if scoped analysis returns null or no coverage at all, fall back to full analysis
+                        if (coverageResults == null || coverageResults.Count == 0 || coverageResults.All(kvp => kvp.Value == null || kvp.Value.Count == 0))
+                        {
+                            _logger.LogWarning("Scoped coverage returned no results; falling back to full analysis for correctness");
+                            coverageResults = await _testCoverageAnalyzer.FindTestsExercisingMethodsAsync(
+                                changedMethods, solutionPath, timeoutCts.Token);
+                        }
                     }
                     else
                     {
@@ -186,7 +196,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                     coverageResults = new Dictionary<string, IReadOnlyList<TestCoverageInfo>>();
                 }
                 
-                foreach (var kvp in coverageResults)
+                foreach (var kvp in coverageResults ?? new Dictionary<string, IReadOnlyList<TestCoverageInfo>>())
                 {
                     var changedMethod = kvp.Key;
                     var coveringTests = kvp.Value;

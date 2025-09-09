@@ -32,17 +32,12 @@ namespace TestIntelligence.ImpactAnalyzer.Services
         private MethodCallGraph? _cachedCallGraph;
         private string? _cachedSolutionPath;
         
-        // Cache BFS path calculations to avoid redundant traversals
-        private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, string), string[]?> _pathCache = new();
+        // Cache BFS path calculations to avoid redundant traversals (LRU to bound memory)
+        private readonly TestIntelligence.Core.Caching.LruCache<(string, string), string[]?> _pathCache = new(capacity: 10000);
         
-        // Cache size management to prevent memory bloat
-        private const int MaxCacheSize = 1000; // Reduced cache size for better memory management
-        private const int MaxVisitedNodes = 10; // Very conservative to prevent cache explosion
-        private const int MaxPathDepth = 2; // Minimal depth for faster analysis
-        
-        // Cache cleanup timing to prevent thrashing
-        private DateTime _lastCacheCleanup = DateTime.MinValue;
-        private readonly TimeSpan CacheCleanupInterval = TimeSpan.FromSeconds(2);
+        // Path search limits to prevent runaway traversals
+        private const int MaxVisitedNodes = 50;
+        private const int MaxPathDepth = 5;
 
         public TestCoverageAnalyzer(
             IRoslynAnalyzer roslynAnalyzer,
@@ -397,13 +392,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             // Use parallel processing for path finding when we have many test methods
             var coverageInfos = new List<TestCoverageInfo>();
             
-            // Safety check: if cache is heavily stressed, limit analysis to prevent infinite loops
-            if (_pathCache.Count > MaxCacheSize * 0.8)
-            {
-                _logger.LogWarning("Cache nearing limit ({Size}), skipping test coverage analysis for method {Method} to prevent performance issues", 
-                    _pathCache.Count, targetMethod.Name);
-                return coverageInfos; // Return empty to prevent infinite analysis
-            }
+            // LRU cache bounds memory; no additional throttling needed here.
             
             if (testMethods.Count > 50) // Use parallel for large test suites
             {
@@ -484,45 +473,16 @@ namespace TestIntelligence.ImpactAnalyzer.Services
 
         private string[]? FindCallPath(string testMethodId, string targetMethodId, MethodCallGraph callGraph)
         {
-            // Check cache first
+            // Check LRU cache first
             var cacheKey = (testMethodId, targetMethodId);
             if (_pathCache.TryGetValue(cacheKey, out var cachedPath))
-            {
                 return cachedPath;
-            }
-
-            // Smart cache size management
-            if (_pathCache.Count >= MaxCacheSize)
-            {
-                // Clean up cache if needed and time allows
-                if (DateTime.UtcNow - _lastCacheCleanup > CacheCleanupInterval)
-                {
-                    // Remove 50% of cache entries to prevent immediate re-filling
-                    var keysToRemove = _pathCache.Keys.Take(_pathCache.Count / 2).ToList();
-                    foreach (var key in keysToRemove)
-                    {
-                        _pathCache.TryRemove(key, out _);
-                    }
-                    
-                    _lastCacheCleanup = DateTime.UtcNow;
-                    _logger.LogDebug("Cache cleanup: removed {Count} entries, cache size now {NewSize}", 
-                        keysToRemove.Count, _pathCache.Count);
-                }
-                else
-                {
-                    // Cache at limit but cleanup too recent, return empty path to prevent infinite loops
-                    _logger.LogDebug("Cache at limit ({Size}), returning empty result to prevent infinite analysis", _pathCache.Count);
-                    var emptyResult = Array.Empty<string>();
-                    _pathCache.TryAdd(cacheKey, emptyResult);
-                    return emptyResult;
-                }
-            }
             
             // Early termination: if the test and target method are the same, return direct path
             if (testMethodId == targetMethodId)
             {
                 var directPath = new[] { testMethodId };
-                _pathCache.TryAdd(cacheKey, directPath);
+                _pathCache.Set(cacheKey, directPath);
                 return directPath;
             }
             
@@ -543,7 +503,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 if (currentMethod == targetMethodId)
                 {
                     var path = currentPath.ToArray();
-                    _pathCache.TryAdd(cacheKey, path);
+                    _pathCache.Set(cacheKey, path);
                     return path;
                 }
 
@@ -566,7 +526,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             }
 
             // Cache negative results too
-            _pathCache.TryAdd(cacheKey, null);
+            _pathCache.Set(cacheKey, null);
             return null; // No path found
         }
 
