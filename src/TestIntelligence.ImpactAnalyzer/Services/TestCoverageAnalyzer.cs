@@ -332,6 +332,10 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                             conf,
                             ttype));
                     }
+                    else
+                    {
+                        _logger.LogDebug("No path found from test '{TestId}' to target '{TargetId}' in scoped graph", testId, target);
+                    }
                 }
                 results[target] = list;
             }
@@ -762,6 +766,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 }
             }
             
+            _logger.LogDebug("Method pattern resolution: pattern='{Pattern}' matched {Count} methods", pattern, matchingIds.Count);
             return matchingIds;
         }
 

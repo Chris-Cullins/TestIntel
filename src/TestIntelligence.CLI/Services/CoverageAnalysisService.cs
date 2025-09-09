@@ -219,6 +219,16 @@ namespace TestIntelligence.CLI.Services
             output.AppendLine($"Provided Tests: {result.ProvidedTests.Count}");
             output.AppendLine();
 
+            // Hint when coverage is 0% but changes and tests are present
+            if (result.TotalChangedMethods > 0 && result.ProvidedTests.Count > 0 && Math.Abs(result.CoveragePercentage) < 0.0001)
+            {
+                output.AppendLine("Note: 0% coverage likely indicates the selected tests do not exercise the changed areas.");
+                output.AppendLine("- Pick CLI integration tests for CLI changes");
+                output.AppendLine("- Pick TestCoverageAnalyzer tests for analyzer changes");
+                output.AppendLine("- Pick TestValidationService tests for validation changes");
+                output.AppendLine();
+            }
+
             // Confidence breakdown
             if (result.ConfidenceBreakdown.HighConfidence + result.ConfidenceBreakdown.MediumConfidence + result.ConfidenceBreakdown.LowConfidence > 0)
             {
