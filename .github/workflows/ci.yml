@@ -41,7 +41,6 @@ jobs:
             safe_name=$(echo "$proj" | tr '/\\' '__')
             dotnet test "$proj" \
               --configuration Release \
-              --no-build \
               --logger "trx;LogFileName=${safe_name}.trx" \
               --results-directory "$GITHUB_WORKSPACE/TestResults"
           done
