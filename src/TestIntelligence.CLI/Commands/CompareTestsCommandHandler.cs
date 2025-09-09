@@ -19,14 +19,17 @@ namespace TestIntelligence.CLI.Commands
     {
         private readonly ITestComparisonService _comparisonService;
         private readonly IProgressReporter _progressReporter;
+        private readonly ITestValidationService _validationService;
 
         public CompareTestsCommandHandler(
             ILogger<CompareTestsCommandHandler> logger,
             ITestComparisonService comparisonService,
-            IProgressReporter progressReporter) : base(logger)
+            IProgressReporter progressReporter,
+            ITestValidationService validationService) : base(logger)
         {
             _comparisonService = comparisonService ?? throw new ArgumentNullException(nameof(comparisonService));
             _progressReporter = progressReporter ?? throw new ArgumentNullException(nameof(progressReporter));
+            _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
         }
 
         protected override async Task<int> ExecuteInternalAsync(CommandContext context, CancellationToken cancellationToken)
@@ -45,7 +48,7 @@ namespace TestIntelligence.CLI.Commands
             var depth = context.GetParameter<string>("depth") ?? "medium";
             var verbose = context.GetParameter<bool>("verbose");
             var includePerformance = context.GetParameter<bool>("include-performance");
-            // Timeout functionality temporarily removed for CLI argument limit
+            var timeoutSeconds = context.GetParameter<int?>("timeout-seconds");
 
             // Validate inputs
             var command = new CompareTestsCommand
@@ -62,7 +65,8 @@ namespace TestIntelligence.CLI.Commands
                 Output = output,
                 Depth = depth,
                 Verbose = verbose,
-                IncludePerformance = includePerformance
+                IncludePerformance = includePerformance,
+                TimeoutSeconds = timeoutSeconds
             };
 
             var validationErrors = command.Validate();
@@ -91,12 +95,21 @@ namespace TestIntelligence.CLI.Commands
                 var isTwoTestComparison = !string.IsNullOrWhiteSpace(command.Test1) && !string.IsNullOrWhiteSpace(command.Test2);
                 var isClusterAnalysis = !string.IsNullOrWhiteSpace(command.Tests) || !string.IsNullOrWhiteSpace(command.Scope);
 
+                // Perform early test validation to fail fast for invalid test method names
                 if (isTwoTestComparison)
                 {
+                    var validationResult = await PerformEarlyValidationAsync(command, cancellationToken);
+                    if (validationResult != 0)
+                        return validationResult;
+                        
                     return await ExecutePairwiseComparisonAsync(command, cancellationToken);
                 }
                 else if (isClusterAnalysis)
                 {
+                    var validationResult = await PerformEarlyValidationForClusteringAsync(command, cancellationToken);
+                    if (validationResult != 0)
+                        return validationResult;
+                        
                     return await ExecuteClusterAnalysisAsync(command, cancellationToken);
                 }
                 else
@@ -148,36 +161,58 @@ namespace TestIntelligence.CLI.Commands
                 Depth = ParseAnalysisDepth(command.Depth)
             };
 
-            // Set up progress reporting for long-running operations
-            Console.WriteLine("🔍 Initializing pairwise comparison analysis...");
-            
-            // Perform the comparison
-            Console.WriteLine("📊 Analyzing test coverage and dependencies...");
-            var result = await _comparisonService.CompareTestsAsync(
-                command.Test1, command.Test2, command.Solution, options, cancellationToken);
+            // Create timeout cancellation token if specified
+            using var timeoutCts = command.TimeoutSeconds.HasValue
+                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+                : null;
 
-            Console.WriteLine("📝 Formatting results...");
-            
-            // Format and output results
-            await OutputResultsAsync(result, command.Format, command.Output, command.Verbose, command.IncludePerformance);
-            
-            Console.WriteLine("✅ Pairwise comparison completed successfully");
-            
-            Logger.LogInformation("Test comparison completed successfully in {Duration}ms", 
-                result.AnalysisDuration.TotalMilliseconds);
-
-            // Show warnings if any
-            if (result.Warnings?.Count > 0)
+            if (timeoutCts != null)
             {
-                Console.WriteLine();
-                Console.WriteLine("⚠️ Warnings:");
-                foreach (var warning in result.Warnings)
-                {
-                    Console.WriteLine($"   • {warning}");
-                }
+                timeoutCts.CancelAfter(TimeSpan.FromSeconds(command.TimeoutSeconds!.Value));
+                Console.WriteLine($"⏱️ Analysis will timeout after {command.TimeoutSeconds.Value} seconds");
             }
 
-            return 0;
+            var effectiveCancellationToken = timeoutCts?.Token ?? cancellationToken;
+
+            try
+            {
+                // Set up progress reporting for long-running operations
+                Console.WriteLine("🔍 Initializing pairwise comparison analysis...");
+                
+                // Perform the comparison with timeout
+                Console.WriteLine("📊 Analyzing test coverage and dependencies...");
+                var result = await _comparisonService.CompareTestsAsync(
+                    command.Test1, command.Test2, command.Solution, options, effectiveCancellationToken);
+
+                Console.WriteLine("📝 Formatting results...");
+                
+                // Format and output results
+                await OutputResultsAsync(result, command.Format, command.Output, command.Verbose, command.IncludePerformance);
+                
+                Console.WriteLine("✅ Pairwise comparison completed successfully");
+                
+                Logger.LogInformation("Test comparison completed successfully in {Duration}ms", 
+                    result.AnalysisDuration.TotalMilliseconds);
+
+                // Show warnings if any
+                if (result.Warnings?.Count > 0)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("⚠️ Warnings:");
+                    foreach (var warning in result.Warnings)
+                    {
+                        Console.WriteLine($"   • {warning}");
+                    }
+                }
+
+                return 0;
+            }
+            catch (OperationCanceledException) when (timeoutCts?.Token.IsCancellationRequested == true && !cancellationToken.IsCancellationRequested)
+            {
+                Console.Error.WriteLine($"❌ Analysis timed out after {command.TimeoutSeconds} seconds");
+                Console.Error.WriteLine("💡 Try using a larger timeout with --timeout-seconds or reduce analysis depth with --depth shallow");
+                return 124; // Timeout error code
+            }
         }
 
         private async Task<int> ExecuteClusterAnalysisAsync(CompareTestsCommand command, CancellationToken cancellationToken)
@@ -193,28 +228,50 @@ namespace TestIntelligence.CLI.Commands
                 }
             };
 
-            // Set up progress reporting for long-running operations
-            Console.WriteLine("🔍 Initializing cluster analysis...");
-            
-            // Determine test IDs based on scope or explicit list
-            var testIds = GetTestIds(command);
-            
-            // Perform the cluster analysis
-            Console.WriteLine("📊 Analyzing test clusters and similarities...");
-            var result = await _comparisonService.AnalyzeTestClustersAsync(
-                testIds, command.Solution, clusteringOptions, cancellationToken);
+            // Create timeout cancellation token if specified
+            using var timeoutCts = command.TimeoutSeconds.HasValue
+                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+                : null;
 
-            Console.WriteLine("📝 Formatting cluster analysis results...");
-            
-            // Format and output results (Note: this will need a different formatter for cluster results)
-            await OutputClusterResultsAsync(result, command.Format, command.Output, command.Verbose, command.IncludePerformance);
-            
-            Console.WriteLine("✅ Cluster analysis completed successfully");
-            
-            Logger.LogInformation("Cluster analysis completed successfully, found {ClusterCount} clusters", 
-                result.Clusters.Count);
+            if (timeoutCts != null)
+            {
+                timeoutCts.CancelAfter(TimeSpan.FromSeconds(command.TimeoutSeconds!.Value));
+                Console.WriteLine($"⏱️ Cluster analysis will timeout after {command.TimeoutSeconds.Value} seconds");
+            }
 
-            return 0;
+            var effectiveCancellationToken = timeoutCts?.Token ?? cancellationToken;
+
+            try
+            {
+                // Set up progress reporting for long-running operations
+                Console.WriteLine("🔍 Initializing cluster analysis...");
+                
+                // Determine test IDs based on scope or explicit list
+                var testIds = GetTestIds(command);
+                
+                // Perform the cluster analysis with timeout
+                Console.WriteLine("📊 Analyzing test clusters and similarities...");
+                var result = await _comparisonService.AnalyzeTestClustersAsync(
+                    testIds, command.Solution, clusteringOptions, effectiveCancellationToken);
+
+                Console.WriteLine("📝 Formatting cluster analysis results...");
+                
+                // Format and output results
+                await OutputClusterResultsAsync(result, command.Format, command.Output, command.Verbose, command.IncludePerformance);
+                
+                Console.WriteLine("✅ Cluster analysis completed successfully");
+                
+                Logger.LogInformation("Cluster analysis completed successfully, found {ClusterCount} clusters", 
+                    result.Clusters.Count);
+
+                return 0;
+            }
+            catch (OperationCanceledException) when (timeoutCts?.Token.IsCancellationRequested == true && !cancellationToken.IsCancellationRequested)
+            {
+                Console.Error.WriteLine($"❌ Cluster analysis timed out after {command.TimeoutSeconds} seconds");
+                Console.Error.WriteLine("💡 Try using a larger timeout with --timeout-seconds or reduce the number of tests");
+                return 124; // Timeout error code
+            }
         }
 
         private static IEnumerable<string> GetTestIds(CompareTestsCommand command)
@@ -457,6 +514,147 @@ namespace TestIntelligence.CLI.Commands
                 EstimatedEffortLevel.Low => "🟢",
                 _ => "⚪"
             };
+        }
+
+        /// <summary>
+        /// Performs early validation for pairwise test comparison to fail fast on invalid test methods.
+        /// </summary>
+        private async Task<int> PerformEarlyValidationAsync(CompareTestsCommand command, CancellationToken cancellationToken)
+        {
+            Console.WriteLine("🔍 Validating test method identifiers...");
+
+            try
+            {
+                // Create timeout token for validation (5 seconds max)
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeoutCts.CancelAfter(TimeSpan.FromSeconds(5));
+
+                var testIds = new[] { command.Test1, command.Test2 };
+                var validationResult = await _validationService.ValidateTestsAsync(testIds, command.Solution, timeoutCts.Token);
+
+                var invalidTests = validationResult.InvalidTests;
+                if (invalidTests.Count > 0)
+                {
+                    Console.Error.WriteLine($"❌ Found {invalidTests.Count} invalid test method(s):");
+                    Console.Error.WriteLine();
+
+                    foreach (var invalidTest in invalidTests)
+                    {
+                        Console.Error.WriteLine($"   • {invalidTest.TestMethodId}");
+                        Console.Error.WriteLine($"     Error: {invalidTest.ErrorMessage}");
+                        
+                        if (invalidTest.Suggestions?.Count > 0)
+                        {
+                            Console.Error.WriteLine($"     💡 Did you mean:");
+                            foreach (var suggestion in invalidTest.Suggestions.Take(3))
+                            {
+                                Console.Error.WriteLine($"        - {suggestion}");
+                            }
+                        }
+                        Console.Error.WriteLine();
+                    }
+
+                    Console.Error.WriteLine("💡 Use exact test method identifiers in format: 'Namespace.ClassName.MethodName'");
+                    return 3; // Test not found error code
+                }
+
+                Console.WriteLine($"✅ Test validation completed in {validationResult.TotalValidationDuration.TotalMilliseconds:F0}ms");
+                return 0; // Success
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                Console.Error.WriteLine("❌ Validation was cancelled");
+                return 130;
+            }
+            catch (OperationCanceledException)
+            {
+                Console.Error.WriteLine("❌ Test validation timed out after 5 seconds");
+                Console.Error.WriteLine("💡 This usually indicates an issue with solution loading or test discovery");
+                return 124; // Timeout error code
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to perform early test validation");
+                Console.Error.WriteLine($"❌ Validation failed: {ex.Message}");
+                return 1;
+            }
+        }
+
+        /// <summary>
+        /// Performs early validation for clustering analysis to fail fast on invalid test methods.
+        /// </summary>
+        private async Task<int> PerformEarlyValidationForClusteringAsync(CompareTestsCommand command, CancellationToken cancellationToken)
+        {
+            Console.WriteLine("🔍 Validating test methods for clustering analysis...");
+
+            try
+            {
+                // Create timeout token for validation (10 seconds max for potentially more tests)
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
+
+                // Get test IDs to validate
+                var testIds = GetTestIds(command).ToList();
+                
+                if (testIds.Count == 0)
+                {
+                    // If no explicit tests provided, skip validation (will be handled by discovery)
+                    Console.WriteLine("ℹ️ No explicit test methods provided - discovery will validate during analysis");
+                    return 0;
+                }
+
+                var validationResult = await _validationService.ValidateTestsAsync(testIds, command.Solution, timeoutCts.Token);
+
+                var invalidTests = validationResult.InvalidTests;
+                if (invalidTests.Count > 0)
+                {
+                    Console.Error.WriteLine($"❌ Found {invalidTests.Count} invalid test method(s) out of {testIds.Count}:");
+                    Console.Error.WriteLine();
+
+                    // Show first few invalid tests with suggestions
+                    foreach (var invalidTest in invalidTests.Take(5))
+                    {
+                        Console.Error.WriteLine($"   • {invalidTest.TestMethodId}");
+                        Console.Error.WriteLine($"     Error: {invalidTest.ErrorMessage}");
+                        
+                        if (invalidTest.Suggestions?.Count > 0)
+                        {
+                            Console.Error.WriteLine($"     💡 Did you mean: {string.Join(", ", invalidTest.Suggestions.Take(2))}");
+                        }
+                    }
+
+                    if (invalidTests.Count > 5)
+                    {
+                        Console.Error.WriteLine($"   ... and {invalidTests.Count - 5} more invalid tests");
+                    }
+
+                    Console.Error.WriteLine();
+                    Console.Error.WriteLine("💡 Use exact test method identifiers in format: 'Namespace.ClassName.MethodName'");
+                    
+                    // For clustering, we could potentially continue with valid tests, but for now fail completely
+                    return 3; // Test not found error code
+                }
+
+                Console.WriteLine($"✅ Validation completed for {testIds.Count} test(s) in {validationResult.TotalValidationDuration.TotalMilliseconds:F0}ms");
+                return 0; // Success
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                Console.Error.WriteLine("❌ Validation was cancelled");
+                return 130;
+            }
+            catch (OperationCanceledException)
+            {
+                Console.Error.WriteLine("❌ Test validation timed out after 10 seconds");
+                Console.Error.WriteLine("💡 This usually indicates an issue with solution loading or test discovery");
+                return 124; // Timeout error code
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to perform early test validation for clustering");
+                Console.Error.WriteLine($"❌ Validation failed: {ex.Message}");
+                return 1;
+            }
         }
 
         protected override void PrintUsageHint(CommandContext context)
