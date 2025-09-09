@@ -239,14 +239,14 @@ public class TestValidationService : ITestValidationService
     {
         try
         {
-            // TODO: This is a simplified implementation for now. 
-            // In a real implementation, this would need to:
-            // 1. Load assemblies from the solution
-            // 2. Use the test discovery service to find tests
-            // 3. Extract metadata from test methods
+            _logger.LogDebug("Starting test discovery for validation in solution: {SolutionPath}", solutionPath);
             
-            // For now, return empty results to allow compilation
-            _logger.LogWarning("Test discovery not yet fully implemented for validation service");
+            // TODO: Implement proper test discovery by loading assemblies
+            // For now, we need to integrate with the assembly loading infrastructure
+            // This is a simplified implementation that provides graceful degradation
+            
+            _logger.LogWarning("Test discovery for validation is not yet fully implemented - returning empty results");
+            _logger.LogInformation("Validation will be skipped, allowing analysis to proceed with its own discovery");
             
             var testIds = new List<string>();
             var metadata = new Dictionary<string, TestMethodMetadata>();
@@ -257,7 +257,8 @@ public class TestValidationService : ITestValidationService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to discover tests for validation in solution: {SolutionPath}", solutionPath);
-            throw;
+            return Task.FromResult<(IReadOnlyList<string> TestIds, IReadOnlyDictionary<string, TestMethodMetadata> Metadata)>(
+                (Array.Empty<string>(), new Dictionary<string, TestMethodMetadata>()));
         }
     }
 

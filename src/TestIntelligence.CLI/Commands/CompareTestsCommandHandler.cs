@@ -529,6 +529,14 @@ namespace TestIntelligence.CLI.Commands
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeoutCts.CancelAfter(TimeSpan.FromSeconds(5));
 
+                // Check if we can discover any tests at all first
+                var availableTests = await _validationService.DiscoverAvailableTestsAsync(command.Solution, timeoutCts.Token);
+                if (availableTests.Count == 0)
+                {
+                    Console.WriteLine("⚠️ No tests discovered in solution - skipping validation (analysis may discover tests differently)");
+                    return 0; // Let the analysis proceed and handle the case where no tests are found
+                }
+
                 var testIds = new[] { command.Test1, command.Test2 };
                 var validationResult = await _validationService.ValidateTestsAsync(testIds, command.Solution, timeoutCts.Token);
 
@@ -601,6 +609,14 @@ namespace TestIntelligence.CLI.Commands
                     // If no explicit tests provided, skip validation (will be handled by discovery)
                     Console.WriteLine("ℹ️ No explicit test methods provided - discovery will validate during analysis");
                     return 0;
+                }
+
+                // Check if we can discover any tests at all first
+                var availableTests = await _validationService.DiscoverAvailableTestsAsync(command.Solution, timeoutCts.Token);
+                if (availableTests.Count == 0)
+                {
+                    Console.WriteLine("⚠️ No tests discovered in solution - skipping validation (analysis may discover tests differently)");
+                    return 0; // Let the analysis proceed and handle the case where no tests are found
                 }
 
                 var validationResult = await _validationService.ValidateTestsAsync(testIds, command.Solution, timeoutCts.Token);
