@@ -475,12 +475,12 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             return coverageInfos;
         }
 
-        private string[]? FindCallPath(string testMethodId, string targetMethodId, MethodCallGraph callGraph)
-        {
-            // Check LRU cache first
-            var cacheKey = (testMethodId, targetMethodId);
-            if (_pathCache.TryGetValue(cacheKey, out var cachedPath))
-                return cachedPath;
+		private string[]? FindCallPath(string testMethodId, string targetMethodId, MethodCallGraph callGraph)
+		{
+			// Check LRU cache first
+			var cacheKey = (testMethodId, targetMethodId);
+			if (_pathCache.TryGetValue(cacheKey, out var cachedPath))
+				return cachedPath;
             
             // Early termination: if the test and target method are the same, return direct path
             if (testMethodId == targetMethodId)
@@ -499,24 +499,45 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             queue.Enqueue((testMethodId, new List<string> { testMethodId }));
             visited.Add(testMethodId);
 
+            
+
+			// TEMP DIAGNOSTIC counters
+			var expansions = 0;
+			var reachedDepthLimitCount = 0;
             while (queue.Count > 0 && visited.Count < maxVisitedNodes)
             {
                 var (currentMethod, currentPath) = queue.Dequeue();
+                expansions++;
 
                 // Check if we found the target
                 if (currentMethod == targetMethodId)
                 {
-                    var path = currentPath.ToArray();
+					var path = currentPath.ToArray();
                     _pathCache.Set(cacheKey, path);
                     return path;
                 }
 
                 // Avoid paths that are too long (prevent infinite recursion and overly complex paths)
-                if (currentPath.Count >= maxPathLength)
-                    continue;
+				if (currentPath.Count >= maxPathLength)
+				{
+					reachedDepthLimitCount++;
+					continue;
+				}
 
-                // Get methods called by the current method and prioritize by call count
-                var calledMethods = callGraph.GetMethodCalls(currentMethod).Take(5); // Drastically reduced breadth
+                // Get methods called by the current method
+                var fullCalledMethods = callGraph.GetMethodCalls(currentMethod);
+
+                // Prefer direct hit before breadth limiting to avoid missing exact neighbor
+                if (fullCalledMethods.Contains(targetMethodId))
+                {
+                    var directPath = new List<string>(currentPath) { targetMethodId };
+                    var arr = directPath.ToArray();
+                    _pathCache.Set(cacheKey, arr);
+                    return arr;
+                }
+
+                // Prioritize by call count, but limit breadth after checking for direct neighbor
+                var calledMethods = fullCalledMethods.Take(5); // Drastically reduced breadth
                 
                 foreach (var calledMethod in calledMethods)
                 {
@@ -529,10 +550,10 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 }
             }
 
-            // Cache negative results too
-            _pathCache.Set(cacheKey, null);
-            return null; // No path found
-        }
+				// Cache negative results too
+				_pathCache.Set(cacheKey, null);
+				return null; // No path found
+		}
 
         private double CalculateConfidence(string[] callPath, MethodInfo testMethod, MethodInfo targetMethod)
         {
@@ -631,9 +652,8 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             _logger.LogInformation("Found {TestMethodCount} test methods for streaming analysis", testMethods.Count);
             
             // Find actual method IDs that match the user's pattern
-            var targetMethodIds = FindMatchingMethodIds(methodId, allMethods);
-            _logger.LogDebug("Found {Count} target method IDs matching pattern: {Pattern}", targetMethodIds.Count, methodId);
-            
+				var targetMethodIds = FindMatchingMethodIds(methodId, allMethods);
+				_logger.LogDebug("Found {Count} target method IDs matching pattern: {Pattern}", targetMethodIds.Count, methodId);
             // Additional console debug output for ScoreTestsAsync
             if (methodId.Contains("ScoreTestsAsync"))
             {
@@ -657,10 +677,10 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 
                 // Skip if this test method is actually one of our target methods
                 // This prevents method signatures from being included as "test coverage"
-                if (targetMethodIds.Contains(testMethod.Id))
-                {
-                    continue;
-                }
+					if (targetMethodIds.Contains(testMethod.Id))
+					{
+						continue;
+					}
                 
                 TestCoverageInfo? result = null;
                 try
@@ -669,40 +689,44 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                     string[]? callPath = null;
                     string? matchedTargetMethodId = null;
                     
-                    foreach (var targetId in targetMethodIds)
-                    {
-                        callPath = FindCallPath(testMethod.Id, targetId, callGraph);
-                        if (callPath != null && callPath.Any())
-                        {
-                            matchedTargetMethodId = targetId;
-                            break;
-                        }
-                    }
+					foreach (var targetId in targetMethodIds)
+					{
+						callPath = FindCallPath(testMethod.Id, targetId, callGraph);
+						if (callPath != null && callPath.Any())
+						{
+							matchedTargetMethodId = targetId;
+								break;
+							}
+							else
+							{
+								// continue
+							}
+						}
                     if (callPath != null && callPath.Any() && matchedTargetMethodId != null)
                     {
                         var targetMethodInfo = callGraph.GetMethodInfo(matchedTargetMethodId)!;
                         var confidence = CalculateConfidence(callPath, testMethod, targetMethodInfo);
                         var testType = _testClassifier.ClassifyTestType(testMethod);
 
-                        result = new TestCoverageInfo(
-                            testMethod.Id,
-                            testMethod.Name,
-                            testMethod.ContainingType,
-                            Path.GetFileName(testMethod.FilePath),
-                            callPath,
-                            confidence,
-                            testType);
-                    }
+						result = new TestCoverageInfo(
+							testMethod.Id,
+							testMethod.Name,
+							testMethod.ContainingType,
+							Path.GetFileName(testMethod.FilePath),
+							callPath,
+							confidence,
+							testType);
+						}
                 }
                 catch (Exception ex)
                 {
                     _logger.LogDebug(ex, "Failed to analyze test method: {TestMethodId}", testMethod.Id);
                 }
                 
-                if (result != null)
-                {
-                    yield return result;
-                }
+					if (result != null)
+					{
+						yield return result;
+					}
             }
         }
 

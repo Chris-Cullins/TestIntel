@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using TestIntelligence.Core.Models;
 using TestIntelligence.ImpactAnalyzer.Analysis.Utilities;
 using TestIntelligence.ImpactAnalyzer.Analysis.Workspace;
+using TestIntelligence.ImpactAnalyzer.Analysis;
 
 namespace TestIntelligence.ImpactAnalyzer.Analysis.CallGraph
 {
@@ -19,8 +20,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis.CallGraph
         private readonly ILoggerFactory _loggerFactory;
         private readonly IWorkspaceManager _workspaceManager;
 
-        // New lazy infrastructure for performance (placeholder for future implementation)
-        // private IncrementalCallGraphBuilder? _incrementalCallGraphBuilder;
+        // High-performance incremental builder (initialized on demand)
+        private IncrementalCallGraphBuilder? _incrementalCallGraphBuilder;
 
         public CallGraphAnalyzer(
             ILogger<CallGraphAnalyzer> logger, 
@@ -51,19 +52,55 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis.CallGraph
                 // Initialize workspace
                 await _workspaceManager.InitializeAsync(solutionFile, cancellationToken).ConfigureAwait(false);
 
-                // TEMPORARY FIX: Disable incremental call graph builder due to placeholder implementation
-                // The GetMethodIdsFromFile method returns empty lists, causing 0 methods to be analyzed
-                // TODO: Re-enable incremental builder once GetMethodIdsFromFile issue is resolved
-                // if (_incrementalCallGraphBuilder != null)
-                // {
-                //     _logger.LogInformation("Using high-performance incremental call graph builder");
-                //     // For full solution analysis, we still need to analyze all files, but incrementally
-                //     // return await _incrementalCallGraphBuilder.BuildCallGraphForMethodsAsync(
-                //         // solutionFiles.SelectMany(f => GetMethodIdsFromFile(f)), 10, cancellationToken).ConfigureAwait(false);
-                // }
-                
+                // Try high-performance incremental path when we can seed with changed file methods
+                var seedMethodIds = solutionFiles
+                    .Where(f => f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && File.Exists(f))
+                    .SelectMany(GetMethodIdsFromFile)
+                    .Distinct()
+                    .ToList();
+
+                if (seedMethodIds.Count > 0)
+                {
+                    // Initialize incremental builder lazily
+                    if (_incrementalCallGraphBuilder == null)
+                    {
+                        if (_workspaceManager.CompilationManager != null && _workspaceManager.SymbolResolver != null)
+                        {
+                            var symbolIndex = new SymbolIndex(_loggerFactory.CreateLogger<SymbolIndex>());
+                            await symbolIndex.BuildIndexAsync(solutionFile, cancellationToken).ConfigureAwait(false);
+
+                            _incrementalCallGraphBuilder = new IncrementalCallGraphBuilder(
+                                _workspaceManager.CompilationManager,
+                                _workspaceManager.SymbolResolver,
+                                symbolIndex,
+                                _loggerFactory.CreateLogger<IncrementalCallGraphBuilder>(),
+                                _loggerFactory);
+                        }
+                    }
+
+                    if (_incrementalCallGraphBuilder != null)
+                    {
+                        // Invalidate any caches for files that changed to avoid stale results
+                        var changedSourceFiles = solutionFiles
+                            .Where(f => f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && File.Exists(f))
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToList();
+                        if (changedSourceFiles.Count > 0)
+                        {
+                            await _incrementalCallGraphBuilder
+                                .InvalidateForFilesAsync(changedSourceFiles, cancellationToken)
+                                .ConfigureAwait(false);
+                        }
+
+                        _logger.LogInformation("Using incremental call graph builder with {SeedCount} seed methods", seedMethodIds.Count);
+                        return await _incrementalCallGraphBuilder
+                            .BuildCallGraphForMethodsAsync(seedMethodIds, 10, cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+                }
+
                 // Fallback to legacy full analysis
-                _logger.LogInformation("Using legacy call graph builder (incremental builder temporarily disabled)");
+                _logger.LogInformation("Using legacy call graph builder (incremental path not engaged)");
 
                 var callGraphBuilder = CreateCallGraphBuilder();
                 if (callGraphBuilder == null)
@@ -385,9 +422,83 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis.CallGraph
 
         private IEnumerable<string> GetMethodIdsFromFile(string filePath)
         {
-            // This is a placeholder - in a real implementation, we'd quickly scan the file
-            // for method signatures without full compilation
-            return new List<string>(); // Placeholder - would return actual method IDs
+            var results = new HashSet<string>();
+            try
+            {
+                if (!File.Exists(filePath))
+                    return results;
+
+                // Prefer workspace semantic model + symbol resolver for exact identifier matching
+                if (_workspaceManager.CompilationManager != null && _workspaceManager.SymbolResolver != null)
+                {
+                    var syntaxTree = _workspaceManager.CompilationManager.GetSyntaxTreeAsync(filePath, CancellationToken.None).GetAwaiter().GetResult();
+                    var semanticModel = _workspaceManager.CompilationManager.GetSemanticModel(filePath);
+                    if (syntaxTree != null && semanticModel != null)
+                    {
+                        var root = syntaxTree.GetRoot();
+
+                        foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+                        {
+                            var symbol = semanticModel.GetDeclaredSymbol(method);
+                            if (symbol is IMethodSymbol methodSymbol)
+                            {
+                                var id = _workspaceManager.SymbolResolver.GetFullyQualifiedMethodName(methodSymbol);
+                                if (!string.IsNullOrEmpty(id)) results.Add(id);
+                            }
+                        }
+
+                        foreach (var ctor in root.DescendantNodes().OfType<ConstructorDeclarationSyntax>())
+                        {
+                            var symbol = semanticModel.GetDeclaredSymbol(ctor);
+                            if (symbol is IMethodSymbol ctorSymbol)
+                            {
+                                var id = _workspaceManager.SymbolResolver.GetFullyQualifiedMethodName(ctorSymbol);
+                                if (!string.IsNullOrEmpty(id)) results.Add(id);
+                            }
+                        }
+
+                        return results;
+                    }
+                }
+
+                // Fallback: lightweight single-file compilation
+                var sourceCode = File.ReadAllText(filePath);
+                var fallbackTree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(sourceCode, path: filePath);
+                var compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create(
+                    assemblyName: Path.GetFileNameWithoutExtension(filePath),
+                    syntaxTrees: new[] { fallbackTree },
+                    references: RoslynAnalyzerHelper.GetBasicReferences()
+                );
+
+                var fallbackModel = compilation.GetSemanticModel(fallbackTree);
+                var fallbackRoot = fallbackTree.GetRoot();
+
+                foreach (var method in fallbackRoot.DescendantNodes().OfType<MethodDeclarationSyntax>())
+                {
+                    var symbol = fallbackModel.GetDeclaredSymbol(method);
+                    if (symbol is IMethodSymbol methodSymbol)
+                    {
+                        var id = RoslynAnalyzerHelper.GetMethodIdentifier(methodSymbol);
+                        if (!string.IsNullOrEmpty(id)) results.Add(id);
+                    }
+                }
+
+                foreach (var ctor in fallbackRoot.DescendantNodes().OfType<ConstructorDeclarationSyntax>())
+                {
+                    var symbol = fallbackModel.GetDeclaredSymbol(ctor);
+                    if (symbol is IMethodSymbol ctorSymbol)
+                    {
+                        var id = RoslynAnalyzerHelper.GetMethodIdentifier(ctorSymbol);
+                        if (!string.IsNullOrEmpty(id)) results.Add(id);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to extract method IDs from file: {FilePath}", filePath);
+            }
+
+            return results;
         }
     }
 }

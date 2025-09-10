@@ -227,6 +227,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                 }
             }
 
+            
+
             // Handle interface implementations and virtual method overrides
             await HandlePolymorphicCallsAsync(methodSymbol, methodId, callGraph);
         }
