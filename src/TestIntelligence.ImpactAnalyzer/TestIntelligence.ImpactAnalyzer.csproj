@@ -48,8 +48,6 @@
     <Compile Remove="Caching/EnhancedCompilationCache.cs" />
   </ItemGroup>
 
-  <!-- Include caching implementation for net8.0 -->
-
   <ItemGroup>
     <ProjectReference Include="..\TestIntelligence.Core\TestIntelligence.Core.csproj" />
     <ProjectReference Include="..\TestIntelligence.DataTracker\TestIntelligence.DataTracker.csproj" />
