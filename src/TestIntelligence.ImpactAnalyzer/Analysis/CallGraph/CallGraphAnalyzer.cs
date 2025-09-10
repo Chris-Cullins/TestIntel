@@ -88,7 +88,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis.CallGraph
                 }
 
                 // Fallback to legacy full analysis
-                _logger.LogInformation("Using legacy call graph builder (incremental builder temporarily disabled)");
+                _logger.LogInformation("Using legacy call graph builder (incremental path not engaged)");
 
                 var callGraphBuilder = CreateCallGraphBuilder();
                 if (callGraphBuilder == null)
