@@ -87,7 +87,13 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             catch (System.Reflection.ReflectionTypeLoadException ex)
             {
                 _logger.LogWarning(ex, "MSBuild assembly loading failed for solution: {SolutionPath}. This is often due to MSBuild version conflicts.", solutionPath);
-                _logger.LogInformation("Specific loading errors: {LoaderExceptions}", string.Join("; ", ex.LoaderExceptions?.Select(le => le.Message) ?? Array.Empty<string>()));
+                _logger.LogInformation(
+                    "Specific loading errors: {LoaderExceptions}",
+                    string.Join(
+                        "; ",
+                        (ex.LoaderExceptions?.Select(le => le?.Message ?? string.Empty)) ?? Array.Empty<string>()
+                    )
+                );
                 workspace.Dispose();
                 throw new InvalidOperationException($"MSBuild workspace creation failed due to assembly loading issues. Try using individual file analysis instead.", ex);
             }

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.1</TargetFramework>
+    <TargetFrameworks>net8.0;netstandard2.1</TargetFrameworks>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <PackageId>TestIntelligence.ImpactAnalyzer</PackageId>
@@ -19,17 +19,33 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Roslyn packages for syntax tree analysis - using .NET 8 compatible versions -->
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Build" Version="17.9.5" ExcludeAssets="runtime" />
-    <PackageReference Include="Microsoft.Build.Locator" Version="1.6.10" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.8.0" />
+    <!-- Common packages (compatible with netstandard2.1 and net8.0) -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.8.0" />
-    <!-- Other dependencies provided by Directory.Build.props: Microsoft.CodeAnalysis.CSharp, Newtonsoft.Json, System.Collections.Immutable, System.CodeDom -->
     <PackageReference Include="System.Reflection.Metadata" Version="8.0.0" />
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
-    <!-- Add explicit reference to fix MSBuild conflicts -->
+  </ItemGroup>
+
+  <!-- MSBuild/Roslyn MSBuild packages are only supported on .NET (not netstandard). Include for net8.0 only. -->
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net8.0' ">
+    <PackageReference Include="Microsoft.Build" Version="17.9.5" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.Build.Framework" Version="17.9.5" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Build.Locator" Version="1.6.10" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.8.0" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.0" />
+  </ItemGroup>
+
+  <!-- Exclude MSBuild-dependent source files when targeting netstandard2.1 -->
+  <ItemGroup Condition=" '$(TargetFramework)' == 'netstandard2.1' ">
+    <Compile Remove="Analysis/SolutionWorkspaceBuilder.cs" />
+    <Compile Remove="Analysis/LazyWorkspaceBuilder.cs" />
+    <Compile Remove="Analysis/Workspace/WorkspaceManager.cs" />
+    <!-- The default RoslynAnalyzer uses MSBuild workspace. Replace with netstandard-friendly implementation below. -->
+    <Compile Remove="Analysis/RoslynAnalyzer.cs" />
+    <Compile Remove="Analysis/CompilationManager.cs" />
+    <!-- Exclude caching implementation that depends on Microsoft.Extensions.Caching.* -->
+    <Compile Remove="Caching/EnhancedCompilationCache.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -40,6 +56,11 @@
   <!-- Exclude backup files from compilation to avoid duplicate/old interface definitions -->
   <ItemGroup>
     <Compile Remove="Analysis/RoslynAnalyzer.cs.backup" />
+  </ItemGroup>
+
+  <!-- Exclude the netstandard-specific analyzer from the net8.0 target -->
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net8.0' ">
+    <Compile Remove="Analysis/RoslynAnalyzer.NetStandard.cs" />
   </ItemGroup>
 
 </Project>
