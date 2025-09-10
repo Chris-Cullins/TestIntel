@@ -87,13 +87,17 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                 finalMethodDefinitions.Count, finalCallGraph.Values.Sum(calls => calls.Count));
 
             // Debug logging for specific methods we're interested in
-            foreach (var method in finalCallGraph.Keys.Where(k => k.Contains("ScoreTestsAsync")))
+            foreach (var method in finalCallGraph.Keys.Where(k => k.Contains("ScoreTestsAsync") || k.Contains("CategorizeAsync")))
             {
                 var calls = finalCallGraph[method];
                 var scoreTestsAsyncCalls = calls.Where(c => c.Contains("ScoreTestsAsync")).ToList();
-                if (scoreTestsAsyncCalls.Any())
+                var categorizeCalls = calls.Where(c => c.Contains("CategorizeAsync")).ToList();
+                if (scoreTestsAsyncCalls.Any() || categorizeCalls.Any())
                 {
-                    _logger.LogDebug("Method {Method} calls ScoreTestsAsync methods: {Calls}", method, string.Join(", ", scoreTestsAsyncCalls));
+                    if (scoreTestsAsyncCalls.Any())
+                        _logger.LogDebug("Method {Method} calls ScoreTestsAsync methods: {Calls}", method, string.Join(", ", scoreTestsAsyncCalls));
+                    if (categorizeCalls.Any())
+                        _logger.LogDebug("Method {Method} calls CategorizeAsync methods: {Calls}", method, string.Join(", ", categorizeCalls));
                 }
             }
 
@@ -182,7 +186,7 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
             var isTest = IsTestMethod(methodSymbol, method);
             
             // Debug logging for specific methods we're tracking
-            if (methodSymbol.Name.Contains("ScoreTestsAsync"))
+            if (methodSymbol.Name.Contains("ScoreTestsAsync") || methodSymbol.Name.Contains("CategorizeAsync"))
             {
                 _logger.LogDebug("Processing method: {MethodId} (isTest: {IsTest}) in {FilePath}", 
                     methodId, isTest, filePath);
@@ -220,7 +224,8 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                 callGraph[methodId].Add(methodCall.CalledMethodId);
 
                 // Debug logging for specific methods we're interested in tracking
-                if (methodSymbol.Name.Contains("ScoreTestsAsync") || methodCall.CalledMethodId.Contains("ScoreTestsAsync"))
+                if (methodSymbol.Name.Contains("ScoreTestsAsync") || methodCall.CalledMethodId.Contains("ScoreTestsAsync") ||
+                    methodSymbol.Name.Contains("CategorizeAsync") || methodCall.CalledMethodId.Contains("CategorizeAsync"))
                 {
                     _logger.LogDebug("Method {CallerMethod} calls {CalledMethod} via {CallType} at line {LineNumber}", 
                         methodId, methodCall.CalledMethodId, methodCall.CallType, methodCall.LineNumber);
@@ -246,11 +251,15 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                     {
                         var implId = _symbolResolver.GetFullyQualifiedMethodName(implementation);
                         
-                        // Add bidirectional relationship for interface calls
+                        // Ensure nodes exist
                         if (!callGraph.ContainsKey(implId))
                             callGraph[implId] = new HashSet<string>();
-                        
-                        callGraph[implId].Add(methodId); // Implementation "calls" interface method conceptually
+                        if (!callGraph.ContainsKey(methodId))
+                            callGraph[methodId] = new HashSet<string>();
+
+                        // Add bidirectional relationship so traversal can go interface -> implementation and implementation -> interface
+                        callGraph[implId].Add(methodId);   // impl -> interface (conceptual)
+                        callGraph[methodId].Add(implId);   // interface -> impl (to enable forward traversal from interface calls)
                     }
                 }
 
@@ -262,11 +271,15 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                     {
                         var overrideId = _symbolResolver.GetFullyQualifiedMethodName(override_);
                         
-                        // Add relationship between base and derived methods
+                        // Ensure nodes exist
                         if (!callGraph.ContainsKey(overrideId))
                             callGraph[overrideId] = new HashSet<string>();
-                        
-                        callGraph[overrideId].Add(methodId); // Override "calls" base method conceptually
+                        if (!callGraph.ContainsKey(methodId))
+                            callGraph[methodId] = new HashSet<string>();
+
+                        // Add bidirectional relationship between base and derived methods
+                        callGraph[overrideId].Add(methodId); // override -> base (conceptual)
+                        callGraph[methodId].Add(overrideId); // base -> override (enable traversal from base references)
                     }
                 }
             }
