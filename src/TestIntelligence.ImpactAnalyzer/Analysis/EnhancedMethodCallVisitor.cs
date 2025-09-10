@@ -102,8 +102,9 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
                     else
                     {
                         var lineNumber = node.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                        var callExpression = node.ToString();
                         _logger.LogDebug("Could not resolve method call '{CallExpression}' at line {LineNumber} in {FilePath}", 
-                            node.ToString(), lineNumber, _filePath);
+                            callExpression, lineNumber, _filePath);
                     }
                 }
             }
