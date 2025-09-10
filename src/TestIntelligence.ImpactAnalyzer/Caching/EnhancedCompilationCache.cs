@@ -103,7 +103,11 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
                                     _logger.LogDebug("Compilation cache hit (distributed): {Key}", key);
                                     
                                     // Promote to memory cache
-                                    var memoryCached = new CachedCompilation(compilation, File.GetLastWriteTimeUtc(key), key);
+                                    var memoryCached = new CachedCompilation(
+                                        compilation,
+                                        File.GetLastWriteTimeUtc(key),
+                                        key,
+                                        cacheEntry.SourceFileTimes ?? new Dictionary<string, DateTime>());
                                     _memoryCache.Set(cacheKey, memoryCached, _options.MemoryCacheExpiration);
                                     
                                     return compilation;
@@ -130,7 +134,11 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
                             _logger.LogDebug("Compilation cache hit (filesystem): {Key}", key);
                             
                             // Promote to memory cache and distributed cache
-                            var memoryCached = new CachedCompilation(compilation, File.GetLastWriteTimeUtc(key), key);
+                            var memoryCached = new CachedCompilation(
+                                compilation,
+                                File.GetLastWriteTimeUtc(key),
+                                key,
+                                fsData.SourceFileTimes ?? new Dictionary<string, DateTime>());
                             _memoryCache.Set(cacheKey, memoryCached, _options.MemoryCacheExpiration);
                             
                             if (_distributedCache != null)
@@ -251,43 +259,61 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
             };
         }
 
-        private Task CacheCompilationAsync(string cacheKey, string key, Compilation compilation, CancellationToken cancellationToken)
+        private async Task CacheCompilationAsync(string cacheKey, string key, Compilation compilation, CancellationToken cancellationToken)
         {
             var fileInfo = new FileInfo(key);
             var lastWriteTime = fileInfo.Exists ? fileInfo.LastWriteTimeUtc : DateTime.UtcNow;
             
             // Cache in memory
-            var memoryCached = new CachedCompilation(compilation, lastWriteTime, key);
+            var sourceFileTimes = GetSourceFileTimes(compilation);
+            var memoryCached = new CachedCompilation(compilation, lastWriteTime, key, sourceFileTimes);
             _memoryCache.Set(cacheKey, memoryCached, _options.MemoryCacheExpiration);
-            
-            // Cache in background for filesystem and distributed cache
-            _ = Task.Run(async () =>
+
+            // Persist to filesystem (and distributed) synchronously to avoid races on immediate subsequent reads
+            try
             {
+                var serializableEntry = await SerializeCompilationAsync(compilation, lastWriteTime, key, cancellationToken);
+
+                // Store in filesystem cache
+                await _fileSystemCache.SetAsync(cacheKey, serializableEntry, _options.FileSystemCacheExpiration, cancellationToken);
+
+                // Store in distributed cache if available
+                if (_distributedCache != null)
+                {
+                    var serialized = JsonConvert.SerializeObject(serializableEntry);
+                    await _distributedCache.SetStringAsync(cacheKey, serialized,
+                        new DistributedCacheEntryOptions
+                        {
+                            AbsoluteExpirationRelativeToNow = _options.DistributedCacheExpiration
+                        }, cancellationToken);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error caching compilation for key: {Key}", key);
+            }
+        }
+
+        private static Dictionary<string, DateTime> GetSourceFileTimes(Compilation compilation)
+        {
+            var times = new Dictionary<string, DateTime>();
+            foreach (var tree in compilation.SyntaxTrees)
+            {
+                var path = tree.FilePath;
+                if (string.IsNullOrWhiteSpace(path)) continue;
                 try
                 {
-                    var serializableEntry = await SerializeCompilationAsync(compilation, lastWriteTime, key, cancellationToken);
-                    
-                    // Store in filesystem cache
-                    await _fileSystemCache.SetAsync(cacheKey, serializableEntry, _options.FileSystemCacheExpiration, cancellationToken);
-                    
-                    // Store in distributed cache if available
-                    if (_distributedCache != null)
+                    if (File.Exists(path))
                     {
-                        var serialized = JsonConvert.SerializeObject(serializableEntry);
-                        await _distributedCache.SetStringAsync(cacheKey, serialized,
-                            new DistributedCacheEntryOptions
-                            {
-                                AbsoluteExpirationRelativeToNow = _options.DistributedCacheExpiration
-                            }, cancellationToken);
+                        times[path] = File.GetLastWriteTimeUtc(path);
                     }
                 }
-                catch (Exception ex)
+                catch
                 {
-                    _logger.LogWarning(ex, "Error caching compilation for key: {Key}", key);
+                    // ignore per-file failures
                 }
-            }, cancellationToken);
-            
-            return Task.CompletedTask;
+            }
+            return times;
         }
 
         private Task<SerializableCompilationCacheEntry> SerializeCompilationAsync(
@@ -466,10 +492,32 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
 
         private bool IsCompilationValid(CachedCompilation cached, string key)
         {
+            // Primary key validation
             if (!File.Exists(key)) return false;
-            
             var fileLastWrite = File.GetLastWriteTimeUtc(key);
-            return cached.LastWriteTime >= fileLastWrite;
+            if (cached.LastWriteTime < fileLastWrite) return false;
+
+            // Validate dependent source files if available
+            if (cached.SourceFileTimes != null && cached.SourceFileTimes.Count > 0)
+            {
+                foreach (var kvp in cached.SourceFileTimes)
+                {
+                    var path = kvp.Key;
+                    var recorded = kvp.Value;
+                    try
+                    {
+                        if (!File.Exists(path)) return false;
+                        var current = File.GetLastWriteTimeUtc(path);
+                        if (current > recorded) return false;
+                    }
+                    catch
+                    {
+                        return false; // be conservative on any error
+                    }
+                }
+            }
+
+            return true;
         }
 
         private bool IsSemanticModelValid(CachedSemanticModel cached, string filePath)
@@ -617,16 +665,18 @@ namespace TestIntelligence.ImpactAnalyzer.Caching
 
     public class CachedCompilation
     {
-        public CachedCompilation(Compilation compilation, DateTime lastWriteTime, string key)
+        public CachedCompilation(Compilation compilation, DateTime lastWriteTime, string key, Dictionary<string, DateTime>? sourceFileTimes = null)
         {
             Compilation = compilation;
             LastWriteTime = lastWriteTime;
             Key = key;
+            SourceFileTimes = sourceFileTimes ?? new Dictionary<string, DateTime>();
         }
 
         public Compilation Compilation { get; }
         public DateTime LastWriteTime { get; }
         public string Key { get; }
+        public Dictionary<string, DateTime> SourceFileTimes { get; }
     }
 
     public class CachedSemanticModel
