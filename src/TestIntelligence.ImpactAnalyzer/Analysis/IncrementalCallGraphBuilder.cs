@@ -32,6 +32,36 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis
         // Cache for file analysis results
         private readonly ConcurrentDictionary<string, FileAnalysisResult> _fileAnalysisCache = new();
 
+        /// <summary>
+        /// Invalidate cached results for a set of files and refresh the symbol index mappings.
+        /// Use when files have changed between runs to avoid stale call graphs.
+        /// </summary>
+        public async Task InvalidateForFilesAsync(IEnumerable<string> filePaths, CancellationToken cancellationToken = default)
+        {
+            var paths = filePaths?.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToList() ?? new();
+            if (paths.Count == 0)
+                return;
+
+            // Remove per-file cached analysis
+            foreach (var path in paths)
+            {
+                _fileAnalysisCache.TryRemove(path, out _);
+            }
+
+            // Clear method subgraph caches since they may depend on changed files
+            _methodSubgraphs.Clear();
+
+            // Refresh symbol index entries for these files so lookups are up to date
+            try
+            {
+                await _symbolIndex.RefreshFilesAsync(paths, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Best-effort: ignore refresh errors; downstream will rebuild as needed
+            }
+        }
+
         public IncrementalCallGraphBuilder(
             ICompilationManager compilationManager, 
             ISymbolResolutionEngine symbolResolver,

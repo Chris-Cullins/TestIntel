@@ -80,6 +80,18 @@ namespace TestIntelligence.ImpactAnalyzer.Analysis.CallGraph
 
                     if (_incrementalCallGraphBuilder != null)
                     {
+                        // Invalidate any caches for files that changed to avoid stale results
+                        var changedSourceFiles = solutionFiles
+                            .Where(f => f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && File.Exists(f))
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToList();
+                        if (changedSourceFiles.Count > 0)
+                        {
+                            await _incrementalCallGraphBuilder
+                                .InvalidateForFilesAsync(changedSourceFiles, cancellationToken)
+                                .ConfigureAwait(false);
+                        }
+
                         _logger.LogInformation("Using incremental call graph builder with {SeedCount} seed methods", seedMethodIds.Count);
                         return await _incrementalCallGraphBuilder
                             .BuildCallGraphForMethodsAsync(seedMethodIds, 10, cancellationToken)
