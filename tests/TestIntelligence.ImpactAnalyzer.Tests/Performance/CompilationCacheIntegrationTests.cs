@@ -142,6 +142,57 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Performance
         }
 
         [Fact]
+        public async Task EnhancedCache_FileSystem_Restore_Works()
+        {
+            // Arrange: create a test file and a cache over a temp directory
+            var testFile = GenerateTestFiles(1, 30)[0];
+
+            var options = new EnhancedCompilationCacheOptions
+            {
+                MemoryCacheExpiration = TimeSpan.FromMinutes(10),
+                FileSystemCacheExpiration = TimeSpan.FromHours(1)
+            };
+
+            // First cache instance: populate filesystem cache
+            var cache1 = new EnhancedCompilationCache(
+                _memoryCache,
+                _fileSystemCache,
+                _cacheLogger,
+                null,
+                options);
+
+            var created = await cache1.GetOrCreateCompilationAsync(testFile, async () =>
+            {
+                var source = await File.ReadAllTextAsync(testFile);
+                var tree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(source, path: testFile);
+                return Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create(
+                    "FsCacheTest",
+                    new[] { tree },
+                    Array.Empty<Microsoft.CodeAnalysis.MetadataReference>());
+            });
+
+            Assert.NotNull(created);
+
+            // New cache instance with a fresh memory cache to force filesystem read
+            using var freshMemory = new MemoryCache(new MemoryCacheOptions());
+            var cache2 = new EnhancedCompilationCache(
+                freshMemory,
+                _fileSystemCache,
+                _cacheLogger,
+                null,
+                options);
+
+            // Act: attempt to get from cache; factory must not be invoked on FS hit
+            var restored = await cache2.GetOrCreateCompilationAsync(testFile, () =>
+            {
+                throw new InvalidOperationException("Factory should not be called when restoring from filesystem cache");
+            });
+
+            // Assert
+            Assert.NotNull(restored);
+        }
+
+        [Fact]
         public void SyntaxTreePool_ShowsMemoryOptimization()
         {
             var pool = new SyntaxTreePool(new TestLogger<SyntaxTreePool>(_output));
