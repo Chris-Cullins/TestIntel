@@ -81,6 +81,18 @@ public class AnalysisConfiguration
     /// </summary>
     [JsonPropertyName("timeoutSeconds")]
     public int TimeoutSeconds { get; set; } = 300; // 5 minutes
+
+    /// <summary>
+    /// Maximum BFS path depth for find-tests traversal (defaults to 12)
+    /// </summary>
+    [JsonPropertyName("findTestsMaxPathDepth")]
+    public int FindTestsMaxPathDepth { get; set; } = 12;
+
+    /// <summary>
+    /// Maximum visited nodes limit for find-tests traversal (defaults to 2000)
+    /// </summary>
+    [JsonPropertyName("findTestsMaxVisitedNodes")]
+    public int FindTestsMaxVisitedNodes { get; set; } = 2000;
 }
 
 /// <summary>
