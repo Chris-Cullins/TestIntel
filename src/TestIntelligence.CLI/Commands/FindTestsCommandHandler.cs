@@ -45,7 +45,7 @@ public class FindTestsCommandHandler : BaseCommandHandler
             var configService = context.GetService<IConfigurationService>();
             if (configService != null)
             {
-                var config = await configService.LoadConfigurationAsync(solution);
+                var config = await configService.LoadConfigurationAsync(solution!);
                 if (config?.Analysis != null)
                 {
                     // Apply configuration by setting env vars consumed by the analyzer
