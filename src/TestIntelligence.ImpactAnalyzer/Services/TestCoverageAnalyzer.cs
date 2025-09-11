@@ -34,10 +34,10 @@ namespace TestIntelligence.ImpactAnalyzer.Services
         
         // Cache BFS path calculations to avoid redundant traversals (LRU to bound memory)
         private readonly TestIntelligence.Core.Caching.LruCache<(string, string), string[]?> _pathCache = new(capacity: 10000);
-        
-        // Path search limits to prevent runaway traversals
-        private const int MaxVisitedNodes = 50;
-        private const int MaxPathDepth = 5;
+
+        // Path search limits (configurable)
+        private readonly int _maxVisitedNodes;
+        private readonly int _maxPathDepth;
 
         public TestCoverageAnalyzer(
             IRoslynAnalyzer roslynAnalyzer,
@@ -48,6 +48,29 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             _assemblyPathResolver = assemblyPathResolver ?? throw new ArgumentNullException(nameof(assemblyPathResolver));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _testClassifier = new TestMethodClassifier();
+
+            // Configure traversal limits via environment variables with sensible defaults
+            _maxPathDepth = GetConfiguredInt("TI_MAX_PATH_DEPTH", 12, 2, 200);
+            _maxVisitedNodes = GetConfiguredInt("TI_MAX_VISITED_NODES", 2000, 100, 100000);
+        }
+
+        private static int GetConfiguredInt(string envVar, int defaultValue, int min, int max)
+        {
+            try
+            {
+                var raw = Environment.GetEnvironmentVariable(envVar);
+                if (!string.IsNullOrWhiteSpace(raw) && int.TryParse(raw, out var parsed))
+                {
+                    if (parsed < min) return min;
+                    if (parsed > max) return max;
+                    return parsed;
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+            return defaultValue;
         }
 
         public async Task<IReadOnlyList<TestCoverageInfo>> FindTestsExercisingMethodAsync(
@@ -493,8 +516,8 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             // Use BFS to find shortest path from test method to target method
             var queue = new Queue<(string methodId, List<string> path)>();
             var visited = new HashSet<string>();
-            const int maxPathLength = MaxPathDepth;
-            const int maxVisitedNodes = MaxVisitedNodes;
+            var maxPathLength = _maxPathDepth;
+            var maxVisitedNodes = _maxVisitedNodes;
 
             queue.Enqueue((testMethodId, new List<string> { testMethodId }));
             visited.Add(testMethodId);
@@ -527,7 +550,7 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 // Get methods called by the current method
                 var fullCalledMethods = callGraph.GetMethodCalls(currentMethod);
 
-                // Prefer direct hit before breadth limiting to avoid missing exact neighbor
+                // Prefer direct hit before exploring to avoid extra work
                 if (fullCalledMethods.Contains(targetMethodId))
                 {
                     var directPath = new List<string>(currentPath) { targetMethodId };
@@ -536,10 +559,13 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                     return arr;
                 }
 
-                // Prioritize by call count, but limit breadth after checking for direct neighbor
-                var calledMethods = fullCalledMethods.Take(5); // Drastically reduced breadth
-                
-                foreach (var calledMethod in calledMethods)
+                // Explore all neighbors, but prioritize likely matches.
+                var targetInfo = callGraph.GetMethodInfo(targetMethodId);
+                var orderedNeighbors = fullCalledMethods
+                    .OrderBy(m => GetHeuristicRank(callGraph, m, targetInfo))
+                    .ThenBy(m => m, StringComparer.Ordinal);
+
+                foreach (var calledMethod in orderedNeighbors)
                 {
                     if (!visited.Contains(calledMethod))
                     {
@@ -596,6 +622,15 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             confidence *= (0.5 + 0.5 * testConfidence); // Scale between 0.5 and 1.0
 
             return Math.Max(0.0, Math.Min(1.0, confidence));
+        }
+
+        private static int GetHeuristicRank(MethodCallGraph callGraph, string methodId, MethodInfo? targetInfo)
+        {
+            if (targetInfo == null) return 2;
+            var info = callGraph.GetMethodInfo(methodId);
+            if (info == null) return 2;
+            if (string.Equals(info.ContainingType, targetInfo.ContainingType, StringComparison.Ordinal)) return 0;
+            return 1;
         }
 
 

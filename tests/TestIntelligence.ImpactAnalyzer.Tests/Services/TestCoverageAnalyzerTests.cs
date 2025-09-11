@@ -236,5 +236,95 @@ namespace TestIntelligence.ImpactAnalyzer.Tests.Services
 
             return new MethodCallGraph(callGraphData, methodDefinitions);
         }
+
+        [Fact]
+        public async Task FindTestsExercisingMethodAsync_FindsTargetBeyondFiveNeighbors()
+        {
+            // Arrange: test calls many neighbors; only the last neighbor leads to target
+            var testId = "CalculatorTests.TestComplex()";
+            var targetId = "BusinessLogic.Calculator.Add(int,int)";
+
+            var neighbors = Enumerable.Range(1, 10)
+                .Select(i => $"BusinessLogic.Helpers.Helper{i}.Do()")
+                .ToList();
+
+            var methodDefinitions = new Dictionary<string, MethodInfo>
+            {
+                [testId] = new MethodInfo(testId, "TestComplex", "CalculatorTests", "/tests/CalculatorTests.cs", 30, true),
+                [targetId] = new MethodInfo(targetId, "Add", "BusinessLogic.Calculator", "/src/Calculator.cs", 15, false)
+            };
+
+            foreach (var n in neighbors)
+            {
+                methodDefinitions[n] = new MethodInfo(n, "Do", n.Split('.').Reverse().Skip(1).First(), "/src/Helper.cs", 1, false);
+            }
+
+            var graph = new Dictionary<string, HashSet<string>>
+            {
+                [testId] = new HashSet<string>(neighbors)
+            };
+
+            // Only the last neighbor calls the target
+            var last = neighbors.Last();
+            graph[last] = new HashSet<string> { targetId };
+
+            // Ensure other neighbors don't lead anywhere
+            foreach (var n in neighbors.Take(neighbors.Count - 1))
+            {
+                graph[n] = new HashSet<string>();
+            }
+
+            // Target has no outgoing edges
+            graph[targetId] = new HashSet<string>();
+
+            var callGraph = new MethodCallGraph(graph, methodDefinitions);
+
+            _mockRoslynAnalyzer
+                .BuildCallGraphAsync(Arg.Any<string[]>(), Arg.Any<CancellationToken>())
+                .Returns(callGraph);
+
+            var result = await _analyzer.FindTestsExercisingMethodAsync(targetId, "/path/to/solution.sln");
+
+            Assert.Contains(result, r => r.TestMethodId == testId);
+        }
+
+        [Fact]
+        public async Task FindTestsExercisingMethodAsync_FindsTargetWithLongerDepth()
+        {
+            // Arrange: build a chain longer than the historical default depth (5)
+            var testId = "CalculatorTests.TestDeep()";
+            var targetId = "BusinessLogic.Calculator.Compute(int,int)";
+
+            var chain = new[] { "A.M1()", "A.M2()", "A.M3()", "A.M4()", "A.M5()", "A.M6()" };
+
+            var methods = new Dictionary<string, MethodInfo>
+            {
+                [testId] = new MethodInfo(testId, "TestDeep", "CalculatorTests", "/tests/CalculatorTests.cs", 40, true),
+                [targetId] = new MethodInfo(targetId, "Compute", "BusinessLogic.Calculator", "/src/Calculator.cs", 50, false)
+            };
+
+            foreach (var m in chain)
+            {
+                methods[m] = new MethodInfo(m, m.Split('.').Last().Trim('(',')'), m.Split('.').First(), "/src/Chain.cs", 1, false);
+            }
+
+            var g = new Dictionary<string, HashSet<string>>();
+            g[testId] = new HashSet<string> { chain[0] };
+            for (int i = 0; i < chain.Length - 1; i++)
+            {
+                g[chain[i]] = new HashSet<string> { chain[i + 1] };
+            }
+            g[chain[^1]] = new HashSet<string> { targetId };
+            g[targetId] = new HashSet<string>();
+
+            var callGraph = new MethodCallGraph(g, methods);
+
+            _mockRoslynAnalyzer
+                .BuildCallGraphAsync(Arg.Any<string[]>(), Arg.Any<CancellationToken>())
+                .Returns(callGraph);
+
+            var result = await _analyzer.FindTestsExercisingMethodAsync(targetId, "/path/to/solution.sln");
+            Assert.Contains(result, r => r.TestMethodId == testId);
+        }
     }
 }
