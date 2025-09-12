@@ -189,37 +189,103 @@ namespace TestIntelligence.Core.Models;
         /// </summary>
         private static bool IsMethodMatch(string fullMethodId, string pattern)
         {
-            if (string.IsNullOrEmpty(fullMethodId) || string.IsNullOrEmpty(pattern))
+            if (string.IsNullOrWhiteSpace(fullMethodId) || string.IsNullOrWhiteSpace(pattern))
                 return false;
 
-            // Exact match
             if (fullMethodId.Equals(pattern, StringComparison.OrdinalIgnoreCase))
                 return true;
 
-            // Remove global:: prefix if present for comparison
-            var normalizedMethodId = fullMethodId.StartsWith("global::", StringComparison.OrdinalIgnoreCase) 
-                ? fullMethodId.Substring(8) // Remove "global::" prefix
+            // Normalize candidate
+            var normalized = fullMethodId.StartsWith("global::", StringComparison.OrdinalIgnoreCase)
+                ? fullMethodId.Substring(8)
                 : fullMethodId;
 
-            // Extract method name without parameters from normalized ID
-            // Format: Namespace.Class.Method(params)
-            var parenIndex = normalizedMethodId.IndexOf('(');
-            var methodWithoutParams = parenIndex > 0 ? normalizedMethodId.Substring(0, parenIndex) : normalizedMethodId;
+            // Parse pattern
+            var parsed = ParsePattern(pattern);
 
-            // Check if pattern matches the method without parameters
-            if (methodWithoutParams.Equals(pattern, StringComparison.OrdinalIgnoreCase))
-                return true;
+            // Extract candidate components
+            var paren = normalized.IndexOf('(');
+            var noParams = paren >= 0 ? normalized.Substring(0, paren) : normalized;
+            var lastDot = noParams.LastIndexOf('.');
+            if (lastDot < 0) return false;
+            var candMethod = noParams.Substring(lastDot + 1);
+            var candQualifier = noParams.Substring(0, lastDot); // Namespace.Type
 
-            // Check if pattern is just the method name (last part after final dot)
-            var lastDotIndex = methodWithoutParams.LastIndexOf('.');
-            if (lastDotIndex >= 0 && lastDotIndex < methodWithoutParams.Length - 1)
+            if (!candMethod.Equals(parsed.MethodName, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            if (!string.IsNullOrEmpty(parsed.TypeQualifier) &&
+                !candQualifier.EndsWith(parsed.TypeQualifier, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            if (parsed.HasParameters)
             {
-                var methodNameOnly = methodWithoutParams.Substring(lastDotIndex + 1);
-                if (methodNameOnly.Equals(pattern, StringComparison.OrdinalIgnoreCase))
-                    return true;
+                if (paren < 0) return false;
+                var close = normalized.LastIndexOf(')');
+                if (close <= paren) return false;
+                var paramList = normalized.Substring(paren + 1, close - paren - 1);
+                var paramTypes = paramList.Split(new[]{','}, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(t => t.Trim())
+                    .Select(t => t.Replace("global::", string.Empty))
+                    .ToArray();
+
+                if (paramTypes.Length != parsed.ParameterTypeHints.Count)
+                    return false;
+
+                for (int i = 0; i < paramTypes.Length; i++)
+                {
+                    if (!paramTypes[i].EndsWith(parsed.ParameterTypeHints[i], StringComparison.OrdinalIgnoreCase))
+                        return false;
+                }
             }
 
-            return false;
+            return true;
+        }
+
+        private sealed class ParsedPattern
+        {
+            public string MethodName { get; set; } = string.Empty;
+            public string? TypeQualifier { get; set; }
+            public IReadOnlyList<string> ParameterTypeHints { get; set; } = Array.Empty<string>();
+            public bool HasParameters => ParameterTypeHints.Count > 0;
+        }
+
+        private static ParsedPattern ParsePattern(string raw)
+        {
+            var result = new ParsedPattern();
+            if (string.IsNullOrWhiteSpace(raw)) return result;
+            raw = raw.Trim();
+
+            // Extract params
+            string head = raw;
+            var open = raw.IndexOf('(');
+            if (open >= 0)
+            {
+                head = raw.Substring(0, open);
+                var close = raw.LastIndexOf(')');
+                if (close > open)
+                {
+                    var paramList = raw.Substring(open + 1, close - open - 1);
+                    var parts = paramList.Split(new[] {','}, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(p => p.Trim())
+                        .Select(p => p.Replace("global::", string.Empty))
+                        .ToArray();
+                    result.ParameterTypeHints = parts;
+                }
+            }
+
+            var lastDot = head.LastIndexOf('.');
+            if (lastDot < 0)
+            {
+                result.MethodName = head;
+                return result;
+            }
+
+            var qualifier = head.Substring(0, lastDot);
+            var methodName = head.Substring(lastDot + 1);
+            result.MethodName = methodName;
+            result.TypeQualifier = qualifier.Split('.').Last();
+            return result;
         }
 
         /// <summary>

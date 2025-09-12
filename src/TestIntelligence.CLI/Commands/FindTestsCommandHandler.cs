@@ -38,6 +38,26 @@ public class FindTestsCommandHandler : BaseCommandHandler
         ValidateInputs(method!, solution!, output, format);
 
         Logger.LogInformation("Finding tests that exercise method: {Method} in solution: {Solution}", method, solution);
+
+        // Load configuration and apply find-tests traversal limits (if provided)
+        try
+        {
+            var configService = context.GetService<IConfigurationService>();
+            if (configService != null)
+            {
+                var config = await configService.LoadConfigurationAsync(solution!);
+                if (config?.Analysis != null)
+                {
+                    // Apply configuration by setting env vars consumed by the analyzer
+                    Environment.SetEnvironmentVariable("TI_MAX_PATH_DEPTH", config.Analysis.FindTestsMaxPathDepth.ToString());
+                    Environment.SetEnvironmentVariable("TI_MAX_VISITED_NODES", config.Analysis.FindTestsMaxVisitedNodes.ToString());
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to load/apply configuration for find-tests; using defaults");
+        }
         
         // Get services from DI
         var testCoverageAnalyzer = context.GetService<ITestCoverageAnalyzer>();

@@ -184,7 +184,13 @@ public class ConfigurationService : IConfigurationService
     ""maxParallelism"": {Environment.ProcessorCount},
     
     // Timeout for individual project analysis (seconds)
-    ""timeoutSeconds"": 300
+    ""timeoutSeconds"": 300,
+    
+    // Maximum BFS path depth for find-tests traversal
+    ""findTestsMaxPathDepth"": 12,
+    
+    // Maximum visited nodes for find-tests traversal
+    ""findTestsMaxVisitedNodes"": 2000
   }},
   
   ""output"": {{
