@@ -94,8 +94,10 @@ jobs:
           
           # Select high-confidence tests (≥70% confidence)
           echo "⚡ Selecting high-confidence tests..."
+          mapfile -t changes < changed_files.txt
           test-intel select \
             --path TestIntelligence.sln \
+            --changes "${changes[@]}" \
             --confidence High \
             --max-tests 100 \
             --output selected-tests.json || {
