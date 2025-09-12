@@ -96,6 +96,7 @@ jobs:
           echo "⚡ Selecting high-confidence tests..."
           test-intel select \
             --path TestIntelligence.sln \
+            --changes "$(tr '\n' ' ' < changed_files.txt)" \
             --confidence High \
             --max-tests 100 \
             --output selected-tests.json || {
