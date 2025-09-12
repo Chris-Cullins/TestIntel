@@ -701,8 +701,16 @@ namespace TestIntelligence.ImpactAnalyzer.Services
             
             if (targetMethodIds.Count == 0)
             {
-                _logger.LogWarning("No methods found matching pattern: {MethodId}", methodId);
-                yield break;
+                var msg = $"Method resolution failed for '{methodId}'. Try a fully-qualified name (Namespace.Class.Method) or include parameter types.";
+                _logger.LogWarning(msg);
+                throw new ArgumentException(msg, nameof(methodId));
+            }
+
+            // If ambiguous and caller did not provide parameters, emit a clear diagnostic
+            if (targetMethodIds.Count > 1 && !methodId.Contains('('))
+            {
+                var examples = string.Join("\n  - ", targetMethodIds.Take(5).Select(id => callGraph.GetMethodInfo(id)?.Id ?? id));
+                _logger.LogInformation("Ambiguous method pattern '{Pattern}' matched {Count} overloads. Examples:\n  - {Examples}", methodId, targetMethodIds.Count, examples);
             }
 
             // Process test methods and yield results as we find them
@@ -712,10 +720,10 @@ namespace TestIntelligence.ImpactAnalyzer.Services
                 
                 // Skip if this test method is actually one of our target methods
                 // This prevents method signatures from being included as "test coverage"
-					if (targetMethodIds.Contains(testMethod.Id))
-					{
-						continue;
-					}
+                    if (targetMethodIds.Contains(testMethod.Id))
+                    {
+                        continue;
+                    }
                 
                 TestCoverageInfo? result = null;
                 try
@@ -815,57 +823,150 @@ namespace TestIntelligence.ImpactAnalyzer.Services
         /// </summary>
         private List<string> FindMatchingMethodIds(string pattern, IReadOnlyList<MethodInfo> allMethods)
         {
-            var matchingIds = new List<string>();
-            
+            var matches = new List<(string Id, MethodInfo Info)>();
+
+            var parsed = MethodPattern.Parse(pattern);
+
             foreach (var method in allMethods)
             {
-                if (IsMethodPatternMatch(method.Id, pattern))
+                if (MethodPattern.Matches(parsed, method))
                 {
-                    matchingIds.Add(method.Id);
+                    matches.Add((method.Id, method));
                 }
             }
-            
-            _logger.LogDebug("Method pattern resolution: pattern='{Pattern}' matched {Count} methods", pattern, matchingIds.Count);
-            return matchingIds;
-        }
 
-        /// <summary>
-        /// Determines if a method ID matches the given pattern.
-        /// Supports pattern matching like the TestCoverageMap.IsMethodMatch method.
-        /// </summary>
-        private static bool IsMethodPatternMatch(string fullMethodId, string pattern)
-        {
-            if (string.IsNullOrEmpty(fullMethodId) || string.IsNullOrEmpty(pattern))
-                return false;
-
-            // Exact match
-            if (fullMethodId.Equals(pattern, StringComparison.OrdinalIgnoreCase))
-                return true;
-
-            // Remove global:: prefix if present for comparison
-            var normalizedMethodId = fullMethodId.StartsWith("global::", StringComparison.OrdinalIgnoreCase) 
-                ? fullMethodId.Substring(8) // Remove "global::" prefix
-                : fullMethodId;
-
-            // Extract method name without parameters from normalized ID
-            // Format: Namespace.Class.Method(params)
-            var parenIndex = normalizedMethodId.IndexOf('(');
-            var methodWithoutParams = parenIndex > 0 ? normalizedMethodId.Substring(0, parenIndex) : normalizedMethodId;
-
-            // Check if pattern matches the method without parameters
-            if (methodWithoutParams.Equals(pattern, StringComparison.OrdinalIgnoreCase))
-                return true;
-
-            // Check if pattern is just the method name (last part after final dot)
-            var lastDotIndex = methodWithoutParams.LastIndexOf('.');
-            if (lastDotIndex >= 0 && lastDotIndex < methodWithoutParams.Length - 1)
+            // If parameters were specified, we've already filtered precisely. If not, and there are multiple
+            // overloads, prefer ones whose containing type ends with the provided type qualifier, if any.
+            if (!parsed.HasParameters && matches.Count > 1 && !string.IsNullOrEmpty(parsed.TypeQualifier))
             {
-                var methodNameOnly = methodWithoutParams.Substring(lastDotIndex + 1);
-                if (methodNameOnly.Equals(pattern, StringComparison.OrdinalIgnoreCase))
-                    return true;
+                var filtered = matches
+                    .Where(m => m.Info.ContainingType.EndsWith(parsed.TypeQualifier!, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (filtered.Count > 0)
+                {
+                    matches = filtered;
+                }
             }
 
-            return false;
+            _logger.LogDebug("Method pattern resolution: pattern='{Pattern}' matched {Count} methods", pattern, matches.Count);
+            return matches.Select(m => m.Id).ToList();
+        }
+
+        private sealed class MethodPattern
+        {
+            public string? NamespaceOrTypePrefix { get; private set; }
+            public string? TypeQualifier { get; private set; }
+            public string MethodName { get; private set; } = string.Empty;
+            public IReadOnlyList<string> ParameterTypeHints { get; private set; } = Array.Empty<string>();
+            public bool HasParameters => ParameterTypeHints.Count > 0;
+
+            public static MethodPattern Parse(string raw)
+            {
+                var result = new MethodPattern();
+                if (string.IsNullOrWhiteSpace(raw)) return result;
+
+                raw = raw.Trim();
+
+                // Separate params if present: Foo.Bar.Baz(TypeA, TypeB)
+                string head = raw;
+                var open = raw.IndexOf('(');
+                if (open >= 0)
+                {
+                    head = raw.Substring(0, open);
+                    var close = raw.LastIndexOf(')');
+                    if (close > open)
+                    {
+                        var paramList = raw.Substring(open + 1, close - open - 1);
+                        var parts = paramList.Split(new[]{','}, StringSplitOptions.RemoveEmptyEntries).Select(p => p.Trim());
+                        // Normalize: strip generic args and allow short names
+                        result.ParameterTypeHints = parts
+                            .Select(p => p.Replace("global::", string.Empty).Trim())
+                            .ToArray();
+                    }
+                }
+
+                // Extract method name and optional qualifier(s)
+                var lastDot = head.LastIndexOf('.');
+                if (lastDot < 0)
+                {
+                    // Only method name provided
+                    result.MethodName = head;
+                    return result;
+                }
+
+                result.MethodName = head.Substring(lastDot + 1);
+                var qualifier = head.Substring(0, lastDot);
+                result.TypeQualifier = qualifier.Split('.').Last(); // class or nested type name
+                result.NamespaceOrTypePrefix = qualifier;            // full prefix provided
+                return result;
+            }
+
+            public static bool Matches(MethodPattern pattern, MethodInfo candidate)
+            {
+                if (candidate == null) return false;
+
+                // Normalize candidate components
+                var fullId = candidate.Id;
+                if (fullId.StartsWith("global::", StringComparison.OrdinalIgnoreCase))
+                {
+                    fullId = fullId.Substring(8);
+                }
+
+                // Extract "Namespace.Type.Method" and parameter types from candidate.Id
+                var paren = fullId.IndexOf('(');
+                var noParams = paren >= 0 ? fullId.Substring(0, paren) : fullId;
+                var lastDot = noParams.LastIndexOf('.');
+                if (lastDot < 0) return false;
+                var candidateMethodName = noParams.Substring(lastDot + 1);
+                var candidateQualifier = noParams.Substring(0, lastDot); // Namespace.Type
+
+                if (!candidateMethodName.Equals(pattern.MethodName, StringComparison.OrdinalIgnoreCase))
+                    return false;
+
+                // If a type qualifier was provided, ensure the candidate type ends with it
+                if (!string.IsNullOrEmpty(pattern.TypeQualifier))
+                {
+                    if (!candidateQualifier.EndsWith(pattern.TypeQualifier, StringComparison.OrdinalIgnoreCase))
+                        return false;
+                }
+
+                // If a namespace/type prefix was provided, prefer suffix match to allow missing leading namespaces
+                if (!string.IsNullOrEmpty(pattern.NamespaceOrTypePrefix))
+                {
+                    if (!candidateQualifier.EndsWith(pattern.NamespaceOrTypePrefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Allow looser match if only class provided; already checked TypeQualifier above
+                        // so if NamespaceOrTypePrefix includes a namespace, this filters properly.
+                    }
+                }
+
+                // Parameter matching (if hints provided): compare counts and suffix match on type names
+                if (pattern.HasParameters)
+                {
+                    if (paren < 0) return false; // no params on candidate
+                    var close = fullId.LastIndexOf(')');
+                    if (close <= paren) return false;
+                    var paramList = fullId.Substring(paren + 1, close - paren - 1);
+                    var paramTypes = paramList.Split(new[]{','}, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(t => t.Trim())
+                        .Select(t => t.Replace("global::", string.Empty))
+                        .ToArray();
+
+                    if (paramTypes.Length != pattern.ParameterTypeHints.Count)
+                        return false;
+
+                    for (int i = 0; i < paramTypes.Length; i++)
+                    {
+                        var cand = paramTypes[i];
+                        var hint = pattern.ParameterTypeHints[i];
+                        // Compare by suffix to allow short names, and ignore generic arguments by checking containment
+                        if (!cand.EndsWith(hint, StringComparison.OrdinalIgnoreCase))
+                            return false;
+                    }
+                }
+
+                return true;
+            }
         }
     }
 }
